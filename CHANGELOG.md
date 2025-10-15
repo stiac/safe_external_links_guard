@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.2] - 2025-10-23
+### Added
+- Commenti descrittivi per ogni opzione di `links-guard.settings.js`, così da chiarire al volo le varianti disponibili e il loro impatto.
+
+### Changed
+- Documentazione aggiornata (README e VERSION) per riflettere la release 1.5.2 e le nuove note sulle impostazioni commentate.
+
 ## [1.5.1] - 2025-10-22
 ### Added
 - Sezione della documentazione che spiega come scegliere i valori `ttl` restituiti dal resolver.

@@ -8,21 +8,21 @@
 
   // ===== Valori di default condivisi =====
   const DEFAULTS = {
-    endpoint: "/links/policy",
-    timeoutMs: 900,
-    cacheTtlSec: 3600,
-    mode: "strict",
-    removeNode: false,
-    showCopyButton: true,
-    hoverFeedback: "title",
-    rel: ["noopener", "noreferrer", "nofollow"],
-    newTab: true,
-    zIndex: 999999,
-    maxConcurrent: 4,
-    warnHighlightClass: "slg-warn-highlight",
+    endpoint: "/links/policy", // Endpoint server: accetta URL relativo o assoluto.
+    timeoutMs: 900, // Timeout in millisecondi per la richiesta API (default 0,9s).
+    cacheTtlSec: 3600, // TTL cache client in secondi; può essere personalizzato via il campo `ttl` della risposta API.
+    mode: "strict", // Varianti: "strict" mostra modale bloccante, "soft" evidenzia soltanto.
+    removeNode: false, // true per sostituire link negati con <span>, false per lasciarli ma disabilitati.
+    showCopyButton: true, // false nasconde pulsante "Copia link" nella modale di avviso.
+    hoverFeedback: "title", // "title" usa tooltip nativo, "tooltip" abilita overlay custom.
+    rel: ["noopener", "noreferrer", "nofollow"], // Attributi rel aggiunti ai link aperti in nuova scheda.
+    newTab: true, // true imposta target="_blank", false lascia il comportamento originale del link.
+    zIndex: 999999, // Ordine di sovrapposizione per modale/tooltip (utile in presenza di overlay complessi).
+    maxConcurrent: 4, // Numero massimo di richieste contemporanee verso l'endpoint.
+    warnHighlightClass: "slg-warn-highlight", // Classe CSS applicata ai link warn in modalità soft.
     warnMessageDefault:
-      "Questo link non è verificato. Procedi solo se ti fidi del sito.",
-    excludeSelectors: []
+      "Questo link non è verificato. Procedi solo se ti fidi del sito.", // Messaggio fallback se l'API non fornisce testo.
+    excludeSelectors: [] // Array di selettori CSS da ignorare (es. [".footer a", "#nav a"]).
   };
 
   const truthyValues = new Set(["true", "1", "yes", "on"]);
