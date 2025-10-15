@@ -36,7 +36,7 @@ Lo script:
    <script
      async
      src="/assets/app/safe_external_links_guard/links-guard.js"
-     data-endpoint="/app/demo/assets/app/links_secure/links/policy/policy.php"
+     data-endpoint="/assets/app/links_secure/links/policy/policy.php"
      data-timeout="900"
      data-cache-ttl="3600"
      data-mode="strict"
