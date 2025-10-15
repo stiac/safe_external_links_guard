@@ -827,14 +827,19 @@
     enqueueHost(host);
 
     // Click: se policy non nota, chiedi e applica prima di navigare
+    // Intercettiamo sempre il click standard per evitare aperture duplicate
+    // causate da handler inline o da altri listener registrati a valle.
     a.addEventListener("click", async (e) => {
-      const isModified = e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1;
+      const isModified =
+        e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1;
       if (isModified) return;
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      e.stopPropagation();
 
       const cached2 = policyCache.get(host);
       if (!cached2) {
-        e.preventDefault();
-        e.stopPropagation();
         const action = await getPolicy(host);
         applyPolicyToHost(host, action);
         if (action === "allow") {
@@ -849,16 +854,16 @@
       }
 
       if (cached2.action === "deny") {
-        e.preventDefault(); e.stopPropagation();
         return;
       }
       if (cached2.action === "warn") {
         if (cfg.mode !== "soft") {
-          e.preventDefault(); e.stopPropagation();
           showModal(url, cached2.message);
         }
+        return;
       }
-      // allow: passa
+
+      followExternalUrl(url);
     }, { capture: true });
   };
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.6] - 2025-10-27
+### Fixed
+- Intercettata la gestione del click sui link consentiti per impedire aperture multiple quando sono presenti handler inline o listener esterni aggiuntivi.
+
+### Changed
+- Documentazione aggiornata con le note sulla prevenzione dei click duplicati e la conferma del supporto a `data-new-tab`.
+
 ## [1.5.5] - 2025-10-26
 ### Added
 - Supporto all'attributo `data-new-tab` nel builder delle impostazioni per controllare l'apertura dei link consentiti.
