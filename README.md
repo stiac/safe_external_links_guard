@@ -1,6 +1,6 @@
 # Safe External Links Guard
 
-**Versione:** 1.0.0
+**Versione:** 1.0.1
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
@@ -29,11 +29,22 @@ Lo script:
 - Hosting condiviso o distribuzione tramite upload FTP/file manager (nessun requisito di shell).
 
 ## Installazione e utilizzo
-1. Carica `links-guard.js` sul tuo hosting all'interno della directory pubblica.
-2. Inserisci lo script nelle pagine da proteggere:
+1. Carica `links-guard.js` sul tuo hosting all'interno della directory pubblica, ad esempio in `/assets/app/safe_external_links_guard/`.
+2. Inserisci lo script nelle pagine da proteggere utilizzando il seguente snippet:
    ```html
-   <script src="/links-guard.js" data-endpoint="/links/policy/policy.php"></script>
+   <!-- /assets/app/safe_external_links_guard/links-guard.js (minificabile) -->
+   <script
+     async
+     src="/assets/app/safe_external_links_guard/links-guard.js"
+     data-endpoint="/app/demo/assets/app/links_secure/links/policy/policy.php"
+     data-timeout="900"
+     data-cache-ttl="3600"
+     data-mode="strict"
+     data-remove-node="true"
+   ></script>
+   <!-- data-remove-node è opzionale: se impostato a true sostituisce <a> con <span> -->
    ```
+   Adatta `src` e `data-endpoint` ai percorsi effettivi del tuo sito.
 3. Assicurati che l'endpoint PHP sia raggiungibile e configurato con le tue liste di allow/deny.
 
 Lo script legge gli attributi `data-*` dal tag `<script>` per adattare il comportamento senza necessità di ricompilazione.
