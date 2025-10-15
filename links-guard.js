@@ -18,6 +18,7 @@
 
   const guardNamespace = (window.SafeExternalLinksGuard =
     window.SafeExternalLinksGuard || {});
+  const VALID_MODES = new Set(["strict", "warn", "soft"]);
   let buildSettings = guardNamespace.buildSettings;
 
   if (typeof buildSettings !== "function") {
@@ -72,7 +73,7 @@
     const parseMode = (value) => {
       if (!value) return "strict";
       const normalized = value.trim().toLowerCase();
-      return normalized === "soft" ? "soft" : "strict";
+      return VALID_MODES.has(normalized) ? normalized : "strict";
     };
 
     const parseHoverFeedback = (value) => {
@@ -126,7 +127,7 @@
         )
       };
 
-      if (cfg.mode !== "soft") cfg.mode = "strict";
+      if (!VALID_MODES.has(cfg.mode)) cfg.mode = "strict";
       if (cfg.hoverFeedback !== "tooltip") cfg.hoverFeedback = "title";
       if (!cfg.warnMessageDefault) {
         cfg.warnMessageDefault = fallbackDefaults.warnMessageDefault;
@@ -154,7 +155,7 @@
   const cfg = buildSettings(thisScript);
   if (!Array.isArray(cfg.rel)) cfg.rel = ["noopener", "noreferrer", "nofollow"];
   if (!Array.isArray(cfg.excludeSelectors)) cfg.excludeSelectors = [];
-  if (cfg.mode !== "soft") cfg.mode = "strict";
+  if (!VALID_MODES.has(cfg.mode)) cfg.mode = "strict";
   if (cfg.hoverFeedback !== "tooltip") cfg.hoverFeedback = "title";
 
   const hoverFeedback = createHoverFeedback(cfg);
@@ -610,7 +611,7 @@
         }
       } else {
         if (node.tagName === "A") ensureAttrs(node); // warn
-        if (cfg.mode === "soft") {
+        if (cfg.mode !== "strict") {
           node.classList?.add(cfg.warnHighlightClass);
           setHoverMessage(node, warnMessage);
         } else {
@@ -817,7 +818,7 @@
           try { tmp.click(); } catch { try { window.open(url.href, "_blank", "noopener"); } catch { location.assign(url.href); } }
           tmp.remove();
         } else if (action === "warn") {
-          if (cfg.mode === "strict") {
+          if (cfg.mode !== "soft") {
             showModal(url, policyCache.get(host)?.message);
           }
         }
@@ -830,7 +831,7 @@
         return;
       }
       if (cached2.action === "warn") {
-        if (cfg.mode === "strict") {
+        if (cfg.mode !== "soft") {
           e.preventDefault(); e.stopPropagation();
           showModal(url, cached2.message);
         }
@@ -884,6 +885,9 @@
   window.SafeLinkGuard = {
     rescan(root) { processAll(root || document); },
     clearCache() { policyCache.clear(); },
-    setMode(m) { cfg.mode = m === "soft" ? "soft" : "strict"; }
+    setMode(m) {
+      const normalized = typeof m === "string" ? m.trim().toLowerCase() : "";
+      cfg.mode = VALID_MODES.has(normalized) ? normalized : "strict";
+    }
   };
 })();

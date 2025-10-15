@@ -11,7 +11,7 @@
     endpoint: "/links/policy", // Endpoint server (relativo o assoluto). Override via `data-endpoint` o override JS.
     timeoutMs: 900, // Tempo massimo (ms) della fetch. Modificabile con `data-timeout` o override JS.
     cacheTtlSec: 3600, // TTL della cache client (s). Configurabile con `data-cache-ttl` e sostituibile dal campo `ttl` dell'API.
-    mode: "strict", // Modalità operative supportate (`strict`/`soft`). Selezionabile con `data-mode`.
+    mode: "strict", // Modalità operative supportate (`strict` / `warn` / `soft`). Selezionabile con `data-mode` o override JS.
     removeNode: false, // Gestione link `deny`: `true` trasforma <a> in <span>. Controllabile tramite `data-remove-node`.
     showCopyButton: true, // Pulsante "Copia link" nella modale. Nascondilo con `data-show-copy-button="false"`.
     hoverFeedback: "title", // Varianti feedback hover: `title` (tooltip nativo) o `tooltip` (UI custom). Cambiabile con `data-hover-feedback`.
@@ -19,11 +19,13 @@
     newTab: true, // Imposta `target="_blank"` sui link esterni. Personalizzabile solo via override JS, nessun `data-*` dedicato.
     zIndex: 999999, // Livello di stacking per modali/tooltip. Regolabile tramite override JS per integrazioni complesse.
     maxConcurrent: 4, // Limite di richieste simultanee verso l'endpoint. Aggiornabile via override JS.
-    warnHighlightClass: "slg-warn-highlight", // Classe CSS dei link warn in modalità `soft`. Impostabile con `data-warn-highlight-class`.
+    warnHighlightClass: "slg-warn-highlight", // Classe CSS dei link warn in modalità `soft`/`warn`. Impostabile con `data-warn-highlight-class`.
     warnMessageDefault:
       "Questo link non è verificato. Procedi solo se ti fidi del sito.", // Messaggio fallback, modificabile con `data-warn-message`.
     excludeSelectors: [] // Selettori da ignorare nella scansione. Accetta CSV tramite `data-exclude-selectors` o array via override.
   };
+
+  const VALID_MODES = new Set(["strict", "warn", "soft"]); // Modalità supportate: `strict` (solo modale), `warn` (modale + evidenza), `soft` (solo evidenza).
 
   const truthyValues = new Set(["true", "1", "yes", "on"]);
   const falsyValues = new Set(["false", "0", "no", "off"]);
@@ -59,8 +61,9 @@
   const parseMode = (value, defaultValue) => {
     if (!value) return defaultValue;
     const normalized = value.trim().toLowerCase();
-    return normalized === "soft" ? "soft" : "strict";
-  }; // Garantisce che la modalità sia solo "strict" o "soft".
+    if (VALID_MODES.has(normalized)) return normalized;
+    return defaultValue;
+  }; // Garantisce che la modalità sia una tra "strict", "warn" o "soft" (fallback al default in caso di valore non valido).
 
   const parseHoverFeedback = (value, defaultValue) => {
     if (!value) return defaultValue;
@@ -181,7 +184,9 @@
   }; // Consente override programmatici preservando la forma dei dati.
 
   const normalizeConfig = (cfg) => {
-    if (cfg.mode !== "soft") cfg.mode = "strict";
+    if (!VALID_MODES.has(cfg.mode)) {
+      cfg.mode = DEFAULTS.mode;
+    }
     if (cfg.hoverFeedback !== "tooltip") cfg.hoverFeedback = "title";
     if (!cfg.warnMessageDefault) {
       cfg.warnMessageDefault = DEFAULTS.warnMessageDefault;
