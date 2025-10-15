@@ -156,7 +156,235 @@
   if (!Array.isArray(cfg.excludeSelectors)) cfg.excludeSelectors = [];
   if (cfg.mode !== "soft") cfg.mode = "strict";
   if (cfg.hoverFeedback !== "tooltip") cfg.hoverFeedback = "title";
-  const useTooltip = cfg.hoverFeedback === "tooltip";
+
+  const hoverFeedback = createHoverFeedback(cfg);
+  const useTooltip = hoverFeedback.useTooltip;
+  const setHoverMessage = hoverFeedback.setMessage;
+  const clearHoverMessage = hoverFeedback.clearMessage;
+
+  const policyCache = createPolicyCache(cfg);
+
+  function createHoverFeedback(config) {
+    const tooltipEnabled = config.hoverFeedback === "tooltip";
+    if (!tooltipEnabled) {
+      return {
+        useTooltip: false,
+        setMessage(node, message) {
+          if (!node) return;
+          if (!message) {
+            node.removeAttribute("title");
+            return;
+          }
+          node.setAttribute("title", message);
+        },
+        clearMessage(node, expectedMessage = null, force = false) {
+          if (!node) return;
+          if (force) {
+            node.removeAttribute("title");
+            return;
+          }
+          const titleAttr = node.getAttribute("title");
+          if (!expectedMessage || titleAttr === expectedMessage) {
+            node.removeAttribute("title");
+          }
+        }
+      };
+    }
+
+    const tooltipHandlers = new WeakMap();
+    let tooltipEl = null;
+    let tooltipVisibleFor = null;
+
+    const ensureTooltipEl = () => {
+      if (tooltipEl) return tooltipEl;
+      tooltipEl = document.createElement("div");
+      tooltipEl.id = "slg-tooltip";
+      tooltipEl.className = "slg-tooltip slg--hidden";
+      document.body.appendChild(tooltipEl);
+      return tooltipEl;
+    };
+
+    const positionTooltip = (node) => {
+      if (!tooltipEl || tooltipVisibleFor !== node) return;
+      if (!node.isConnected) {
+        hideTooltip();
+        return;
+      }
+      const rect = node.getBoundingClientRect();
+      const tipRect = tooltipEl.getBoundingClientRect();
+      let top = window.scrollY + rect.top - tipRect.height - 10;
+      if (top < window.scrollY + 4) {
+        top = window.scrollY + rect.bottom + 10;
+      }
+      let left = window.scrollX + rect.left + (rect.width - tipRect.width) / 2;
+      const minLeft = window.scrollX + 4;
+      if (left < minLeft) left = minLeft;
+      const maxLeft =
+        window.scrollX + document.documentElement.clientWidth - tipRect.width - 4;
+      if (left > maxLeft) left = maxLeft;
+      tooltipEl.style.top = `${Math.round(top)}px`;
+      tooltipEl.style.left = `${Math.round(left)}px`;
+      tooltipEl.style.visibility = "visible";
+    };
+
+    const hideTooltip = () => {
+      if (!tooltipEl) return;
+      tooltipEl.classList.add("slg--hidden");
+      tooltipEl.style.visibility = "hidden";
+      tooltipVisibleFor = null;
+    };
+
+    const showTooltipForNode = (node) => {
+      if (!node) return;
+      const message = node.getAttribute("data-slg-message");
+      if (!message) return;
+      const tip = ensureTooltipEl();
+      tip.textContent = message;
+      tip.style.visibility = "hidden";
+      tip.classList.remove("slg--hidden");
+      tooltipVisibleFor = node;
+      requestAnimationFrame(() => positionTooltip(node));
+    };
+
+    const detachHandlers = (node) => {
+      const handlers = tooltipHandlers.get(node);
+      if (!handlers) return;
+      node.removeEventListener("mouseenter", handlers.onEnter);
+      node.removeEventListener("mouseleave", handlers.onLeave);
+      node.removeEventListener("focus", handlers.onFocus);
+      node.removeEventListener("blur", handlers.onBlur);
+      node.removeEventListener("mousemove", handlers.onMove);
+      tooltipHandlers.delete(node);
+    };
+
+    const bindTooltip = (node) => {
+      if (!node || tooltipHandlers.has(node)) return;
+      const onEnter = () => showTooltipForNode(node);
+      const onLeave = () => {
+        if (tooltipVisibleFor === node) hideTooltip();
+      };
+      const onFocus = onEnter;
+      const onBlur = onLeave;
+      const onMove = () => positionTooltip(node);
+      node.addEventListener("mouseenter", onEnter);
+      node.addEventListener("mouseleave", onLeave);
+      node.addEventListener("focus", onFocus);
+      node.addEventListener("blur", onBlur);
+      node.addEventListener("mousemove", onMove);
+      tooltipHandlers.set(node, { onEnter, onLeave, onFocus, onBlur, onMove });
+    };
+
+    const setMessage = (node, message) => {
+      if (!node) return;
+      if (!message) {
+        clearMessage(node, null, true);
+        return;
+      }
+      node.setAttribute("data-slg-message", message);
+      bindTooltip(node);
+      if (tooltipVisibleFor === node) {
+        showTooltipForNode(node);
+      }
+    };
+
+    const clearMessage = (node, expectedMessage = null, force = false) => {
+      if (!node) return;
+      const attr = node.getAttribute("data-slg-message");
+      if (!attr && !tooltipHandlers.has(node)) return;
+      if (force || !expectedMessage || attr === expectedMessage) {
+        detachHandlers(node);
+        node.removeAttribute("data-slg-message");
+        if (tooltipVisibleFor === node) hideTooltip();
+      }
+    };
+
+    window.addEventListener(
+      "scroll",
+      () => {
+        if (tooltipVisibleFor) hideTooltip();
+      },
+      true
+    );
+    window.addEventListener("resize", () => {
+      if (!tooltipVisibleFor) return;
+      requestAnimationFrame(() => {
+        if (tooltipVisibleFor) positionTooltip(tooltipVisibleFor);
+      });
+    });
+
+    return {
+      useTooltip: true,
+      setMessage,
+      clearMessage,
+      hideAll: hideTooltip,
+      detach: detachHandlers
+    };
+  }
+
+  function createPolicyCache(config) {
+    const storageKey = "SLG_POLICY_CACHE_V3";
+    const store = new Map();
+
+    const nowSec = () => Math.floor(Date.now() / 1000);
+
+    const load = () => {
+      try {
+        const raw = sessionStorage.getItem(storageKey);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        Object.entries(parsed || {}).forEach(([host, entry]) => {
+          if (entry && typeof entry === "object") {
+            store.set(host, entry);
+          }
+        });
+      } catch (e) {
+        console.warn("[SafeLinkGuard] Lettura cache non disponibile:", e);
+      }
+    };
+
+    const persist = () => {
+      try {
+        if (!store.size) {
+          sessionStorage.removeItem(storageKey);
+          return;
+        }
+        const obj = {};
+        store.forEach((value, key) => {
+          obj[key] = value;
+        });
+        sessionStorage.setItem(storageKey, JSON.stringify(obj));
+      } catch (e) {
+        console.warn("[SafeLinkGuard] Scrittura cache non disponibile:", e);
+      }
+    };
+
+    return {
+      load,
+      get(host) {
+        const entry = store.get(host);
+        if (!entry) return null;
+        const ttl = Number.isFinite(entry.ttl) ? entry.ttl : config.cacheTtlSec;
+        if (entry.ts + ttl < nowSec()) {
+          store.delete(host);
+          return null;
+        }
+        return entry;
+      },
+      set(host, action, ttl, message) {
+        store.set(host, {
+          action,
+          ttl: Number.isFinite(ttl) ? ttl : config.cacheTtlSec,
+          ts: nowSec(),
+          message: message || null
+        });
+        persist();
+      },
+      clear() {
+        store.clear();
+        persist();
+      }
+    };
+  }
 
   // ===== Stato endpoint =====
   let endpointHealthy = false;
@@ -207,138 +435,6 @@
     a.setAttribute("rel", merged.join(" "));
     a.dataset.safeLinkGuard = "1";
   };
-
-  // ===== Hover feedback (title | tooltip) =====
-  const tooltipHandlers = new WeakMap();
-  let tooltipEl = null;
-  let tooltipVisibleFor = null;
-
-  const ensureTooltipEl = () => {
-    if (tooltipEl) return tooltipEl;
-    tooltipEl = document.createElement("div");
-    tooltipEl.id = "slg-tooltip";
-    tooltipEl.className = "slg-tooltip slg--hidden";
-    document.body.appendChild(tooltipEl);
-    return tooltipEl;
-  };
-
-  const positionTooltip = (node) => {
-    if (!tooltipEl || tooltipVisibleFor !== node) return;
-    if (!node.isConnected) {
-      hideTooltip();
-      return;
-    }
-    const rect = node.getBoundingClientRect();
-    const tipRect = tooltipEl.getBoundingClientRect();
-    let top = window.scrollY + rect.top - tipRect.height - 10;
-    if (top < window.scrollY + 4) {
-      top = window.scrollY + rect.bottom + 10;
-    }
-    let left = window.scrollX + rect.left + (rect.width - tipRect.width) / 2;
-    const minLeft = window.scrollX + 4;
-    if (left < minLeft) left = minLeft;
-    const maxLeft = window.scrollX + document.documentElement.clientWidth - tipRect.width - 4;
-    if (left > maxLeft) left = maxLeft;
-    tooltipEl.style.top = `${Math.round(top)}px`;
-    tooltipEl.style.left = `${Math.round(left)}px`;
-    tooltipEl.style.visibility = "visible";
-  };
-
-  const showTooltipForNode = (node) => {
-    if (!useTooltip || !node) return;
-    const message = node.getAttribute("data-slg-message");
-    if (!message) return;
-    const tip = ensureTooltipEl();
-    tip.textContent = message;
-    tip.style.visibility = "hidden";
-    tip.classList.remove("slg--hidden");
-    tooltipVisibleFor = node;
-    requestAnimationFrame(() => positionTooltip(node));
-  };
-
-  const hideTooltip = () => {
-    if (!tooltipEl) return;
-    tooltipEl.classList.add("slg--hidden");
-    tooltipEl.style.visibility = "hidden";
-    tooltipVisibleFor = null;
-  };
-
-  const removeTooltipListeners = (node) => {
-    const handlers = tooltipHandlers.get(node);
-    if (!handlers) return;
-    node.removeEventListener("mouseenter", handlers.onEnter);
-    node.removeEventListener("mouseleave", handlers.onLeave);
-    node.removeEventListener("focus", handlers.onFocus);
-    node.removeEventListener("blur", handlers.onBlur);
-    node.removeEventListener("mousemove", handlers.onMove);
-    tooltipHandlers.delete(node);
-  };
-
-  const bindTooltip = (node) => {
-    if (!useTooltip || !node || tooltipHandlers.has(node)) return;
-    const onEnter = () => showTooltipForNode(node);
-    const onLeave = () => {
-      if (tooltipVisibleFor === node) hideTooltip();
-    };
-    const onFocus = onEnter;
-    const onBlur = onLeave;
-    const onMove = () => positionTooltip(node);
-    node.addEventListener("mouseenter", onEnter);
-    node.addEventListener("mouseleave", onLeave);
-    node.addEventListener("focus", onFocus);
-    node.addEventListener("blur", onBlur);
-    node.addEventListener("mousemove", onMove);
-    tooltipHandlers.set(node, { onEnter, onLeave, onFocus, onBlur, onMove });
-  };
-
-  const setHoverMessage = (node, message) => {
-    if (!node) return;
-    if (!message) {
-      clearHoverMessage(node, null, true);
-      return;
-    }
-    if (useTooltip) {
-      node.setAttribute("data-slg-message", message);
-      bindTooltip(node);
-      if (tooltipVisibleFor === node) {
-        showTooltipForNode(node);
-      }
-    } else {
-      node.setAttribute("title", message);
-      node.removeAttribute("data-slg-message");
-    }
-  };
-
-  const clearHoverMessage = (node, expectedMessage = null, force = false) => {
-    if (!node) return;
-    if (useTooltip) {
-      const attr = node.getAttribute("data-slg-message");
-      if (!attr && !tooltipHandlers.has(node)) return;
-      if (force || !expectedMessage || attr === expectedMessage) {
-        removeTooltipListeners(node);
-        node.removeAttribute("data-slg-message");
-        if (tooltipVisibleFor === node) hideTooltip();
-      }
-    } else {
-      const titleAttr = node.getAttribute("title");
-      if (force || !expectedMessage || titleAttr === expectedMessage) {
-        node.removeAttribute("title");
-      }
-    }
-  };
-
-  if (useTooltip) {
-    window.addEventListener("scroll", () => {
-      if (tooltipVisibleFor) hideTooltip();
-    }, true);
-    window.addEventListener("resize", () => {
-      if (tooltipVisibleFor) {
-        requestAnimationFrame(() => {
-          if (tooltipVisibleFor) positionTooltip(tooltipVisibleFor);
-        });
-      }
-    });
-  }
 
   // Indice host → Set<nodo>
   const anchorsByHost = new Map();
@@ -399,40 +495,6 @@
     return a;
   };
 
-  // ===== Cache =====
-  const SS_KEY = "SLG_POLICY_CACHE_V3";
-  const mem = new Map();
-  const loadSession = () => {
-    try {
-      const raw = sessionStorage.getItem(SS_KEY);
-      if (!raw) return;
-      const obj = JSON.parse(raw);
-      Object.entries(obj).forEach(([host, v]) => mem.set(host, v));
-    } catch {}
-  };
-  const saveSession = () => {
-    try {
-      const obj = {}; mem.forEach((v, k) => obj[k] = v);
-      sessionStorage.setItem(SS_KEY, JSON.stringify(obj));
-    } catch {}
-  };
-  const nowSec = () => Math.floor(Date.now() / 1000);
-  const getCached = (host) => {
-    const it = mem.get(host);
-    if (!it) return null;
-    if (it.ts + (it.ttl || cfg.cacheTtlSec) < nowSec()) { mem.delete(host); return null; }
-    return it;
-  };
-  const setCached = (host, action, ttl, message) => {
-    mem.set(host, {
-      action,
-      ttl: ttl || cfg.cacheTtlSec,
-      ts: nowSec(),
-      message: message || null
-    });
-    saveSession();
-  };
-
   // ===== Endpoint =====
   const fetchWithTimeout = (url, opts = {}, timeoutMs = 800) => {
     const ctrl = new AbortController();
@@ -469,13 +531,18 @@
   };
 
   async function getPolicy(host) {
-    const cached = getCached(host);
+    const cached = policyCache.get(host);
     if (cached) return cached.action;
 
     if (!endpointHealthy) {
       console.error("[SafeLinkGuard] Endpoint non disponibile. Fallback 'warn'. Host:", host);
       const fallback = "warn";
-      setCached(host, fallback, Math.min(300, cfg.cacheTtlSec), "Endpoint non disponibile. Procedi con cautela.");
+      policyCache.set(
+        host,
+        fallback,
+        Math.min(300, cfg.cacheTtlSec),
+        "Endpoint non disponibile. Procedi con cautela."
+      );
       return fallback;
     }
 
@@ -496,12 +563,17 @@
       const action = normalizeAction(json?.action);
       const ttl = Number.isFinite(json?.ttl) ? json.ttl : cfg.cacheTtlSec;
       const message = typeof json?.message === "string" ? json.message : null;
-      setCached(host, action, ttl, message);
+      policyCache.set(host, action, ttl, message);
       return action;
     } catch (e) {
       console.error("[SafeLinkGuard] Errore policy per host:", host, e);
       const fallback = "warn";
-      setCached(host, fallback, Math.min(300, cfg.cacheTtlSec), "Errore durante la verifica del dominio. Procedi con cautela.");
+      policyCache.set(
+        host,
+        fallback,
+        Math.min(300, cfg.cacheTtlSec),
+        "Errore durante la verifica del dominio. Procedi con cautela."
+      );
       return fallback;
     }
   }
@@ -514,7 +586,7 @@
   const applyPolicyToHost = (host, action) => {
     const set = anchorsByHost.get(host);
     if (!set) return;
-    const cached = getCached(host);
+    const cached = policyCache.get(host);
     const message = cached?.message || null;
     const warnMessage = message || cfg.warnMessageDefault;
     for (const node of Array.from(set)) {
@@ -549,7 +621,7 @@
   };
 
   const enqueueHost = (host) => {
-    const cached = getCached(host);
+    const cached = policyCache.get(host);
     if (cached) { applyPolicyToHost(host, cached.action); return; }
     if (inFlight.has(host)) return;
     inFlight.add(host);
@@ -715,7 +787,7 @@
     mapAdd(host, a);
 
     // Se già in cache come DENY, blocca SUBITO (e sostituisci <a>→<span> se richiesto)
-    const cached = getCached(host);
+    const cached = policyCache.get(host);
     if (cached && cached.action === "deny") {
       const denyMsg = cached.message || "Dominio bloccato";
       disableLink(a, denyMsg, host);
@@ -731,7 +803,7 @@
       const isModified = e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1;
       if (isModified) return;
 
-      const cached2 = getCached(host);
+      const cached2 = policyCache.get(host);
       if (!cached2) {
         e.preventDefault();
         e.stopPropagation();
@@ -746,7 +818,7 @@
           tmp.remove();
         } else if (action === "warn") {
           if (cfg.mode === "strict") {
-            showModal(url, getCached(host)?.message);
+            showModal(url, policyCache.get(host)?.message);
           }
         }
         // deny: già applicato a tutti i link dell’host
@@ -797,7 +869,7 @@
   // ===== Init =====
   const init = async () => {
     injectStyles();
-    loadSession();
+    policyCache.load();
     await checkEndpointHealth();
     if (!endpointHealthy) {
       console.error(`[SafeLinkGuard] Verifica fallita per data-endpoint="${cfg.endpoint}". Fallback "warn".`);
@@ -811,7 +883,7 @@
   // ===== API =====
   window.SafeLinkGuard = {
     rescan(root) { processAll(root || document); },
-    clearCache() { mem.clear(); saveSession(); },
+    clearCache() { policyCache.clear(); },
     setMode(m) { cfg.mode = m === "soft" ? "soft" : "strict"; }
   };
 })();
