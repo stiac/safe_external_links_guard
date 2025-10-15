@@ -3,7 +3,9 @@
  * - Async, policy lato server, DENY immediato
  * - Normalizzazione action endpoint (allow|warn|deny)
  * - Blocco immediato da cache; sostituzione <a>→<span> aggiorna l’indice
- */
+ * - Modalità soft con evidenziazione configurabile e messaggi lato server
+ * - Supporto a selettori esclusi definiti nell’attributo data-exclude-selectors
+*/
 (function () {
   "use strict";
 
@@ -17,13 +19,20 @@
     endpoint: (thisScript.getAttribute("data-endpoint") || "/links/policy").trim(),
     timeoutMs: parseInt(thisScript.getAttribute("data-timeout") || "900", 10),
     cacheTtlSec: parseInt(thisScript.getAttribute("data-cache-ttl") || "3600", 10),
-    mode: (thisScript.getattribute?.("data-mode") || thisScript.getAttribute("data-mode") || "strict").trim(), // strict|soft
+    mode: (thisScript.getAttribute("data-mode") || "strict").trim().toLowerCase(), // strict|soft
     removeNode: (thisScript.getAttribute("data-remove-node") || "false") === "true",
     rel: ["noopener", "noreferrer", "nofollow"],
     newTab: true,
     zIndex: 999999,
-    maxConcurrent: 4
+    maxConcurrent: 4,
+    warnHighlightClass: (thisScript.getAttribute("data-warn-highlight-class") || "slg-warn-highlight").trim(),
+    warnMessageDefault: (thisScript.getAttribute("data-warn-message") || "Questo link non è verificato. Procedi solo se ti fidi del sito.").trim(),
+    excludeSelectors: (thisScript.getAttribute("data-exclude-selectors") || "")
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean)
   };
+  if (cfg.mode !== "soft") cfg.mode = "strict";
 
   // ===== Stato endpoint =====
   let endpointHealthy = false;
@@ -54,6 +63,8 @@
       .slg-btn.primary:hover{filter:brightness(1.05)}
       body.slg-no-scroll{overflow:hidden}
       .slg-disabled{cursor:not-allowed;opacity:.6}
+      .slg-warn-highlight{outline:2px solid rgba(247,144,9,.8);border-radius:8px;padding:2px}
+      .slg-warn-highlight:focus{outline-width:3px}
     `;
     document.head.appendChild(style);
   };
@@ -86,6 +97,23 @@
     if (newNode) set.add(newNode);
   };
 
+  const invalidExcludeSelectors = new Set();
+
+  const shouldExclude = (node) => {
+    if (!node || !node.matches) return false;
+    for (const sel of cfg.excludeSelectors) {
+      try {
+        if (node.matches(sel)) return true;
+      } catch (e) {
+        if (!invalidExcludeSelectors.has(sel)) {
+          invalidExcludeSelectors.add(sel);
+          console.error(`[SafeLinkGuard] Selettore non valido in data-exclude-selectors: "${sel}"`, e);
+        }
+      }
+    }
+    return false;
+  };
+
   const disableLink = (a, reason = "Dominio bloccato", hostForIndex = null) => {
     if (cfg.removeNode) {
       const span = document.createElement("span");
@@ -111,7 +139,7 @@
   };
 
   // ===== Cache =====
-  const SS_KEY = "SLG_POLICY_CACHE_V2";
+  const SS_KEY = "SLG_POLICY_CACHE_V3";
   const mem = new Map();
   const loadSession = () => {
     try {
@@ -134,8 +162,13 @@
     if (it.ts + (it.ttl || cfg.cacheTtlSec) < nowSec()) { mem.delete(host); return null; }
     return it;
   };
-  const setCached = (host, action, ttl) => {
-    mem.set(host, { action, ttl: ttl || cfg.cacheTtlSec, ts: nowSec() });
+  const setCached = (host, action, ttl, message) => {
+    mem.set(host, {
+      action,
+      ttl: ttl || cfg.cacheTtlSec,
+      ts: nowSec(),
+      message: message || null
+    });
     saveSession();
   };
 
@@ -181,7 +214,7 @@
     if (!endpointHealthy) {
       console.error("[SafeLinkGuard] Endpoint non disponibile. Fallback 'warn'. Host:", host);
       const fallback = "warn";
-      setCached(host, fallback, Math.min(300, cfg.cacheTtlSec));
+      setCached(host, fallback, Math.min(300, cfg.cacheTtlSec), "Endpoint non disponibile. Procedi con cautela.");
       return fallback;
     }
 
@@ -201,12 +234,13 @@
       const json = await res.json();
       const action = normalizeAction(json?.action);
       const ttl = Number.isFinite(json?.ttl) ? json.ttl : cfg.cacheTtlSec;
-      setCached(host, action, ttl);
+      const message = typeof json?.message === "string" ? json.message : null;
+      setCached(host, action, ttl, message);
       return action;
     } catch (e) {
       console.error("[SafeLinkGuard] Errore policy per host:", host, e);
       const fallback = "warn";
-      setCached(host, fallback, Math.min(300, cfg.cacheTtlSec));
+      setCached(host, fallback, Math.min(300, cfg.cacheTtlSec), "Errore durante la verifica del dominio. Procedi con cautela.");
       return fallback;
     }
   }
@@ -219,20 +253,33 @@
   const applyPolicyToHost = (host, action) => {
     const set = anchorsByHost.get(host);
     if (!set) return;
+    const cached = getCached(host);
+    const message = cached?.message || null;
+    const warnMessage = message || cfg.warnMessageDefault;
     for (const node of Array.from(set)) {
       if (!node.isConnected) { set.delete(node); continue; }
       if (action === "deny") {
-        disableLink(node, "Dominio bloccato", host);
+        const reason = message || "Dominio bloccato";
+        disableLink(node, reason, host);
       } else if (action === "allow") {
         if (node.tagName === "A") {
           ensureAttrs(node);
           // reset listener: clone per sicurezza
           const clone = node.cloneNode(true);
+          clone.classList?.remove(cfg.warnHighlightClass);
+          if (clone.title && clone.title === warnMessage) clone.removeAttribute("title");
           node.replaceWith(clone);
           mapReplaceNode(host, node, clone);
+        } else {
+          node.classList?.remove(cfg.warnHighlightClass);
+          if (node.title && node.title === warnMessage) node.removeAttribute("title");
         }
       } else {
         if (node.tagName === "A") ensureAttrs(node); // warn
+        if (cfg.mode === "soft") {
+          node.classList?.add(cfg.warnHighlightClass);
+          node.title = warnMessage;
+        }
       }
     }
   };
@@ -266,6 +313,7 @@
   // ===== Modale + apertura robusta =====
   let modalRoot = null;
   let pendingUrl = null;
+  let pendingMessage = null;
   let lastFocused = null;
 
   const buildModal = () => {
@@ -297,7 +345,7 @@
     const body = document.createElement("div");
     body.className = "slg-body";
     body.innerHTML = `
-      <p>Questo link non è verificato. Procedi solo se ti fidi del sito.</p>
+      <p id="slg-message">${cfg.warnMessageDefault}</p>
       <p>Host: <span id="slg-host" class="slg-host"></span></p>
       <div class="slg-actions">
         <a id="slg-open" class="slg-btn primary" rel="noopener noreferrer nofollow" target="_blank">Apri link</a>
@@ -316,6 +364,7 @@
       root.classList.add("slg--hidden");
       document.body.classList.remove("slg-no-scroll");
       pendingUrl = null;
+      pendingMessage = null;
       if (lastFocused && lastFocused.focus) lastFocused.focus();
     };
 
@@ -364,14 +413,16 @@
     return modalRoot;
   };
 
-  const showModal = (url) => {
+  const showModal = (url, message) => {
     ensureModal();
     pendingUrl = url;
+    pendingMessage = message || cfg.warnMessageDefault;
     modalRoot.querySelector("#slg-host").textContent = url.host;
     const openEl = modalRoot.querySelector("#slg-open");
     openEl.setAttribute("href", url.href);
     openEl.setAttribute("target", "_blank");
     openEl.setAttribute("rel", "noopener noreferrer nofollow");
+    modalRoot.querySelector("#slg-message").textContent = pendingMessage;
     lastFocused = document.activeElement;
     modalRoot.classList.remove("slg--hidden");
     document.body.classList.add("slg-no-scroll");
@@ -397,7 +448,8 @@
     // Se già in cache come DENY, blocca SUBITO (e sostituisci <a>→<span> se richiesto)
     const cached = getCached(host);
     if (cached && cached.action === "deny") {
-      disableLink(a, "Dominio bloccato", host);
+      const denyMsg = cached.message || "Dominio bloccato";
+      disableLink(a, denyMsg, host);
       return;
     }
 
@@ -424,7 +476,9 @@
           try { tmp.click(); } catch { try { window.open(url.href, "_blank", "noopener"); } catch { location.assign(url.href); } }
           tmp.remove();
         } else if (action === "warn") {
-          showModal(url);
+          if (cfg.mode === "strict") {
+            showModal(url, getCached(host)?.message);
+          }
         }
         // deny: già applicato a tutti i link dell’host
         return;
@@ -435,23 +489,38 @@
         return;
       }
       if (cached2.action === "warn") {
-        e.preventDefault(); e.stopPropagation();
-        showModal(url);
+        if (cfg.mode === "strict") {
+          e.preventDefault(); e.stopPropagation();
+          showModal(url, cached2.message);
+        }
       }
       // allow: passa
     }, { capture: true });
   };
 
   const processAll = (root = document) => {
-    root.querySelectorAll("a[href]:not([data-safe-link-guard])").forEach(processAnchor);
+    root.querySelectorAll("a[href]:not([data-safe-link-guard])").forEach((node) => {
+      if (shouldExclude(node)) {
+        node.dataset.safeLinkGuard = "1";
+        return;
+      }
+      processAnchor(node);
+    });
   };
 
   const observer = new MutationObserver((mutations) => {
     for (const m of mutations) {
       m.addedNodes.forEach((node) => {
         if (node.nodeType !== 1) return;
-        if (node.tagName === "A") processAnchor(node);
-        else node.querySelectorAll?.("a[href]")?.forEach(processAnchor);
+        if (node.tagName === "A") {
+          if (shouldExclude(node)) { node.dataset.safeLinkGuard = "1"; return; }
+          processAnchor(node);
+        } else {
+          node.querySelectorAll?.("a[href]")?.forEach((anchor) => {
+            if (shouldExclude(anchor)) { anchor.dataset.safeLinkGuard = "1"; return; }
+            processAnchor(anchor);
+          });
+        }
       });
     }
   });

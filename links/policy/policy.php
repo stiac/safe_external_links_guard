@@ -2,64 +2,44 @@
 // policy.php
 declare(strict_types=1);
 
-// Facoltativo: verifica Origin/CSRF base
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-  http_response_code(405);
-  header('Allow: POST');
-  exit;
-}
-header('Content-Type: application/json; charset=utf-8');
+require __DIR__ . '/resolver.php';
+
 header('Cache-Control: no-store');
+header('Content-Type: application/json; charset=utf-8');
+
+// Health check via GET ?health=1
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    if (isset($_GET['health'])) {
+        echo json_encode([
+            'status' => 'ok',
+            'timestamp' => gmdate('c'),
+        ]);
+        exit;
+    }
+    http_response_code(405);
+    header('Allow: POST');
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    header('Allow: POST');
+    exit;
+}
 
 $raw = file_get_contents('php://input');
 $data = json_decode($raw, true) ?: [];
 
-$host = strtolower($data['host'] ?? '');
+$host = strtolower((string) ($data['host'] ?? ''));
 if ($host === '') {
-  echo json_encode(['action' => 'warn', 'ttl' => 300]);
-  exit;
+    echo json_encode([
+        'action' => 'warn',
+        'ttl' => SLG_DEFAULT_WARN_TTL,
+        'message' => 'Host non specificato.',
+    ]);
+    exit;
 }
 
-// ——— Liste PRIVATE lato server ———
-// Supporto wildcard con suffissi.
-$ALLOW = [
-  'tuo-sito.it',
-  '*.tuo-sito.it',
-  'github.com',
-  'openai.com',
-];
-$DENY = [
-  'bad-domain.com',
-  '*.truffa.xyz',
-  'phishing.example',
-  'getmanylinks.ru'
-];
+$decision = slg_resolve_policy($host);
 
-// Match con wildcard "*.dominio.tld"
-$match = function (string $host, string $pattern): bool {
-  $host = strtolower($host);
-  $pattern = strtolower($pattern);
-  if (strpos($pattern, '*.') === 0) {
-    $base = substr($pattern, 2);
-    return $host === $base || str_ends_with($host, '.' . $base);
-  }
-  return $host === $pattern;
-};
-
-$inList = function (string $host, array $list) use ($match): bool {
-  foreach ($list as $p) { if ($match($host, $p)) return true; }
-  return false;
-};
-
-// Decisione
-if ($inList($host, $DENY)) {
-  echo json_encode(['action' => 'deny', 'ttl' => 3600]);
-  exit;
-}
-if ($inList($host, $ALLOW)) {
-  echo json_encode(['action' => 'allow', 'ttl' => 3600]);
-  exit;
-}
-
-// Default: warn (mostra popup)
-echo json_encode(['action' => 'warn', 'ttl' => 900]);
+echo json_encode($decision);
