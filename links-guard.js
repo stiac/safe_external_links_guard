@@ -21,6 +21,13 @@
     cacheTtlSec: parseInt(thisScript.getAttribute("data-cache-ttl") || "3600", 10),
     mode: (thisScript.getAttribute("data-mode") || "strict").trim().toLowerCase(), // strict|soft
     removeNode: (thisScript.getAttribute("data-remove-node") || "false") === "true",
+    // Mostra o nasconde il pulsante "Copia link" nella modale secondo l'attributo data-show-copy-button
+    showCopyButton: (() => {
+      const raw = thisScript.getAttribute("data-show-copy-button");
+      if (raw == null) return true;
+      const normalized = raw.trim().toLowerCase();
+      return !["false", "0", "no", "off"].includes(normalized);
+    })(),
     rel: ["noopener", "noreferrer", "nofollow"],
     newTab: true,
     zIndex: 999999,
@@ -344,12 +351,15 @@
 
     const body = document.createElement("div");
     body.className = "slg-body";
+    const copyButtonMarkup = cfg.showCopyButton
+      ? '<button id="slg-copy" class="slg-btn secondary" type="button">Copia link</button>'
+      : "";
     body.innerHTML = `
       <p id="slg-message">${cfg.warnMessageDefault}</p>
       <p>Host: <span id="slg-host" class="slg-host"></span></p>
       <div class="slg-actions">
         <a id="slg-open" class="slg-btn primary" rel="noopener noreferrer nofollow" target="_blank">Apri link</a>
-        <button id="slg-copy" class="slg-btn secondary" type="button">Copia link</button>
+        ${copyButtonMarkup}
         <button id="slg-cancel" class="slg-btn secondary" type="button">Annulla</button>
       </div>
     `;
@@ -391,16 +401,18 @@
       hide();
     }, { capture: true });
 
-    copyBtn.addEventListener("click", async () => {
-      if (!pendingUrl) return;
-      try { await navigator.clipboard.writeText(pendingUrl.href); }
-      catch {
-        const ta = document.createElement("textarea");
-        ta.value = pendingUrl.href;
-        document.body.appendChild(ta);
-        ta.select(); document.execCommand("copy"); ta.remove();
-      }
-    });
+    if (copyBtn) {
+      copyBtn.addEventListener("click", async () => {
+        if (!pendingUrl) return;
+        try { await navigator.clipboard.writeText(pendingUrl.href); }
+        catch {
+          const ta = document.createElement("textarea");
+          ta.value = pendingUrl.href;
+          document.body.appendChild(ta);
+          ta.select(); document.execCommand("copy"); ta.remove();
+        }
+      });
+    }
 
     return { root, dialog };
   };

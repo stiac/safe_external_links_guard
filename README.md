@@ -1,6 +1,6 @@
 # Safe External Links Guard
 
-**Versione:** 1.1.0
+**Versione:** 1.2.0
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
@@ -45,8 +45,10 @@ Lo script:
      data-warn-message="Questo link è monitorato: procedi con attenzione"
      data-warn-highlight-class="slg-warn-highlight"
      data-exclude-selectors=".slg-ignore, .newsletter-footer a"
+     data-show-copy-button="true"
    ></script>
    <!-- data-remove-node è opzionale: se impostato a true sostituisce <a> con <span> -->
+   <!-- imposta data-show-copy-button="false" per nascondere il pulsante "Copia link" -->
   ```
   Adatta `src` e `data-endpoint` ai percorsi effettivi del tuo sito.
  3. Assicurati che l'endpoint PHP sia raggiungibile e configurato con le tue liste di allow/deny.
@@ -61,6 +63,7 @@ Lo script legge gli attributi `data-*` dal tag `<script>` per adattare il compor
 | `data-cache-ttl` | `3600` | Durata cache lato client (secondi). |
 | `data-mode` | `strict` | Modalità operativa: `strict` mostra una modale per i link `warn`, `soft` li lascia cliccabili ma li evidenzia. |
 | `data-remove-node` | `false` | Se `true`, i link negati vengono sostituiti da `<span>` disabilitati. |
+| `data-show-copy-button` | `true` | Se impostato a `false`, nasconde il pulsante "Copia link" nella modale. |
 | `data-warn-message` | Messaggio predefinito | Testo mostrato nella modale e come tooltip nei warning in modalità `soft`. |
 | `data-warn-highlight-class` | `slg-warn-highlight` | Classe CSS applicata ai link `warn` in modalità `soft`. |
 | `data-exclude-selectors` | *(vuoto)* | Lista CSV di selettori CSS da escludere dalla scansione (`.footer a, #nav a.ignore`). |

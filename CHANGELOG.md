@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0] - 2025-10-18
+### Added
+- Opzione `data-show-copy-button` per disattivare il pulsante "Copia link" nella modale di avviso.
+
+### Changed
+- Documentazione aggiornata con la nuova configurazione e versione 1.2.0.
+
 ## [1.1.0] - 2025-10-17
 ### Added
 - Modalità `soft` con evidenziazione configurabile dei link in warning e supporto a messaggi personalizzati dal server.
