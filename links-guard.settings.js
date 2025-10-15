@@ -8,21 +8,21 @@
 
   // ===== Valori di default condivisi =====
   const DEFAULTS = {
-    endpoint: "/links/policy", // Endpoint server: accetta URL relativo o assoluto.
-    timeoutMs: 900, // Timeout in millisecondi per la richiesta API (default 0,9s).
-    cacheTtlSec: 3600, // TTL cache client in secondi; può essere personalizzato via il campo `ttl` della risposta API.
-    mode: "strict", // Varianti: "strict" mostra modale bloccante, "soft" evidenzia soltanto.
-    removeNode: false, // true per sostituire link negati con <span>, false per lasciarli ma disabilitati.
-    showCopyButton: true, // false nasconde pulsante "Copia link" nella modale di avviso.
-    hoverFeedback: "title", // "title" usa tooltip nativo, "tooltip" abilita overlay custom.
-    rel: ["noopener", "noreferrer", "nofollow"], // Attributi rel aggiunti ai link aperti in nuova scheda.
-    newTab: true, // true imposta target="_blank", false lascia il comportamento originale del link.
-    zIndex: 999999, // Ordine di sovrapposizione per modale/tooltip (utile in presenza di overlay complessi).
-    maxConcurrent: 4, // Numero massimo di richieste contemporanee verso l'endpoint.
-    warnHighlightClass: "slg-warn-highlight", // Classe CSS applicata ai link warn in modalità soft.
+    endpoint: "/links/policy", // Endpoint server (relativo o assoluto). Override via `data-endpoint` o override JS.
+    timeoutMs: 900, // Tempo massimo (ms) della fetch. Modificabile con `data-timeout` o override JS.
+    cacheTtlSec: 3600, // TTL della cache client (s). Configurabile con `data-cache-ttl` e sostituibile dal campo `ttl` dell'API.
+    mode: "strict", // Modalità operative supportate (`strict`/`soft`). Selezionabile con `data-mode`.
+    removeNode: false, // Gestione link `deny`: `true` trasforma <a> in <span>. Controllabile tramite `data-remove-node`.
+    showCopyButton: true, // Pulsante "Copia link" nella modale. Nascondilo con `data-show-copy-button="false"`.
+    hoverFeedback: "title", // Varianti feedback hover: `title` (tooltip nativo) o `tooltip` (UI custom). Cambiabile con `data-hover-feedback`.
+    rel: ["noopener", "noreferrer", "nofollow"], // Attributi di sicurezza aggiunti. Override solo via `SafeExternalLinksGuard.buildSettings` manuale.
+    newTab: true, // Imposta `target="_blank"` sui link esterni. Personalizzabile solo via override JS, nessun `data-*` dedicato.
+    zIndex: 999999, // Livello di stacking per modali/tooltip. Regolabile tramite override JS per integrazioni complesse.
+    maxConcurrent: 4, // Limite di richieste simultanee verso l'endpoint. Aggiornabile via override JS.
+    warnHighlightClass: "slg-warn-highlight", // Classe CSS dei link warn in modalità `soft`. Impostabile con `data-warn-highlight-class`.
     warnMessageDefault:
-      "Questo link non è verificato. Procedi solo se ti fidi del sito.", // Messaggio fallback se l'API non fornisce testo.
-    excludeSelectors: [] // Array di selettori CSS da ignorare (es. [".footer a", "#nav a"]).
+      "Questo link non è verificato. Procedi solo se ti fidi del sito.", // Messaggio fallback, modificabile con `data-warn-message`.
+    excludeSelectors: [] // Selettori da ignorare nella scansione. Accetta CSV tramite `data-exclude-selectors` o array via override.
   };
 
   const truthyValues = new Set(["true", "1", "yes", "on"]);
