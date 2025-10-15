@@ -531,9 +531,69 @@
 
   // ===== Endpoint =====
   const fetchWithTimeout = (url, opts = {}, timeoutMs = 800) => {
+    // Estrae un eventuale segnale esterno per propagare l'abort.
+    const { signal: externalSignal, ...requestOpts } = opts || {};
     const ctrl = new AbortController();
-    const id = setTimeout(() => ctrl.abort(), timeoutMs);
-    return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(id));
+
+    let timedOut = false;
+    let externalListenerAttached = false;
+
+    const timerId =
+      typeof timeoutMs === "number" && timeoutMs > 0
+        ? setTimeout(() => {
+            timedOut = true;
+            const timeoutError = new Error(`Timeout dopo ${timeoutMs} ms`);
+            timeoutError.name = "TimeoutError";
+            try {
+              ctrl.abort(timeoutError);
+            } catch (err) {
+              ctrl.abort();
+            }
+          }, timeoutMs)
+        : null;
+
+    const abortFromExternal = () => {
+      try {
+        ctrl.abort(externalSignal.reason);
+      } catch (err) {
+        ctrl.abort();
+      }
+    };
+
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        abortFromExternal();
+      } else {
+        externalSignal.addEventListener("abort", abortFromExternal, { once: true });
+        externalListenerAttached = true;
+      }
+    }
+
+    return fetch(url, { ...requestOpts, signal: ctrl.signal })
+      .catch((error) => {
+        if (error?.name === "AbortError") {
+          const reason = ctrl.signal.reason;
+          if (timedOut) {
+            if (reason instanceof Error) throw reason;
+            const timeoutError = new Error(`Timeout dopo ${timeoutMs} ms`);
+            timeoutError.name = "TimeoutError";
+            throw timeoutError;
+          }
+          if (reason instanceof Error) throw reason;
+          if (reason !== undefined) {
+            const reasonError = new Error(String(reason));
+            reasonError.name = "AbortError";
+            throw reasonError;
+          }
+        }
+        throw error;
+      })
+      .finally(() => {
+        if (timerId) clearTimeout(timerId);
+        if (externalListenerAttached) {
+          externalSignal.removeEventListener("abort", abortFromExternal);
+        }
+      });
   };
 
   async function checkEndpointHealth() {
@@ -544,7 +604,11 @@
     }
     const url = cfg.endpoint + (cfg.endpoint.includes("?") ? "&" : "?") + "health=1";
     try {
-      const res = await fetchWithTimeout(url, { method: "GET", cache: "no-store", credentials: "same-origin" }, cfg.timeoutMs);
+      const res = await fetchWithTimeout(
+        url,
+        { method: "GET", cache: "no-store", credentials: "same-origin" },
+        cfg.timeoutMs
+      );
       if (!res.ok) {
         console.error(`[SafeLinkGuard] Endpoint non raggiungibile. HTTP ${res.status} su ${url}`);
         endpointHealthy = false;
@@ -553,7 +617,11 @@
       endpointHealthy = true;
       return true;
     } catch (e) {
-      console.error(`[SafeLinkGuard] Errore di rete verso ${url}:`, e);
+      if (e?.name === "TimeoutError") {
+        console.warn(`[SafeLinkGuard] Timeout health-check su ${url} dopo ${cfg.timeoutMs} ms`);
+      } else {
+        console.error(`[SafeLinkGuard] Errore di rete verso ${url}:`, e);
+      }
       endpointHealthy = false;
       return false;
     }
@@ -600,13 +668,22 @@
       policyCache.set(host, action, ttl, message);
       return action;
     } catch (e) {
-      console.error("[SafeLinkGuard] Errore policy per host:", host, e);
+      const isTimeout = e?.name === "TimeoutError";
+      if (isTimeout) {
+        console.warn(
+          `[SafeLinkGuard] Timeout policy per host "${host}" dopo ${cfg.timeoutMs} ms`
+        );
+      } else {
+        console.error("[SafeLinkGuard] Errore policy per host:", host, e);
+      }
       const fallback = "warn";
       policyCache.set(
         host,
         fallback,
         Math.min(300, cfg.cacheTtlSec),
-        "Errore durante la verifica del dominio. Procedi con cautela."
+        isTimeout
+          ? "Timeout durante la verifica del dominio. Procedi con cautela."
+          : "Errore durante la verifica del dominio. Procedi con cautela."
       );
       return fallback;
     }

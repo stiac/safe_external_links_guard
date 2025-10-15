@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.7] - 2025-10-28
+### Fixed
+- Gestione dei timeout delle richieste verso l'endpoint con errori dedicati per evitare `AbortError` poco chiari in console e garantire messaggi di fallback coerenti lato utente.
+
+### Changed
+- Log del controllo di salute e delle policy aggiornati per distinguere i timeout dagli altri errori di rete, migliorando la diagnosi dei problemi di connettività.
+
 ## [1.5.6] - 2025-10-27
 ### Fixed
 - Intercettata la gestione del click sui link consentiti per impedire aperture multiple quando sono presenti handler inline o listener esterni aggiuntivi.
