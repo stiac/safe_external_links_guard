@@ -34,7 +34,8 @@ class FakeScript {
     'data-cache-ttl': '1200',
     'data-mode': 'soft',
     'data-remove-node': 'true',
-    'data-exclude-selectors': '.ignore, .skip'
+    'data-exclude-selectors': '.ignore, .skip',
+    'data-new-tab': 'false'
   });
   const cfg = SafeExternalLinksGuard.buildSettings(script);
   assert.strictEqual(cfg.timeoutMs, 1500, 'data-timeout should be parsed as integer');
@@ -42,6 +43,7 @@ class FakeScript {
   assert.strictEqual(cfg.mode, 'soft', 'data-mode="soft" should enable soft mode');
   assert.strictEqual(cfg.removeNode, true, 'data-remove-node="true" should enable node removal');
   assert.deepStrictEqual(cfg.excludeSelectors, ['.ignore', '.skip'], 'data-exclude-selectors should produce cleaned array');
+  assert.strictEqual(cfg.newTab, false, 'data-new-tab="false" should disable new tab opening');
 })();
 
 (() => {
@@ -49,6 +51,12 @@ class FakeScript {
   const cfg = SafeExternalLinksGuard.buildSettings(script, { mode: 'strict', cacheTtlSec: 600 });
   assert.strictEqual(cfg.mode, 'strict', 'manual override should win over script attribute');
   assert.strictEqual(cfg.cacheTtlSec, 600, 'manual override should apply numeric values');
+})();
+
+(() => {
+  const script = new FakeScript({ 'data-new-tab': 'false' });
+  const cfg = SafeExternalLinksGuard.buildSettings(script, { newTab: true });
+  assert.strictEqual(cfg.newTab, true, 'manual override should be able to force new tab behaviour');
 })();
 
 (() => {
