@@ -1,11 +1,11 @@
 # Safe External Links Guard
 
-**Versione:** 1.5.4
+**Versione:** 1.5.6
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
 
-Con la versione 1.5.0 la logica interna è stata riorganizzata in moduli indipendenti (tooltip, cache, coda delle richieste) per semplificare la manutenzione e migliorare la leggibilità del codice. La release 1.5.4 corregge il parsing della modalità operativa accettando `data-mode="warn"` oltre a `strict` e `soft`, mantenendo sincronizzate le opzioni documentate e i valori effettivamente supportati.
+Con la versione 1.5.0 la logica interna è stata riorganizzata in moduli indipendenti (tooltip, cache, coda delle richieste) per semplificare la manutenzione e migliorare la leggibilità del codice. La release 1.5.6 assicura che i click sui link consentiti vengano gestiti una sola volta, prevenendo aperture duplicate anche quando sono presenti handler `onclick` personalizzati, e mantiene il supporto diretto all'attributo `data-new-tab` nel file di configurazione.
 
 Lo script:
 - impone attributi di sicurezza (`rel`, `target`) sui link esterni;
@@ -89,6 +89,7 @@ In questo modo le modifiche alle impostazioni restano concentrate in un file ded
 | `data-remove-node` | `false` | Se `true`, i link negati vengono sostituiti da `<span>` disabilitati. |
 | `data-show-copy-button` | `true` | Se impostato a `false`, nasconde il pulsante "Copia link" nella modale. |
 | `data-hover-feedback` | `title` | Determina come mostrare i messaggi su hover: `title` usa il tooltip nativo del browser, `tooltip` attiva la UI personalizzata. |
+| `data-new-tab` | `true` | Imposta se i link consentiti devono aprirsi in una nuova scheda (`true`) o riutilizzare quella corrente (`false`). |
 | `data-warn-message` | Messaggio predefinito | Testo mostrato nella modale e nei messaggi su hover dei link in warning. |
 | `data-warn-highlight-class` | `slg-warn-highlight` | Classe CSS applicata ai link `warn` in modalità `soft` o `warn`. |
 | `data-exclude-selectors` | *(vuoto)* | Lista CSV di selettori CSS da escludere dalla scansione (`.footer a, #nav a.ignore`). |
