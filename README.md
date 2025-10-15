@@ -1,6 +1,6 @@
 # Safe External Links Guard
 
-**Versione:** 1.3.0
+**Versione:** 1.4.0
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
@@ -11,6 +11,7 @@ Lo script:
 - blocca immediatamente i domini già noti in cache e opzionalmente sostituisce i link con elementi non interattivi;
 - mostra una modale di avviso per i domini non riconosciuti (in modalità `strict`) oppure evidenzia visivamente i link (in modalità `soft`);
 - rende configurabile la visualizzazione dei messaggi su hover tramite tooltip personalizzato oppure attributo `title` standard;
+- espone un file di impostazioni dedicato (`links-guard.settings.js`) per gestire i valori di default e facilitare la manutenzione;
 - osserva il DOM con `MutationObserver` per gestire i link aggiunti dinamicamente, rispettando selettori esclusi configurati.
 
 ## Struttura del repository
@@ -18,6 +19,7 @@ Lo script:
 ├── README.md                # Questo documento
 ├── VERSION                  # Numero di versione corrente
 ├── CHANGELOG.md             # Registro delle modifiche
+├── links-guard.settings.js  # Gestione centralizzata delle impostazioni
 ├── links-guard.js           # Script front-end di protezione dei link
 └── links/
     └── policy/
@@ -31,12 +33,14 @@ Lo script:
 - Hosting condiviso o distribuzione tramite upload FTP/file manager (nessun requisito di shell).
 
 ## Installazione e utilizzo
-1. Carica `links-guard.js` sul tuo hosting all'interno della directory pubblica, ad esempio in `/assets/app/safe_external_links_guard/`.
-2. Inserisci lo script nelle pagine da proteggere utilizzando il seguente snippet:
+1. Carica sia `links-guard.settings.js` sia `links-guard.js` sul tuo hosting all'interno della directory pubblica, ad esempio in `/assets/app/safe_external_links_guard/`.
+2. Inserisci gli script nelle pagine da proteggere utilizzando il seguente snippet (l'ordine è importante per caricare prima i settings):
    ```html
+   <!-- /assets/app/safe_external_links_guard/links-guard.settings.js -->
+   <script src="/assets/app/safe_external_links_guard/links-guard.settings.js"></script>
    <!-- /assets/app/safe_external_links_guard/links-guard.js (minificabile) -->
    <script
-     async
+     defer
      src="/assets/app/safe_external_links_guard/links-guard.js"
      data-endpoint="/app/demo/assets/app/links_secure/links/policy/policy.php"
      data-timeout="900"
@@ -54,9 +58,22 @@ Lo script:
    <!-- imposta data-hover-feedback="title" per usare il tooltip nativo del browser -->
   ```
   Adatta `src` e `data-endpoint` ai percorsi effettivi del tuo sito.
- 3. Assicurati che l'endpoint PHP sia raggiungibile e configurato con le tue liste di allow/deny.
+3. Assicurati che l'endpoint PHP sia raggiungibile e configurato con le tue liste di allow/deny.
 
-Lo script legge gli attributi `data-*` dal tag `<script>` per adattare il comportamento senza necessità di ricompilazione.
+Lo script legge gli attributi `data-*` dal tag `<script>` per adattare il comportamento senza necessità di ricompilazione. Se `links-guard.settings.js` non è caricato, `links-guard.js` utilizza comunque un fallback legacy, ma verrà mostrato un avviso in console per ricordare di includere il file di impostazioni centralizzato.
+L'attributo `defer` garantisce che gli script vengano eseguiti nell'ordine dichiarato senza bloccare il parsing HTML; evita `async` sul file principale a meno che il file di settings non sia stato precaricato.
+
+### File di impostazioni dedicato (`links-guard.settings.js`)
+Il file `links-guard.settings.js` espone il namespace globale `SafeExternalLinksGuard` con:
+- i valori di default (`defaults`) per tutte le impostazioni supportate;
+- la funzione `buildSettings(scriptEl, overrides)` che genera la configurazione finale partendo dagli attributi `data-*`;
+- alcune utility di parsing riutilizzabili.
+
+Per adattare i default al tuo progetto puoi:
+- modificare direttamente `links-guard.settings.js`, mantenendo in chiaro i valori attesi;
+- creare un tuo file di configurazione che sostituisce `SafeExternalLinksGuard.buildSettings` prima di includere `links-guard.js`.
+
+In questo modo le modifiche alle impostazioni restano concentrate in un file dedicato e facilmente versionabile.
 
 ### Attributi di configurazione supportati
 | Attributo | Default | Descrizione |

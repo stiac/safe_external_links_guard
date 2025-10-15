@@ -16,36 +16,144 @@
     return s[s.length - 1];
   })();
 
-  const cfg = {
-    endpoint: (thisScript.getAttribute("data-endpoint") || "/links/policy").trim(),
-    timeoutMs: parseInt(thisScript.getAttribute("data-timeout") || "900", 10),
-    cacheTtlSec: parseInt(thisScript.getAttribute("data-cache-ttl") || "3600", 10),
-    mode: (thisScript.getAttribute("data-mode") || "strict").trim().toLowerCase(), // strict|soft
-    removeNode: (thisScript.getAttribute("data-remove-node") || "false") === "true",
-    // Mostra o nasconde il pulsante "Copia link" nella modale secondo l'attributo data-show-copy-button
-    showCopyButton: (() => {
-      const raw = thisScript.getAttribute("data-show-copy-button");
-      if (raw == null) return true;
-      const normalized = raw.trim().toLowerCase();
-      return !["false", "0", "no", "off"].includes(normalized);
-    })(),
-    hoverFeedback: (() => {
-      const raw = thisScript.getAttribute("data-hover-feedback");
-      if (!raw) return "title";
-      const normalized = raw.trim().toLowerCase();
+  const guardNamespace = (window.SafeExternalLinksGuard =
+    window.SafeExternalLinksGuard || {});
+  let buildSettings = guardNamespace.buildSettings;
+
+  if (typeof buildSettings !== "function") {
+    // Fallback legacy: se il file links-guard.settings.js non è stato caricato,
+    // ricostruiamo la configurazione mantenendo la compatibilità con le versioni precedenti.
+    const fallbackDefaults = {
+      endpoint: "/links/policy",
+      timeoutMs: 900,
+      cacheTtlSec: 3600,
+      mode: "strict",
+      removeNode: false,
+      showCopyButton: true,
+      hoverFeedback: "title",
+      rel: ["noopener", "noreferrer", "nofollow"],
+      newTab: true,
+      zIndex: 999999,
+      maxConcurrent: 4,
+      warnHighlightClass: "slg-warn-highlight",
+      warnMessageDefault:
+        "Questo link non è verificato. Procedi solo se ti fidi del sito.",
+      excludeSelectors: []
+    };
+
+    const getAttribute = (node, attr) => {
+      if (!node) return null;
+      const raw = node.getAttribute(attr);
+      return raw == null ? null : raw.trim();
+    };
+
+    const parseBoolean = (value, defaultValue) => {
+      if (value == null || value === "") return defaultValue;
+      const normalized = value.trim().toLowerCase();
+      if (["true", "1", "yes", "on"].includes(normalized)) return true;
+      if (["false", "0", "no", "off"].includes(normalized)) return false;
+      return defaultValue;
+    };
+
+    const parseInteger = (value, defaultValue) => {
+      if (value == null || value === "") return defaultValue;
+      const parsed = parseInt(value, 10);
+      return Number.isFinite(parsed) ? parsed : defaultValue;
+    };
+
+    const parseList = (value) => {
+      if (value == null || value === "") return [];
+      return value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    };
+
+    const parseMode = (value) => {
+      if (!value) return "strict";
+      const normalized = value.trim().toLowerCase();
+      return normalized === "soft" ? "soft" : "strict";
+    };
+
+    const parseHoverFeedback = (value) => {
+      if (!value) return "title";
+      const normalized = value.trim().toLowerCase();
       return normalized === "tooltip" ? "tooltip" : "title";
-    })(),
-    rel: ["noopener", "noreferrer", "nofollow"],
-    newTab: true,
-    zIndex: 999999,
-    maxConcurrent: 4,
-    warnHighlightClass: (thisScript.getAttribute("data-warn-highlight-class") || "slg-warn-highlight").trim(),
-    warnMessageDefault: (thisScript.getAttribute("data-warn-message") || "Questo link non è verificato. Procedi solo se ti fidi del sito.").trim(),
-    excludeSelectors: (thisScript.getAttribute("data-exclude-selectors") || "")
-      .split(",")
-      .map((v) => v.trim())
-      .filter(Boolean)
-  };
+    };
+
+    if (typeof console !== "undefined" && typeof console.warn === "function") {
+      console.warn(
+        "[SafeLinkGuard] links-guard.settings.js non caricato: utilizzo configurazione legacy."
+      );
+    }
+
+    buildSettings = (scriptEl) => {
+      const cfg = {
+        endpoint:
+          getAttribute(scriptEl, "data-endpoint") || fallbackDefaults.endpoint,
+        timeoutMs: parseInteger(
+          getAttribute(scriptEl, "data-timeout"),
+          fallbackDefaults.timeoutMs
+        ),
+        cacheTtlSec: parseInteger(
+          getAttribute(scriptEl, "data-cache-ttl"),
+          fallbackDefaults.cacheTtlSec
+        ),
+        mode: parseMode(getAttribute(scriptEl, "data-mode")),
+        removeNode: parseBoolean(
+          getAttribute(scriptEl, "data-remove-node"),
+          fallbackDefaults.removeNode
+        ),
+        showCopyButton: parseBoolean(
+          getAttribute(scriptEl, "data-show-copy-button"),
+          fallbackDefaults.showCopyButton
+        ),
+        hoverFeedback: parseHoverFeedback(
+          getAttribute(scriptEl, "data-hover-feedback")
+        ),
+        rel: [...fallbackDefaults.rel],
+        newTab: fallbackDefaults.newTab,
+        zIndex: fallbackDefaults.zIndex,
+        maxConcurrent: fallbackDefaults.maxConcurrent,
+        warnHighlightClass:
+          getAttribute(scriptEl, "data-warn-highlight-class") ||
+          fallbackDefaults.warnHighlightClass,
+        warnMessageDefault:
+          getAttribute(scriptEl, "data-warn-message") ||
+          fallbackDefaults.warnMessageDefault,
+        excludeSelectors: parseList(
+          getAttribute(scriptEl, "data-exclude-selectors") || ""
+        )
+      };
+
+      if (cfg.mode !== "soft") cfg.mode = "strict";
+      if (cfg.hoverFeedback !== "tooltip") cfg.hoverFeedback = "title";
+      if (!cfg.warnMessageDefault) {
+        cfg.warnMessageDefault = fallbackDefaults.warnMessageDefault;
+      }
+      return cfg;
+    };
+
+    if (!guardNamespace.defaults) {
+      guardNamespace.defaults = Object.freeze({
+        ...fallbackDefaults,
+        rel: [...fallbackDefaults.rel]
+      });
+    }
+    if (!guardNamespace.utils) {
+      guardNamespace.utils = {
+        parseBoolean,
+        parseInteger,
+        parseList,
+        parseMode,
+        parseHoverFeedback
+      };
+    }
+  }
+
+  const cfg = buildSettings(thisScript);
+  if (!Array.isArray(cfg.rel)) cfg.rel = ["noopener", "noreferrer", "nofollow"];
+  if (!Array.isArray(cfg.excludeSelectors)) cfg.excludeSelectors = [];
   if (cfg.mode !== "soft") cfg.mode = "strict";
   if (cfg.hoverFeedback !== "tooltip") cfg.hoverFeedback = "title";
   const useTooltip = cfg.hoverFeedback === "tooltip";

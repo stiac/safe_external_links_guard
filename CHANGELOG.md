@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0] - 2025-10-20
+### Added
+- File `links-guard.settings.js` con i valori di default e i parser condivisi per le impostazioni dello script.
+
+### Changed
+- `links-guard.js` ora legge la configurazione tramite il builder centralizzato e mostra un avviso quando ricade nel fallback legacy.
+- Documentazione aggiornata con la nuova struttura dei file, lo snippet con doppio `<script>` e indicazioni sull'uso del file di settings.
+
 ## [1.3.0] - 2025-10-19
 ### Added
 - Tooltip personalizzato per i messaggi mostrati quando un link è bloccato o in warning, configurabile tramite `data-hover-feedback="tooltip"`.
