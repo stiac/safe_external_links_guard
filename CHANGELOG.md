@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.9] - 2025-10-30
+### Fixed
+- Impedita l'applicazione dei codici di protezione agli elementi della modale di conferma, evitando che attributi come `title=""` o listener superflui alterino l'interfaccia.
+
+### Changed
+- Aggiunto `aria-describedby` alla finestra di dialogo per una presentazione più professionale e accessibile dei messaggi di avviso.
+
 ## [1.5.8] - 2025-10-29
 ### Fixed
 - Apertura dei link dalla modale con `newTab` attivo senza più ricadere nel fallback di navigazione interna quando il browser restituisce `window.open(...)=null` a causa di `noopener`, evitando così doppi redirect.
