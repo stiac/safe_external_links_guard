@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.5.1] - 2025-10-22
+### Added
+- Sezione della documentazione che spiega come scegliere i valori `ttl` restituiti dal resolver.
+
+### Changed
+- Commenti esplicativi sui TTL predefiniti in `links/policy/resolver.php` per chiarire le diverse durate di cache.
+
+## [1.5.0] - 2025-10-21
+### Added
+- Test automatico `node tests/unit/settings_builder_test.js` per garantire che la build delle impostazioni rispetti gli attributi `data-*` e i fallback di default.
+
+### Changed
+- Ristrutturata la logica di `links-guard.js` in moduli per tooltip, cache e coda di richieste, migliorando la manutenibilità e l'applicazione coerente delle policy.
+- `links-guard.settings.js` ora applica i default solo quando gli attributi `data-*` non sono presenti sullo script e include commenti descrittivi per ciascuna funzione di parsing.
+- Documentazione aggiornata con la versione 1.5.0, le note sulla nuova architettura e il comando di test Node.js.
+
 ## [1.4.0] - 2025-10-20
 ### Added
 - File `links-guard.settings.js` con i valori di default e i parser condivisi per le impostazioni dello script.

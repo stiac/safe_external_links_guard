@@ -21,31 +21,31 @@ function slg_policy_rules(): array
         [
             'pattern' => 'bad-domain.com',
             'action' => 'deny',
-            'ttl' => 86400,
+            'ttl' => 86400, // 24 ore di validità della decisione nella cache client.
             'message' => 'Dominio segnalato per phishing.'
         ],
         [
             'pattern' => '*.truffa.xyz',
             'action' => 'deny',
-            'ttl' => 86400,
+            'ttl' => 86400, // Anche i sottodomini restano bloccati per 24 ore.
             'message' => 'Blocca tutti i sottodomini truffa.xyz.'
         ],
         [
             'pattern' => 'github.com',
             'action' => 'allow',
-            'ttl' => 7200,
+            'ttl' => 7200, // TTL di due ore per consentire refresh frequenti.
             'message' => 'Repository GitHub verificato.'
         ],
         [
             'pattern' => '*.tuo-sito.it',
             'action' => 'allow',
-            'ttl' => 7200,
+            'ttl' => 7200, // Anche i sottodomini ufficiali vengono rivalutati ogni 2 ore.
             'message' => 'Sottodomini ufficiali tuo-sito.it.'
         ],
         [
             'pattern' => 'beta.partner.it',
             'action' => 'warn',
-            'ttl' => 1200,
+            'ttl' => 1200, // 20 minuti, così gli avvisi riflettono rapidamente i cambiamenti.
             'message' => 'Ambiente beta: verifica prima di procedere.'
         ],
     ];
