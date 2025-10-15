@@ -25,10 +25,10 @@ function slg_policy_rules(): array
             'message' => 'Dominio segnalato per phishing.'
         ],
         [
-            'pattern' => '*.truffa.xyz',
+            'pattern' => '*.ru',
             'action' => 'deny',
             'ttl' => 86400,
-            'message' => 'Blocca tutti i sottodomini truffa.xyz.'
+            'message' => 'Blocca tutti i sottodomini .ru.'
         ],
         [
             'pattern' => 'github.com',
