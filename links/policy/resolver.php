@@ -25,7 +25,7 @@ function slg_policy_rules(): array
             'message' => 'Dominio segnalato per phishing.'
         ],
         [
-            'pattern' => '*.ru',
+            'pattern' => '*.truffa.xyz',
             'action' => 'deny',
             'ttl' => 86400, // Anche i sottodomini restano bloccati per 24 ore.
             'message' => 'Blocca tutti i sottodomini truffa.xyz.'

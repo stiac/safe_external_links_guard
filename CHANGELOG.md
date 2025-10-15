@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.8] - 2025-10-29
+### Fixed
+- Apertura dei link dalla modale con `newTab` attivo senza più ricadere nel fallback di navigazione interna quando il browser restituisce `window.open(...)=null` a causa di `noopener`, evitando così doppi redirect.
+- Regola di deny per `*.truffa.xyz` allineata al messaggio e ai test, così da bloccare correttamente i sottodomini previsti.
+
 ## [1.5.7] - 2025-10-28
 ### Fixed
 - Gestione dei timeout delle richieste verso l'endpoint con errori dedicati per evitare `AbortError` poco chiari in console e garantire messaggi di fallback coerenti lato utente.
