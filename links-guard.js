@@ -5,6 +5,7 @@
  * - Blocco immediato da cache; sostituzione <a>→<span> aggiorna l’indice
  * - Modalità soft con evidenziazione configurabile e messaggi lato server
  * - Supporto a selettori esclusi definiti nell’attributo data-exclude-selectors
+ * - Messaggi su hover configurabili (tooltip personalizzato oppure title="")
 */
 (function () {
   "use strict";
@@ -28,6 +29,12 @@
       const normalized = raw.trim().toLowerCase();
       return !["false", "0", "no", "off"].includes(normalized);
     })(),
+    hoverFeedback: (() => {
+      const raw = thisScript.getAttribute("data-hover-feedback");
+      if (!raw) return "title";
+      const normalized = raw.trim().toLowerCase();
+      return normalized === "tooltip" ? "tooltip" : "title";
+    })(),
     rel: ["noopener", "noreferrer", "nofollow"],
     newTab: true,
     zIndex: 999999,
@@ -40,6 +47,8 @@
       .filter(Boolean)
   };
   if (cfg.mode !== "soft") cfg.mode = "strict";
+  if (cfg.hoverFeedback !== "tooltip") cfg.hoverFeedback = "title";
+  const useTooltip = cfg.hoverFeedback === "tooltip";
 
   // ===== Stato endpoint =====
   let endpointHealthy = false;
@@ -72,6 +81,7 @@
       .slg-disabled{cursor:not-allowed;opacity:.6}
       .slg-warn-highlight{outline:2px solid rgba(247,144,9,.8);border-radius:8px;padding:2px}
       .slg-warn-highlight:focus{outline-width:3px}
+      .slg-tooltip{position:absolute;z-index:1000000;padding:6px 10px;border-radius:8px;background:rgba(17,24,39,.95);color:#f9fafb;font-size:13px;line-height:1.4;box-shadow:0 10px 30px rgba(15,23,42,.35);pointer-events:none;max-width:260px}
     `;
     document.head.appendChild(style);
   };
@@ -89,6 +99,138 @@
     a.setAttribute("rel", merged.join(" "));
     a.dataset.safeLinkGuard = "1";
   };
+
+  // ===== Hover feedback (title | tooltip) =====
+  const tooltipHandlers = new WeakMap();
+  let tooltipEl = null;
+  let tooltipVisibleFor = null;
+
+  const ensureTooltipEl = () => {
+    if (tooltipEl) return tooltipEl;
+    tooltipEl = document.createElement("div");
+    tooltipEl.id = "slg-tooltip";
+    tooltipEl.className = "slg-tooltip slg--hidden";
+    document.body.appendChild(tooltipEl);
+    return tooltipEl;
+  };
+
+  const positionTooltip = (node) => {
+    if (!tooltipEl || tooltipVisibleFor !== node) return;
+    if (!node.isConnected) {
+      hideTooltip();
+      return;
+    }
+    const rect = node.getBoundingClientRect();
+    const tipRect = tooltipEl.getBoundingClientRect();
+    let top = window.scrollY + rect.top - tipRect.height - 10;
+    if (top < window.scrollY + 4) {
+      top = window.scrollY + rect.bottom + 10;
+    }
+    let left = window.scrollX + rect.left + (rect.width - tipRect.width) / 2;
+    const minLeft = window.scrollX + 4;
+    if (left < minLeft) left = minLeft;
+    const maxLeft = window.scrollX + document.documentElement.clientWidth - tipRect.width - 4;
+    if (left > maxLeft) left = maxLeft;
+    tooltipEl.style.top = `${Math.round(top)}px`;
+    tooltipEl.style.left = `${Math.round(left)}px`;
+    tooltipEl.style.visibility = "visible";
+  };
+
+  const showTooltipForNode = (node) => {
+    if (!useTooltip || !node) return;
+    const message = node.getAttribute("data-slg-message");
+    if (!message) return;
+    const tip = ensureTooltipEl();
+    tip.textContent = message;
+    tip.style.visibility = "hidden";
+    tip.classList.remove("slg--hidden");
+    tooltipVisibleFor = node;
+    requestAnimationFrame(() => positionTooltip(node));
+  };
+
+  const hideTooltip = () => {
+    if (!tooltipEl) return;
+    tooltipEl.classList.add("slg--hidden");
+    tooltipEl.style.visibility = "hidden";
+    tooltipVisibleFor = null;
+  };
+
+  const removeTooltipListeners = (node) => {
+    const handlers = tooltipHandlers.get(node);
+    if (!handlers) return;
+    node.removeEventListener("mouseenter", handlers.onEnter);
+    node.removeEventListener("mouseleave", handlers.onLeave);
+    node.removeEventListener("focus", handlers.onFocus);
+    node.removeEventListener("blur", handlers.onBlur);
+    node.removeEventListener("mousemove", handlers.onMove);
+    tooltipHandlers.delete(node);
+  };
+
+  const bindTooltip = (node) => {
+    if (!useTooltip || !node || tooltipHandlers.has(node)) return;
+    const onEnter = () => showTooltipForNode(node);
+    const onLeave = () => {
+      if (tooltipVisibleFor === node) hideTooltip();
+    };
+    const onFocus = onEnter;
+    const onBlur = onLeave;
+    const onMove = () => positionTooltip(node);
+    node.addEventListener("mouseenter", onEnter);
+    node.addEventListener("mouseleave", onLeave);
+    node.addEventListener("focus", onFocus);
+    node.addEventListener("blur", onBlur);
+    node.addEventListener("mousemove", onMove);
+    tooltipHandlers.set(node, { onEnter, onLeave, onFocus, onBlur, onMove });
+  };
+
+  const setHoverMessage = (node, message) => {
+    if (!node) return;
+    if (!message) {
+      clearHoverMessage(node, null, true);
+      return;
+    }
+    if (useTooltip) {
+      node.setAttribute("data-slg-message", message);
+      bindTooltip(node);
+      if (tooltipVisibleFor === node) {
+        showTooltipForNode(node);
+      }
+    } else {
+      node.setAttribute("title", message);
+      node.removeAttribute("data-slg-message");
+    }
+  };
+
+  const clearHoverMessage = (node, expectedMessage = null, force = false) => {
+    if (!node) return;
+    if (useTooltip) {
+      const attr = node.getAttribute("data-slg-message");
+      if (!attr && !tooltipHandlers.has(node)) return;
+      if (force || !expectedMessage || attr === expectedMessage) {
+        removeTooltipListeners(node);
+        node.removeAttribute("data-slg-message");
+        if (tooltipVisibleFor === node) hideTooltip();
+      }
+    } else {
+      const titleAttr = node.getAttribute("title");
+      if (force || !expectedMessage || titleAttr === expectedMessage) {
+        node.removeAttribute("title");
+      }
+    }
+  };
+
+  if (useTooltip) {
+    window.addEventListener("scroll", () => {
+      if (tooltipVisibleFor) hideTooltip();
+    }, true);
+    window.addEventListener("resize", () => {
+      if (tooltipVisibleFor) {
+        requestAnimationFrame(() => {
+          if (tooltipVisibleFor) positionTooltip(tooltipVisibleFor);
+        });
+      }
+    });
+  }
 
   // Indice host → Set<nodo>
   const anchorsByHost = new Map();
@@ -122,12 +264,16 @@
   };
 
   const disableLink = (a, reason = "Dominio bloccato", hostForIndex = null) => {
+    const message = reason || "Dominio bloccato";
+    clearHoverMessage(a, null, true);
     if (cfg.removeNode) {
       const span = document.createElement("span");
       span.innerHTML = a.innerHTML;
-      span.className = (a.className || "") + " slg-disabled";
-      span.setAttribute("title", reason);
+      const cls = (a.className || "").trim();
+      span.className = cls ? `${cls} slg-disabled` : "slg-disabled";
       span.setAttribute("aria-disabled", "true");
+      span.dataset.safeLinkGuard = "1";
+      setHoverMessage(span, message);
       const parent = a.parentNode;
       if (parent) {
         parent.replaceChild(span, a);
@@ -139,7 +285,7 @@
     a.setAttribute("role", "link");
     a.setAttribute("aria-disabled", "true");
     a.classList.add("slg-disabled");
-    a.title = reason;
+    setHoverMessage(a, message);
     a.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); }, { capture: true });
     a.dataset.safeLinkGuard = "1";
     return a;
@@ -271,21 +417,24 @@
       } else if (action === "allow") {
         if (node.tagName === "A") {
           ensureAttrs(node);
+          clearHoverMessage(node, warnMessage, useTooltip);
           // reset listener: clone per sicurezza
           const clone = node.cloneNode(true);
           clone.classList?.remove(cfg.warnHighlightClass);
-          if (clone.title && clone.title === warnMessage) clone.removeAttribute("title");
+          clearHoverMessage(clone, warnMessage, useTooltip);
           node.replaceWith(clone);
           mapReplaceNode(host, node, clone);
         } else {
           node.classList?.remove(cfg.warnHighlightClass);
-          if (node.title && node.title === warnMessage) node.removeAttribute("title");
+          clearHoverMessage(node, warnMessage, useTooltip);
         }
       } else {
         if (node.tagName === "A") ensureAttrs(node); // warn
         if (cfg.mode === "soft") {
           node.classList?.add(cfg.warnHighlightClass);
-          node.title = warnMessage;
+          setHoverMessage(node, warnMessage);
+        } else {
+          clearHoverMessage(node, warnMessage, useTooltip);
         }
       }
     }

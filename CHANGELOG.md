@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0] - 2025-10-19
+### Added
+- Tooltip personalizzato per i messaggi mostrati quando un link è bloccato o in warning, configurabile tramite `data-hover-feedback="tooltip"`.
+
+### Changed
+- `links-guard.js` permette di scegliere tra tooltip dedicato o attributo `title` per i messaggi su hover e gestisce in modo coerente la sostituzione dei nodi disabilitati.
+- Documentazione aggiornata alla versione 1.3.0 con istruzioni sulla nuova opzione di feedback.
+
 ## [1.2.0] - 2025-10-18
 ### Added
 - Opzione `data-show-copy-button` per disattivare il pulsante "Copia link" nella modale di avviso.

@@ -1,6 +1,6 @@
 # Safe External Links Guard
 
-**Versione:** 1.2.0
+**Versione:** 1.3.0
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
@@ -10,6 +10,7 @@ Lo script:
 - consulta in modo asincrono un endpoint che risponde con le azioni `allow`, `warn` o `deny` e un eventuale messaggio di motivazione;
 - blocca immediatamente i domini già noti in cache e opzionalmente sostituisce i link con elementi non interattivi;
 - mostra una modale di avviso per i domini non riconosciuti (in modalità `strict`) oppure evidenzia visivamente i link (in modalità `soft`);
+- rende configurabile la visualizzazione dei messaggi su hover tramite tooltip personalizzato oppure attributo `title` standard;
 - osserva il DOM con `MutationObserver` per gestire i link aggiunti dinamicamente, rispettando selettori esclusi configurati.
 
 ## Struttura del repository
@@ -46,9 +47,11 @@ Lo script:
      data-warn-highlight-class="slg-warn-highlight"
      data-exclude-selectors=".slg-ignore, .newsletter-footer a"
      data-show-copy-button="true"
+     data-hover-feedback="tooltip"
    ></script>
    <!-- data-remove-node è opzionale: se impostato a true sostituisce <a> con <span> -->
    <!-- imposta data-show-copy-button="false" per nascondere il pulsante "Copia link" -->
+   <!-- imposta data-hover-feedback="title" per usare il tooltip nativo del browser -->
   ```
   Adatta `src` e `data-endpoint` ai percorsi effettivi del tuo sito.
  3. Assicurati che l'endpoint PHP sia raggiungibile e configurato con le tue liste di allow/deny.
@@ -64,7 +67,8 @@ Lo script legge gli attributi `data-*` dal tag `<script>` per adattare il compor
 | `data-mode` | `strict` | Modalità operativa: `strict` mostra una modale per i link `warn`, `soft` li lascia cliccabili ma li evidenzia. |
 | `data-remove-node` | `false` | Se `true`, i link negati vengono sostituiti da `<span>` disabilitati. |
 | `data-show-copy-button` | `true` | Se impostato a `false`, nasconde il pulsante "Copia link" nella modale. |
-| `data-warn-message` | Messaggio predefinito | Testo mostrato nella modale e come tooltip nei warning in modalità `soft`. |
+| `data-hover-feedback` | `title` | Determina come mostrare i messaggi su hover: `title` usa il tooltip nativo del browser, `tooltip` attiva la UI personalizzata. |
+| `data-warn-message` | Messaggio predefinito | Testo mostrato nella modale e nei messaggi su hover dei link in warning. |
 | `data-warn-highlight-class` | `slg-warn-highlight` | Classe CSS applicata ai link `warn` in modalità `soft`. |
 | `data-exclude-selectors` | *(vuoto)* | Lista CSV di selettori CSS da escludere dalla scansione (`.footer a, #nav a.ignore`). |
 
@@ -96,6 +100,8 @@ Il resolver restituisce anche un health check JSON (`GET ?health=1`) per permett
 Lo stile della modale è iniettato direttamente dallo script e supporta modalità chiara/scura. È possibile sovrascrivere le classi `.slg-*` tramite CSS custom, mantenendo Tailwind CSS o altri framework come base.
 
 In modalità `soft` viene aggiunta la classe `slg-warn-highlight` ai link in warning. Sovrascrivi questa classe per adattare il visual (ad esempio con Tailwind CSS) oppure imposta `data-warn-highlight-class` con una classe personalizzata.
+
+Il comportamento dei messaggi su hover è configurabile tramite `data-hover-feedback`: impostandolo su `tooltip` viene mostrato un riquadro contestuale con stile personalizzato e posizionamento automatico; con il valore `title` viene invece utilizzato il tooltip nativo del browser, utile in scenari dove si preferisce un approccio minimale o non si vuole iniettare ulteriore markup.
 
 ## Sviluppo
 - Il codice JavaScript è autonomo e non richiede build. È stato introdotto il supporto all'esclusione di selettori via attributo `data-exclude-selectors` e al messaggio personalizzato lato server.
