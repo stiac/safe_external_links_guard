@@ -16,7 +16,7 @@
     showCopyButton: true, // Pulsante "Copia link" nella modale. Nascondilo con `data-show-copy-button="false"`.
     hoverFeedback: "title", // Varianti feedback hover: `title` (tooltip nativo) o `tooltip` (UI custom). Cambiabile con `data-hover-feedback`.
     rel: ["noopener", "noreferrer", "nofollow"], // Attributi di sicurezza aggiunti. Override solo via `SafeExternalLinksGuard.buildSettings` manuale.
-    newTab: true, // Imposta `target="_blank"` sui link esterni. Personalizzabile solo via override JS, nessun `data-*` dedicato.
+    newTab: true, // Imposta `target="_blank"` sui link esterni. Configurabile con `data-new-tab` o override JS.
     zIndex: 999999, // Livello di stacking per modali/tooltip. Regolabile tramite override JS per integrazioni complesse.
     maxConcurrent: 4, // Limite di richieste simultanee verso l'endpoint. Aggiornabile via override JS.
     warnHighlightClass: "slg-warn-highlight", // Classe CSS dei link warn in modalità `soft`/`warn`. Impostabile con `data-warn-highlight-class`.
@@ -119,6 +119,12 @@
       cfg.hoverFeedback = parseHoverFeedback(
         getAttribute(scriptEl, "data-hover-feedback"),
         cfg.hoverFeedback
+      );
+    }
+    if (hasDataAttribute(scriptEl, "data-new-tab")) {
+      cfg.newTab = parseBoolean(
+        getAttribute(scriptEl, "data-new-tab"),
+        cfg.newTab
       );
     }
     if (hasDataAttribute(scriptEl, "data-warn-highlight-class")) {

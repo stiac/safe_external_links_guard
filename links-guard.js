@@ -165,6 +165,35 @@
 
   const policyCache = createPolicyCache(cfg);
 
+  // Gestisce la navigazione effettiva verso un URL rispettando la configurazione
+  // `newTab`. L'apertura preferisce una nuova scheda quando richiesto e torna
+  // al navigatore corrente se il browser blocca `window.open`.
+  const followExternalUrl = (urlLike) => {
+    const href = typeof urlLike === "string" ? urlLike : urlLike?.href;
+    if (!href) return;
+
+    if (cfg.newTab) {
+      try {
+        const openedWindow = window.open(href, "_blank", "noopener");
+        if (openedWindow) return;
+      } catch (err) {
+        // Se il browser blocca la nuova finestra passiamo al fallback nello stesso tab.
+      }
+    }
+
+    try {
+      window.location.assign(href);
+    } catch (err) {
+      try {
+        window.location.href = href;
+      } catch (err2) {
+        if (typeof console !== "undefined" && typeof console.error === "function") {
+          console.error(`[SafeLinkGuard] Impossibile aprire l'URL: ${href}`, err2);
+        }
+      }
+    }
+  };
+
   function createHoverFeedback(config) {
     const tooltipEnabled = config.hoverFeedback === "tooltip";
     if (!tooltipEnabled) {
@@ -430,7 +459,11 @@
   const isExternal = (url) => url && url.host.toLowerCase() !== ORIGIN_HOST;
 
   const ensureAttrs = (a) => {
-    if (cfg.newTab) a.setAttribute("target", "_blank");
+    if (cfg.newTab) {
+      a.setAttribute("target", "_blank");
+    } else {
+      a.removeAttribute("target");
+    }
     const cur = (a.getAttribute("rel") || "").split(/\s+/).filter(Boolean);
     const merged = Array.from(new Set([...cur, ...cfg.rel]));
     a.setAttribute("rel", merged.join(" "));
@@ -717,17 +750,7 @@
       if (!href) { hide(); return; }
       e.preventDefault();
       e.stopImmediatePropagation();
-      let opened = false;
-      try { const w = window.open(href, "_blank", "noopener"); if (w) opened = true; } catch {}
-      if (!opened) {
-        const tmp = document.createElement("a");
-        tmp.href = href; tmp.target = "_blank"; tmp.rel = "noopener noreferrer nofollow";
-        tmp.style.position = "absolute"; tmp.style.left = "-9999px";
-        document.body.appendChild(tmp);
-        try { tmp.click(); opened = true; } catch {}
-        tmp.remove();
-      }
-      if (!opened) { try { location.assign(href); } catch {} }
+      followExternalUrl(href);
       hide();
     }, { capture: true });
 
@@ -762,7 +785,11 @@
     modalRoot.querySelector("#slg-host").textContent = url.host;
     const openEl = modalRoot.querySelector("#slg-open");
     openEl.setAttribute("href", url.href);
-    openEl.setAttribute("target", "_blank");
+    if (cfg.newTab) {
+      openEl.setAttribute("target", "_blank");
+    } else {
+      openEl.removeAttribute("target");
+    }
     openEl.setAttribute("rel", "noopener noreferrer nofollow");
     modalRoot.querySelector("#slg-message").textContent = pendingMessage;
     lastFocused = document.activeElement;
@@ -811,12 +838,7 @@
         const action = await getPolicy(host);
         applyPolicyToHost(host, action);
         if (action === "allow") {
-          const tmp = document.createElement("a");
-          tmp.href = url.href; tmp.target = "_blank"; tmp.rel = "noopener noreferrer nofollow";
-          tmp.style.position = "absolute"; tmp.style.left = "-9999px";
-          document.body.appendChild(tmp);
-          try { tmp.click(); } catch { try { window.open(url.href, "_blank", "noopener"); } catch { location.assign(url.href); } }
-          tmp.remove();
+          followExternalUrl(url);
         } else if (action === "warn") {
           if (cfg.mode !== "soft") {
             showModal(url, policyCache.get(host)?.message);

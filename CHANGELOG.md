@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.5.5] - 2025-10-26
+### Added
+- Supporto all'attributo `data-new-tab` nel builder delle impostazioni per controllare l'apertura dei link consentiti.
+
+### Fixed
+- Corretto il flusso di apertura dei link `allow` evitando aperture multiple e rispettando l'opzione `newTab` anche durante la conferma dalla modale.
+
+### Changed
+- Gli attributi dei link e della modale vengono aggiornati per forzare il riutilizzo della scheda corrente quando `newTab` è disattivato.
+
 ## [1.5.4] - 2025-10-25
 ### Fixed
 - Corretto il builder delle impostazioni per riconoscere `data-mode="warn"` e mantenere valida la modalità impostata tramite attributi o override manuali.
