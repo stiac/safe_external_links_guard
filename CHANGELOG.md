@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1] - 2025-10-22
+### Added
+- Sezione della documentazione che spiega come scegliere i valori `ttl` restituiti dal resolver.
+
+### Changed
+- Commenti esplicativi sui TTL predefiniti in `links/policy/resolver.php` per chiarire le diverse durate di cache.
+
 ## [1.5.0] - 2025-10-21
 ### Added
 - Test automatico `node tests/unit/settings_builder_test.js` per garantire che la build delle impostazioni rispetti gli attributi `data-*` e i fallback di default.

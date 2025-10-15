@@ -1,6 +1,6 @@
 # Safe External Links Guard
 
-**Versione:** 1.5.0
+**Versione:** 1.5.1
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
@@ -91,6 +91,15 @@ In questo modo le modifiche alle impostazioni restano concentrate in un file ded
 | `data-warn-message` | Messaggio predefinito | Testo mostrato nella modale e nei messaggi su hover dei link in warning. |
 | `data-warn-highlight-class` | `slg-warn-highlight` | Classe CSS applicata ai link `warn` in modalità `soft`. |
 | `data-exclude-selectors` | *(vuoto)* | Lista CSV di selettori CSS da escludere dalla scansione (`.footer a, #nav a.ignore`). |
+
+#### Come interpretare i TTL restituiti dal resolver
+Il campo `ttl` presente nelle risposte dell'endpoint indica per quanti secondi la decisione può restare in cache lato client prima di richiedere nuovamente il verdetto al server. Alcuni esempi pratici:
+
+- `"ttl": 86400` &rarr; 24 ore di validità: adatto a domini con policy molto stabili.
+- `"ttl": 7200` &rarr; 2 ore: utile quando le decisioni possono cambiare durante la giornata.
+- `"ttl": 1200` &rarr; 20 minuti: rende gli avvisi più reattivi in contesti temporanei o ambienti beta.
+
+Usa valori più bassi quando ti serve riflettere rapidamente cambiamenti lato server e valori alti quando le regole sono statiche, così da ridurre il numero di richieste.
 
 ### Cosa restituisce l'endpoint
 L'endpoint deve rispondere a richieste `POST` con un JSON del tipo:
