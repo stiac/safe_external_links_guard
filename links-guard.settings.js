@@ -32,7 +32,7 @@
     if (!node) return null;
     const raw = node.getAttribute(attribute);
     return raw == null ? null : raw.trim();
-  };
+  }; // Legge un attributo `data-*` e restituisce il valore normalizzato.
 
   const parseBoolean = (value, defaultValue) => {
     if (value == null || value === "") return defaultValue;
@@ -40,13 +40,13 @@
     if (truthyValues.has(normalized)) return true;
     if (falsyValues.has(normalized)) return false;
     return defaultValue;
-  };
+  }; // Converte gli attributi stringa in booleani rispettando i default.
 
   const parseInteger = (value, defaultValue) => {
     if (value == null || value === "") return defaultValue;
     const parsed = parseInt(value, 10);
     return Number.isFinite(parsed) ? parsed : defaultValue;
-  };
+  }; // Interpreta i valori numerici mantenendo fallback sicuri.
 
   const parseList = (value) => {
     if (value == null || value === "") return [];
@@ -54,128 +54,155 @@
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
-  };
+  }; // Trasforma una lista CSV in array pulito di stringhe.
 
   const parseMode = (value, defaultValue) => {
     if (!value) return defaultValue;
     const normalized = value.trim().toLowerCase();
     return normalized === "soft" ? "soft" : "strict";
-  };
+  }; // Garantisce che la modalità sia solo "strict" o "soft".
 
   const parseHoverFeedback = (value, defaultValue) => {
     if (!value) return defaultValue;
     const normalized = value.trim().toLowerCase();
     return normalized === "tooltip" ? "tooltip" : "title";
-  };
+  }; // Gestisce la strategia di feedback su hover.
 
-  /**
-   * Costruisce l'oggetto di configurazione a partire dal tag <script>
-   * e da eventuali override manuali forniti dal chiamante.
-   */
-  const buildSettings = (scriptEl, overrides) => {
-    const cfg = {
-      endpoint: getAttribute(scriptEl, "data-endpoint") || DEFAULTS.endpoint,
-      timeoutMs: parseInteger(
+  const hasDataAttribute = (scriptEl, attribute) => {
+    if (!scriptEl || typeof scriptEl.hasAttribute !== "function") return false;
+    return scriptEl.hasAttribute(attribute);
+  }; // Verifica se il tag <script> espone l'attributo richiesto.
+
+  const cloneDefaults = () => ({
+    ...DEFAULTS,
+    rel: [...DEFAULTS.rel],
+    excludeSelectors: [...DEFAULTS.excludeSelectors]
+  }); // Produce una copia isolata dei valori di default.
+
+  const applyScriptAttributes = (cfg, scriptEl) => {
+    if (!scriptEl) return cfg;
+
+    if (hasDataAttribute(scriptEl, "data-endpoint")) {
+      cfg.endpoint = getAttribute(scriptEl, "data-endpoint") || cfg.endpoint;
+    }
+    if (hasDataAttribute(scriptEl, "data-timeout")) {
+      cfg.timeoutMs = parseInteger(
         getAttribute(scriptEl, "data-timeout"),
-        DEFAULTS.timeoutMs
-      ),
-      cacheTtlSec: parseInteger(
+        cfg.timeoutMs
+      );
+    }
+    if (hasDataAttribute(scriptEl, "data-cache-ttl")) {
+      cfg.cacheTtlSec = parseInteger(
         getAttribute(scriptEl, "data-cache-ttl"),
-        DEFAULTS.cacheTtlSec
-      ),
-      mode: parseMode(
-        getAttribute(scriptEl, "data-mode") || DEFAULTS.mode,
-        DEFAULTS.mode
-      ),
-      removeNode: parseBoolean(
+        cfg.cacheTtlSec
+      );
+    }
+    if (hasDataAttribute(scriptEl, "data-mode")) {
+      cfg.mode = parseMode(getAttribute(scriptEl, "data-mode"), cfg.mode);
+    }
+    if (hasDataAttribute(scriptEl, "data-remove-node")) {
+      cfg.removeNode = parseBoolean(
         getAttribute(scriptEl, "data-remove-node"),
-        DEFAULTS.removeNode
-      ),
-      showCopyButton: parseBoolean(
+        cfg.removeNode
+      );
+    }
+    if (hasDataAttribute(scriptEl, "data-show-copy-button")) {
+      cfg.showCopyButton = parseBoolean(
         getAttribute(scriptEl, "data-show-copy-button"),
-        DEFAULTS.showCopyButton
-      ),
-      hoverFeedback: parseHoverFeedback(
+        cfg.showCopyButton
+      );
+    }
+    if (hasDataAttribute(scriptEl, "data-hover-feedback")) {
+      cfg.hoverFeedback = parseHoverFeedback(
         getAttribute(scriptEl, "data-hover-feedback"),
-        DEFAULTS.hoverFeedback
-      ),
-      rel: [...DEFAULTS.rel],
-      newTab: DEFAULTS.newTab,
-      zIndex: DEFAULTS.zIndex,
-      maxConcurrent: DEFAULTS.maxConcurrent,
-      warnHighlightClass:
-        getAttribute(scriptEl, "data-warn-highlight-class") ||
-        DEFAULTS.warnHighlightClass,
-      warnMessageDefault:
-        getAttribute(scriptEl, "data-warn-message") ||
-        DEFAULTS.warnMessageDefault,
-      excludeSelectors: parseList(
+        cfg.hoverFeedback
+      );
+    }
+    if (hasDataAttribute(scriptEl, "data-warn-highlight-class")) {
+      const cls = getAttribute(scriptEl, "data-warn-highlight-class");
+      cfg.warnHighlightClass = cls || cfg.warnHighlightClass;
+    }
+    if (hasDataAttribute(scriptEl, "data-warn-message")) {
+      const message = getAttribute(scriptEl, "data-warn-message");
+      cfg.warnMessageDefault = message || cfg.warnMessageDefault;
+    }
+    if (hasDataAttribute(scriptEl, "data-exclude-selectors")) {
+      cfg.excludeSelectors = parseList(
         getAttribute(scriptEl, "data-exclude-selectors")
-      )
-    };
-
-    if (!cfg.warnMessageDefault) {
-      cfg.warnMessageDefault = DEFAULTS.warnMessageDefault;
-    }
-    if (cfg.hoverFeedback !== "tooltip") {
-      cfg.hoverFeedback = "title";
+      );
     }
 
-    const manualOverrides =
-      overrides && typeof overrides === "object" ? overrides : null;
-    if (manualOverrides) {
-      const simpleKeys = [
-        "endpoint",
-        "timeoutMs",
-        "cacheTtlSec",
-        "mode",
-        "removeNode",
-        "showCopyButton",
-        "hoverFeedback",
-        "newTab",
-        "zIndex",
-        "maxConcurrent",
-        "warnHighlightClass",
-        "warnMessageDefault"
-      ];
-      simpleKeys.forEach((key) => {
-        if (Object.prototype.hasOwnProperty.call(manualOverrides, key)) {
-          const value = manualOverrides[key];
-          if (value !== undefined) {
-            cfg[key] = value;
-          }
+    return cfg;
+  }; // Applica selettivamente gli attributi `data-*` presenti sul tag <script>.
+
+  const applyManualOverrides = (cfg, overrides) => {
+    if (!overrides || typeof overrides !== "object") return cfg;
+
+    const simpleKeys = [
+      "endpoint",
+      "timeoutMs",
+      "cacheTtlSec",
+      "mode",
+      "removeNode",
+      "showCopyButton",
+      "hoverFeedback",
+      "newTab",
+      "zIndex",
+      "maxConcurrent",
+      "warnHighlightClass",
+      "warnMessageDefault"
+    ];
+    simpleKeys.forEach((key) => {
+      if (Object.prototype.hasOwnProperty.call(overrides, key)) {
+        const value = overrides[key];
+        if (value !== undefined) {
+          cfg[key] = value;
         }
-      });
-
-      if (Object.prototype.hasOwnProperty.call(manualOverrides, "rel")) {
-        const value = manualOverrides.rel;
-        cfg.rel = Array.isArray(value) ? [...value] : [...DEFAULTS.rel];
       }
+    });
 
-      if (
-        Object.prototype.hasOwnProperty.call(
-          manualOverrides,
-          "excludeSelectors"
-        )
-      ) {
-        const value = manualOverrides.excludeSelectors;
-        if (Array.isArray(value)) {
-          cfg.excludeSelectors = [...value];
-        } else if (value != null) {
-          cfg.excludeSelectors = parseList(String(value));
-        } else {
-          cfg.excludeSelectors = [];
-        }
+    if (Object.prototype.hasOwnProperty.call(overrides, "rel")) {
+      const value = overrides.rel;
+      cfg.rel = Array.isArray(value) ? [...value] : [...DEFAULTS.rel];
+    }
+
+    if (Object.prototype.hasOwnProperty.call(overrides, "excludeSelectors")) {
+      const value = overrides.excludeSelectors;
+      if (Array.isArray(value)) {
+        cfg.excludeSelectors = [...value];
+      } else if (value != null) {
+        cfg.excludeSelectors = parseList(String(value));
+      } else {
+        cfg.excludeSelectors = [];
       }
     }
 
     return cfg;
-  };
+  }; // Consente override programmatici preservando la forma dei dati.
+
+  const normalizeConfig = (cfg) => {
+    if (cfg.mode !== "soft") cfg.mode = "strict";
+    if (cfg.hoverFeedback !== "tooltip") cfg.hoverFeedback = "title";
+    if (!cfg.warnMessageDefault) {
+      cfg.warnMessageDefault = DEFAULTS.warnMessageDefault;
+    }
+    if (!Array.isArray(cfg.excludeSelectors)) {
+      cfg.excludeSelectors = [];
+    }
+    return cfg;
+  }; // Rifinisce la configurazione finale evitando stati inconsistenti.
+
+  const buildSettings = (scriptEl, overrides) => {
+    const cfg = cloneDefaults();
+    applyScriptAttributes(cfg, scriptEl);
+    applyManualOverrides(cfg, overrides);
+    return normalizeConfig(cfg);
+  }; // Orchestratore: fonde default, attributi `data-*` e override.
 
   const namespace = (global.SafeExternalLinksGuard =
     global.SafeExternalLinksGuard || {});
 
-  namespace.defaults = Object.freeze({ ...DEFAULTS, rel: [...DEFAULTS.rel] });
+  namespace.defaults = Object.freeze({ ...cloneDefaults(), rel: [...DEFAULTS.rel] });
   namespace.buildSettings = buildSettings;
   namespace.utils = {
     parseBoolean,
