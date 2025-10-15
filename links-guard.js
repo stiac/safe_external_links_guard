@@ -174,8 +174,15 @@
 
     if (cfg.newTab) {
       try {
-        const openedWindow = window.open(href, "_blank", "noopener");
-        if (openedWindow) return;
+        const openedWindow = window.open(href, "_blank");
+        if (openedWindow) {
+          try {
+            openedWindow.opener = null;
+          } catch (errAssignOpener) {
+            // Alcuni browser potrebbero impedire l'accesso a opener: ignora l'errore.
+          }
+          return;
+        }
       } catch (err) {
         // Se il browser blocca la nuova finestra passiamo al fallback nello stesso tab.
       }
