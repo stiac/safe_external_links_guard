@@ -785,6 +785,7 @@
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-modal", "true");
     dialog.setAttribute("aria-labelledby", "slg-title");
+    dialog.setAttribute("aria-describedby", "slg-message");
     dialog.tabIndex = -1;
     wrap.appendChild(dialog);
 
@@ -816,6 +817,12 @@
     const cancelBtn = body.querySelector("#slg-cancel");
     const openLink = body.querySelector("#slg-open");
     const copyBtn = body.querySelector("#slg-copy");
+
+    // Impediamo che gli elementi della modale vengano presi in carico dalla scansione principale
+    // marcandoli come interni fin dalla creazione. Questo evita che la logica di protezione
+    // applicata ai link esterni sovrascriva attributi come `title` o aggiunga listener
+    // indesiderati ai controlli della UI.
+    openLink.dataset.safeLinkGuard = "modal";
 
     const hide = () => {
       root.classList.add("slg--hidden");
@@ -862,6 +869,11 @@
     return modalRoot;
   };
 
+  const isModalElement = (node) => {
+    if (!modalRoot || !node) return false;
+    return node === modalRoot || modalRoot.contains(node);
+  };
+
   const showModal = (url, message) => {
     ensureModal();
     pendingUrl = url;
@@ -886,6 +898,7 @@
   // ===== Scansione =====
   const processAnchor = (a) => {
     if (!a || a.dataset.safeLinkGuard === "1") return;
+    if (isModalElement(a)) { a.dataset.safeLinkGuard = "modal"; return; }
 
     const href = a.getAttribute("href") || "";
     if (!href || href.startsWith("#")) { a.dataset.safeLinkGuard = "1"; return; }
@@ -953,6 +966,10 @@
 
   const processAll = (root = document) => {
     root.querySelectorAll("a[href]:not([data-safe-link-guard])").forEach((node) => {
+      if (isModalElement(node)) {
+        node.dataset.safeLinkGuard = "modal";
+        return;
+      }
       if (shouldExclude(node)) {
         node.dataset.safeLinkGuard = "1";
         return;
@@ -966,10 +983,12 @@
       m.addedNodes.forEach((node) => {
         if (node.nodeType !== 1) return;
         if (node.tagName === "A") {
+          if (isModalElement(node)) { node.dataset.safeLinkGuard = "modal"; return; }
           if (shouldExclude(node)) { node.dataset.safeLinkGuard = "1"; return; }
           processAnchor(node);
         } else {
           node.querySelectorAll?.("a[href]")?.forEach((anchor) => {
+            if (isModalElement(anchor)) { anchor.dataset.safeLinkGuard = "modal"; return; }
             if (shouldExclude(anchor)) { anchor.dataset.safeLinkGuard = "1"; return; }
             processAnchor(anchor);
           });
