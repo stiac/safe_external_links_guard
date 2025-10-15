@@ -3,7 +3,10 @@
  * - Async, policy lato server, DENY immediato
  * - Normalizzazione action endpoint (allow|warn|deny)
  * - Blocco immediato da cache; sostituzione <a>→<span> aggiorna l’indice
- */
+ * - Modalità soft con evidenziazione configurabile e messaggi lato server
+ * - Supporto a selettori esclusi definiti nell’attributo data-exclude-selectors
+ * - Messaggi su hover configurabili (tooltip personalizzato oppure title="")
+*/
 (function () {
   "use strict";
 
@@ -13,17 +16,147 @@
     return s[s.length - 1];
   })();
 
-  const cfg = {
-    endpoint: (thisScript.getAttribute("data-endpoint") || "/links/policy").trim(),
-    timeoutMs: parseInt(thisScript.getAttribute("data-timeout") || "900", 10),
-    cacheTtlSec: parseInt(thisScript.getAttribute("data-cache-ttl") || "3600", 10),
-    mode: (thisScript.getattribute?.("data-mode") || thisScript.getAttribute("data-mode") || "strict").trim(), // strict|soft
-    removeNode: (thisScript.getAttribute("data-remove-node") || "false") === "true",
-    rel: ["noopener", "noreferrer", "nofollow"],
-    newTab: true,
-    zIndex: 999999,
-    maxConcurrent: 4
-  };
+  const guardNamespace = (window.SafeExternalLinksGuard =
+    window.SafeExternalLinksGuard || {});
+  let buildSettings = guardNamespace.buildSettings;
+
+  if (typeof buildSettings !== "function") {
+    // Fallback legacy: se il file links-guard.settings.js non è stato caricato,
+    // ricostruiamo la configurazione mantenendo la compatibilità con le versioni precedenti.
+    const fallbackDefaults = {
+      endpoint: "/links/policy",
+      timeoutMs: 900,
+      cacheTtlSec: 3600,
+      mode: "strict",
+      removeNode: false,
+      showCopyButton: true,
+      hoverFeedback: "title",
+      rel: ["noopener", "noreferrer", "nofollow"],
+      newTab: true,
+      zIndex: 999999,
+      maxConcurrent: 4,
+      warnHighlightClass: "slg-warn-highlight",
+      warnMessageDefault:
+        "Questo link non è verificato. Procedi solo se ti fidi del sito.",
+      excludeSelectors: []
+    };
+
+    const getAttribute = (node, attr) => {
+      if (!node) return null;
+      const raw = node.getAttribute(attr);
+      return raw == null ? null : raw.trim();
+    };
+
+    const parseBoolean = (value, defaultValue) => {
+      if (value == null || value === "") return defaultValue;
+      const normalized = value.trim().toLowerCase();
+      if (["true", "1", "yes", "on"].includes(normalized)) return true;
+      if (["false", "0", "no", "off"].includes(normalized)) return false;
+      return defaultValue;
+    };
+
+    const parseInteger = (value, defaultValue) => {
+      if (value == null || value === "") return defaultValue;
+      const parsed = parseInt(value, 10);
+      return Number.isFinite(parsed) ? parsed : defaultValue;
+    };
+
+    const parseList = (value) => {
+      if (value == null || value === "") return [];
+      return value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    };
+
+    const parseMode = (value) => {
+      if (!value) return "strict";
+      const normalized = value.trim().toLowerCase();
+      return normalized === "soft" ? "soft" : "strict";
+    };
+
+    const parseHoverFeedback = (value) => {
+      if (!value) return "title";
+      const normalized = value.trim().toLowerCase();
+      return normalized === "tooltip" ? "tooltip" : "title";
+    };
+
+    if (typeof console !== "undefined" && typeof console.warn === "function") {
+      console.warn(
+        "[SafeLinkGuard] links-guard.settings.js non caricato: utilizzo configurazione legacy."
+      );
+    }
+
+    buildSettings = (scriptEl) => {
+      const cfg = {
+        endpoint:
+          getAttribute(scriptEl, "data-endpoint") || fallbackDefaults.endpoint,
+        timeoutMs: parseInteger(
+          getAttribute(scriptEl, "data-timeout"),
+          fallbackDefaults.timeoutMs
+        ),
+        cacheTtlSec: parseInteger(
+          getAttribute(scriptEl, "data-cache-ttl"),
+          fallbackDefaults.cacheTtlSec
+        ),
+        mode: parseMode(getAttribute(scriptEl, "data-mode")),
+        removeNode: parseBoolean(
+          getAttribute(scriptEl, "data-remove-node"),
+          fallbackDefaults.removeNode
+        ),
+        showCopyButton: parseBoolean(
+          getAttribute(scriptEl, "data-show-copy-button"),
+          fallbackDefaults.showCopyButton
+        ),
+        hoverFeedback: parseHoverFeedback(
+          getAttribute(scriptEl, "data-hover-feedback")
+        ),
+        rel: [...fallbackDefaults.rel],
+        newTab: fallbackDefaults.newTab,
+        zIndex: fallbackDefaults.zIndex,
+        maxConcurrent: fallbackDefaults.maxConcurrent,
+        warnHighlightClass:
+          getAttribute(scriptEl, "data-warn-highlight-class") ||
+          fallbackDefaults.warnHighlightClass,
+        warnMessageDefault:
+          getAttribute(scriptEl, "data-warn-message") ||
+          fallbackDefaults.warnMessageDefault,
+        excludeSelectors: parseList(
+          getAttribute(scriptEl, "data-exclude-selectors") || ""
+        )
+      };
+
+      if (cfg.mode !== "soft") cfg.mode = "strict";
+      if (cfg.hoverFeedback !== "tooltip") cfg.hoverFeedback = "title";
+      if (!cfg.warnMessageDefault) {
+        cfg.warnMessageDefault = fallbackDefaults.warnMessageDefault;
+      }
+      return cfg;
+    };
+
+    if (!guardNamespace.defaults) {
+      guardNamespace.defaults = Object.freeze({
+        ...fallbackDefaults,
+        rel: [...fallbackDefaults.rel]
+      });
+    }
+    if (!guardNamespace.utils) {
+      guardNamespace.utils = {
+        parseBoolean,
+        parseInteger,
+        parseList,
+        parseMode,
+        parseHoverFeedback
+      };
+    }
+  }
+
+  const cfg = buildSettings(thisScript);
+  if (!Array.isArray(cfg.rel)) cfg.rel = ["noopener", "noreferrer", "nofollow"];
+  if (!Array.isArray(cfg.excludeSelectors)) cfg.excludeSelectors = [];
+  if (cfg.mode !== "soft") cfg.mode = "strict";
+  if (cfg.hoverFeedback !== "tooltip") cfg.hoverFeedback = "title";
+  const useTooltip = cfg.hoverFeedback === "tooltip";
 
   // ===== Stato endpoint =====
   let endpointHealthy = false;
@@ -54,6 +187,9 @@
       .slg-btn.primary:hover{filter:brightness(1.05)}
       body.slg-no-scroll{overflow:hidden}
       .slg-disabled{cursor:not-allowed;opacity:.6}
+      .slg-warn-highlight{outline:2px solid rgba(247,144,9,.8);border-radius:8px;padding:2px}
+      .slg-warn-highlight:focus{outline-width:3px}
+      .slg-tooltip{position:absolute;z-index:1000000;padding:6px 10px;border-radius:8px;background:rgba(17,24,39,.95);color:#f9fafb;font-size:13px;line-height:1.4;box-shadow:0 10px 30px rgba(15,23,42,.35);pointer-events:none;max-width:260px}
     `;
     document.head.appendChild(style);
   };
@@ -72,6 +208,138 @@
     a.dataset.safeLinkGuard = "1";
   };
 
+  // ===== Hover feedback (title | tooltip) =====
+  const tooltipHandlers = new WeakMap();
+  let tooltipEl = null;
+  let tooltipVisibleFor = null;
+
+  const ensureTooltipEl = () => {
+    if (tooltipEl) return tooltipEl;
+    tooltipEl = document.createElement("div");
+    tooltipEl.id = "slg-tooltip";
+    tooltipEl.className = "slg-tooltip slg--hidden";
+    document.body.appendChild(tooltipEl);
+    return tooltipEl;
+  };
+
+  const positionTooltip = (node) => {
+    if (!tooltipEl || tooltipVisibleFor !== node) return;
+    if (!node.isConnected) {
+      hideTooltip();
+      return;
+    }
+    const rect = node.getBoundingClientRect();
+    const tipRect = tooltipEl.getBoundingClientRect();
+    let top = window.scrollY + rect.top - tipRect.height - 10;
+    if (top < window.scrollY + 4) {
+      top = window.scrollY + rect.bottom + 10;
+    }
+    let left = window.scrollX + rect.left + (rect.width - tipRect.width) / 2;
+    const minLeft = window.scrollX + 4;
+    if (left < minLeft) left = minLeft;
+    const maxLeft = window.scrollX + document.documentElement.clientWidth - tipRect.width - 4;
+    if (left > maxLeft) left = maxLeft;
+    tooltipEl.style.top = `${Math.round(top)}px`;
+    tooltipEl.style.left = `${Math.round(left)}px`;
+    tooltipEl.style.visibility = "visible";
+  };
+
+  const showTooltipForNode = (node) => {
+    if (!useTooltip || !node) return;
+    const message = node.getAttribute("data-slg-message");
+    if (!message) return;
+    const tip = ensureTooltipEl();
+    tip.textContent = message;
+    tip.style.visibility = "hidden";
+    tip.classList.remove("slg--hidden");
+    tooltipVisibleFor = node;
+    requestAnimationFrame(() => positionTooltip(node));
+  };
+
+  const hideTooltip = () => {
+    if (!tooltipEl) return;
+    tooltipEl.classList.add("slg--hidden");
+    tooltipEl.style.visibility = "hidden";
+    tooltipVisibleFor = null;
+  };
+
+  const removeTooltipListeners = (node) => {
+    const handlers = tooltipHandlers.get(node);
+    if (!handlers) return;
+    node.removeEventListener("mouseenter", handlers.onEnter);
+    node.removeEventListener("mouseleave", handlers.onLeave);
+    node.removeEventListener("focus", handlers.onFocus);
+    node.removeEventListener("blur", handlers.onBlur);
+    node.removeEventListener("mousemove", handlers.onMove);
+    tooltipHandlers.delete(node);
+  };
+
+  const bindTooltip = (node) => {
+    if (!useTooltip || !node || tooltipHandlers.has(node)) return;
+    const onEnter = () => showTooltipForNode(node);
+    const onLeave = () => {
+      if (tooltipVisibleFor === node) hideTooltip();
+    };
+    const onFocus = onEnter;
+    const onBlur = onLeave;
+    const onMove = () => positionTooltip(node);
+    node.addEventListener("mouseenter", onEnter);
+    node.addEventListener("mouseleave", onLeave);
+    node.addEventListener("focus", onFocus);
+    node.addEventListener("blur", onBlur);
+    node.addEventListener("mousemove", onMove);
+    tooltipHandlers.set(node, { onEnter, onLeave, onFocus, onBlur, onMove });
+  };
+
+  const setHoverMessage = (node, message) => {
+    if (!node) return;
+    if (!message) {
+      clearHoverMessage(node, null, true);
+      return;
+    }
+    if (useTooltip) {
+      node.setAttribute("data-slg-message", message);
+      bindTooltip(node);
+      if (tooltipVisibleFor === node) {
+        showTooltipForNode(node);
+      }
+    } else {
+      node.setAttribute("title", message);
+      node.removeAttribute("data-slg-message");
+    }
+  };
+
+  const clearHoverMessage = (node, expectedMessage = null, force = false) => {
+    if (!node) return;
+    if (useTooltip) {
+      const attr = node.getAttribute("data-slg-message");
+      if (!attr && !tooltipHandlers.has(node)) return;
+      if (force || !expectedMessage || attr === expectedMessage) {
+        removeTooltipListeners(node);
+        node.removeAttribute("data-slg-message");
+        if (tooltipVisibleFor === node) hideTooltip();
+      }
+    } else {
+      const titleAttr = node.getAttribute("title");
+      if (force || !expectedMessage || titleAttr === expectedMessage) {
+        node.removeAttribute("title");
+      }
+    }
+  };
+
+  if (useTooltip) {
+    window.addEventListener("scroll", () => {
+      if (tooltipVisibleFor) hideTooltip();
+    }, true);
+    window.addEventListener("resize", () => {
+      if (tooltipVisibleFor) {
+        requestAnimationFrame(() => {
+          if (tooltipVisibleFor) positionTooltip(tooltipVisibleFor);
+        });
+      }
+    });
+  }
+
   // Indice host → Set<nodo>
   const anchorsByHost = new Map();
   const mapAdd = (host, node) => {
@@ -86,13 +354,34 @@
     if (newNode) set.add(newNode);
   };
 
+  const invalidExcludeSelectors = new Set();
+
+  const shouldExclude = (node) => {
+    if (!node || !node.matches) return false;
+    for (const sel of cfg.excludeSelectors) {
+      try {
+        if (node.matches(sel)) return true;
+      } catch (e) {
+        if (!invalidExcludeSelectors.has(sel)) {
+          invalidExcludeSelectors.add(sel);
+          console.error(`[SafeLinkGuard] Selettore non valido in data-exclude-selectors: "${sel}"`, e);
+        }
+      }
+    }
+    return false;
+  };
+
   const disableLink = (a, reason = "Dominio bloccato", hostForIndex = null) => {
+    const message = reason || "Dominio bloccato";
+    clearHoverMessage(a, null, true);
     if (cfg.removeNode) {
       const span = document.createElement("span");
       span.innerHTML = a.innerHTML;
-      span.className = (a.className || "") + " slg-disabled";
-      span.setAttribute("title", reason);
+      const cls = (a.className || "").trim();
+      span.className = cls ? `${cls} slg-disabled` : "slg-disabled";
       span.setAttribute("aria-disabled", "true");
+      span.dataset.safeLinkGuard = "1";
+      setHoverMessage(span, message);
       const parent = a.parentNode;
       if (parent) {
         parent.replaceChild(span, a);
@@ -104,14 +393,14 @@
     a.setAttribute("role", "link");
     a.setAttribute("aria-disabled", "true");
     a.classList.add("slg-disabled");
-    a.title = reason;
+    setHoverMessage(a, message);
     a.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); }, { capture: true });
     a.dataset.safeLinkGuard = "1";
     return a;
   };
 
   // ===== Cache =====
-  const SS_KEY = "SLG_POLICY_CACHE_V2";
+  const SS_KEY = "SLG_POLICY_CACHE_V3";
   const mem = new Map();
   const loadSession = () => {
     try {
@@ -134,8 +423,13 @@
     if (it.ts + (it.ttl || cfg.cacheTtlSec) < nowSec()) { mem.delete(host); return null; }
     return it;
   };
-  const setCached = (host, action, ttl) => {
-    mem.set(host, { action, ttl: ttl || cfg.cacheTtlSec, ts: nowSec() });
+  const setCached = (host, action, ttl, message) => {
+    mem.set(host, {
+      action,
+      ttl: ttl || cfg.cacheTtlSec,
+      ts: nowSec(),
+      message: message || null
+    });
     saveSession();
   };
 
@@ -181,7 +475,7 @@
     if (!endpointHealthy) {
       console.error("[SafeLinkGuard] Endpoint non disponibile. Fallback 'warn'. Host:", host);
       const fallback = "warn";
-      setCached(host, fallback, Math.min(300, cfg.cacheTtlSec));
+      setCached(host, fallback, Math.min(300, cfg.cacheTtlSec), "Endpoint non disponibile. Procedi con cautela.");
       return fallback;
     }
 
@@ -201,12 +495,13 @@
       const json = await res.json();
       const action = normalizeAction(json?.action);
       const ttl = Number.isFinite(json?.ttl) ? json.ttl : cfg.cacheTtlSec;
-      setCached(host, action, ttl);
+      const message = typeof json?.message === "string" ? json.message : null;
+      setCached(host, action, ttl, message);
       return action;
     } catch (e) {
       console.error("[SafeLinkGuard] Errore policy per host:", host, e);
       const fallback = "warn";
-      setCached(host, fallback, Math.min(300, cfg.cacheTtlSec));
+      setCached(host, fallback, Math.min(300, cfg.cacheTtlSec), "Errore durante la verifica del dominio. Procedi con cautela.");
       return fallback;
     }
   }
@@ -219,20 +514,36 @@
   const applyPolicyToHost = (host, action) => {
     const set = anchorsByHost.get(host);
     if (!set) return;
+    const cached = getCached(host);
+    const message = cached?.message || null;
+    const warnMessage = message || cfg.warnMessageDefault;
     for (const node of Array.from(set)) {
       if (!node.isConnected) { set.delete(node); continue; }
       if (action === "deny") {
-        disableLink(node, "Dominio bloccato", host);
+        const reason = message || "Dominio bloccato";
+        disableLink(node, reason, host);
       } else if (action === "allow") {
         if (node.tagName === "A") {
           ensureAttrs(node);
+          clearHoverMessage(node, warnMessage, useTooltip);
           // reset listener: clone per sicurezza
           const clone = node.cloneNode(true);
+          clone.classList?.remove(cfg.warnHighlightClass);
+          clearHoverMessage(clone, warnMessage, useTooltip);
           node.replaceWith(clone);
           mapReplaceNode(host, node, clone);
+        } else {
+          node.classList?.remove(cfg.warnHighlightClass);
+          clearHoverMessage(node, warnMessage, useTooltip);
         }
       } else {
         if (node.tagName === "A") ensureAttrs(node); // warn
+        if (cfg.mode === "soft") {
+          node.classList?.add(cfg.warnHighlightClass);
+          setHoverMessage(node, warnMessage);
+        } else {
+          clearHoverMessage(node, warnMessage, useTooltip);
+        }
       }
     }
   };
@@ -266,6 +577,7 @@
   // ===== Modale + apertura robusta =====
   let modalRoot = null;
   let pendingUrl = null;
+  let pendingMessage = null;
   let lastFocused = null;
 
   const buildModal = () => {
@@ -296,12 +608,15 @@
 
     const body = document.createElement("div");
     body.className = "slg-body";
+    const copyButtonMarkup = cfg.showCopyButton
+      ? '<button id="slg-copy" class="slg-btn secondary" type="button">Copia link</button>'
+      : "";
     body.innerHTML = `
-      <p>Questo link non è verificato. Procedi solo se ti fidi del sito.</p>
+      <p id="slg-message">${cfg.warnMessageDefault}</p>
       <p>Host: <span id="slg-host" class="slg-host"></span></p>
       <div class="slg-actions">
         <a id="slg-open" class="slg-btn primary" rel="noopener noreferrer nofollow" target="_blank">Apri link</a>
-        <button id="slg-copy" class="slg-btn secondary" type="button">Copia link</button>
+        ${copyButtonMarkup}
         <button id="slg-cancel" class="slg-btn secondary" type="button">Annulla</button>
       </div>
     `;
@@ -316,6 +631,7 @@
       root.classList.add("slg--hidden");
       document.body.classList.remove("slg-no-scroll");
       pendingUrl = null;
+      pendingMessage = null;
       if (lastFocused && lastFocused.focus) lastFocused.focus();
     };
 
@@ -342,16 +658,18 @@
       hide();
     }, { capture: true });
 
-    copyBtn.addEventListener("click", async () => {
-      if (!pendingUrl) return;
-      try { await navigator.clipboard.writeText(pendingUrl.href); }
-      catch {
-        const ta = document.createElement("textarea");
-        ta.value = pendingUrl.href;
-        document.body.appendChild(ta);
-        ta.select(); document.execCommand("copy"); ta.remove();
-      }
-    });
+    if (copyBtn) {
+      copyBtn.addEventListener("click", async () => {
+        if (!pendingUrl) return;
+        try { await navigator.clipboard.writeText(pendingUrl.href); }
+        catch {
+          const ta = document.createElement("textarea");
+          ta.value = pendingUrl.href;
+          document.body.appendChild(ta);
+          ta.select(); document.execCommand("copy"); ta.remove();
+        }
+      });
+    }
 
     return { root, dialog };
   };
@@ -364,14 +682,16 @@
     return modalRoot;
   };
 
-  const showModal = (url) => {
+  const showModal = (url, message) => {
     ensureModal();
     pendingUrl = url;
+    pendingMessage = message || cfg.warnMessageDefault;
     modalRoot.querySelector("#slg-host").textContent = url.host;
     const openEl = modalRoot.querySelector("#slg-open");
     openEl.setAttribute("href", url.href);
     openEl.setAttribute("target", "_blank");
     openEl.setAttribute("rel", "noopener noreferrer nofollow");
+    modalRoot.querySelector("#slg-message").textContent = pendingMessage;
     lastFocused = document.activeElement;
     modalRoot.classList.remove("slg--hidden");
     document.body.classList.add("slg-no-scroll");
@@ -397,7 +717,8 @@
     // Se già in cache come DENY, blocca SUBITO (e sostituisci <a>→<span> se richiesto)
     const cached = getCached(host);
     if (cached && cached.action === "deny") {
-      disableLink(a, "Dominio bloccato", host);
+      const denyMsg = cached.message || "Dominio bloccato";
+      disableLink(a, denyMsg, host);
       return;
     }
 
@@ -424,7 +745,9 @@
           try { tmp.click(); } catch { try { window.open(url.href, "_blank", "noopener"); } catch { location.assign(url.href); } }
           tmp.remove();
         } else if (action === "warn") {
-          showModal(url);
+          if (cfg.mode === "strict") {
+            showModal(url, getCached(host)?.message);
+          }
         }
         // deny: già applicato a tutti i link dell’host
         return;
@@ -435,23 +758,38 @@
         return;
       }
       if (cached2.action === "warn") {
-        e.preventDefault(); e.stopPropagation();
-        showModal(url);
+        if (cfg.mode === "strict") {
+          e.preventDefault(); e.stopPropagation();
+          showModal(url, cached2.message);
+        }
       }
       // allow: passa
     }, { capture: true });
   };
 
   const processAll = (root = document) => {
-    root.querySelectorAll("a[href]:not([data-safe-link-guard])").forEach(processAnchor);
+    root.querySelectorAll("a[href]:not([data-safe-link-guard])").forEach((node) => {
+      if (shouldExclude(node)) {
+        node.dataset.safeLinkGuard = "1";
+        return;
+      }
+      processAnchor(node);
+    });
   };
 
   const observer = new MutationObserver((mutations) => {
     for (const m of mutations) {
       m.addedNodes.forEach((node) => {
         if (node.nodeType !== 1) return;
-        if (node.tagName === "A") processAnchor(node);
-        else node.querySelectorAll?.("a[href]")?.forEach(processAnchor);
+        if (node.tagName === "A") {
+          if (shouldExclude(node)) { node.dataset.safeLinkGuard = "1"; return; }
+          processAnchor(node);
+        } else {
+          node.querySelectorAll?.("a[href]")?.forEach((anchor) => {
+            if (shouldExclude(anchor)) { anchor.dataset.safeLinkGuard = "1"; return; }
+            processAnchor(anchor);
+          });
+        }
       });
     }
   });
