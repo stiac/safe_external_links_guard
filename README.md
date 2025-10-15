@@ -1,17 +1,17 @@
 # Safe External Links Guard
 
-**Versione:** 1.5.2
+**Versione:** 1.5.4
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
 
-Con la versione 1.5.0 la logica interna è stata riorganizzata in moduli indipendenti (tooltip, cache, coda delle richieste) per semplificare la manutenzione e migliorare la leggibilità del codice. La release 1.5.2 aggiunge commenti descrittivi ai default di configurazione in `links-guard.settings.js` per chiarire in modo immediato le opzioni disponibili.
+Con la versione 1.5.0 la logica interna è stata riorganizzata in moduli indipendenti (tooltip, cache, coda delle richieste) per semplificare la manutenzione e migliorare la leggibilità del codice. La release 1.5.4 corregge il parsing della modalità operativa accettando `data-mode="warn"` oltre a `strict` e `soft`, mantenendo sincronizzate le opzioni documentate e i valori effettivamente supportati.
 
 Lo script:
 - impone attributi di sicurezza (`rel`, `target`) sui link esterni;
 - consulta in modo asincrono un endpoint che risponde con le azioni `allow`, `warn` o `deny` e un eventuale messaggio di motivazione;
 - blocca immediatamente i domini già noti in cache e opzionalmente sostituisce i link con elementi non interattivi;
-- mostra una modale di avviso per i domini non riconosciuti (in modalità `strict`) oppure evidenzia visivamente i link (in modalità `soft`);
+- mostra una modale di avviso per i domini non riconosciuti (in modalità `strict`), evidenzia e conferma i link in warning (modalità `warn`) oppure li evidenzia soltanto (modalità `soft`);
 - rende configurabile la visualizzazione dei messaggi su hover tramite tooltip personalizzato oppure attributo `title` standard;
 - espone un file di impostazioni dedicato (`links-guard.settings.js`) per gestire i valori di default e facilitare la manutenzione;
 - osserva il DOM con `MutationObserver` per gestire i link aggiunti dinamicamente, rispettando selettori esclusi configurati.
@@ -56,6 +56,7 @@ Lo script:
      data-hover-feedback="tooltip"
    ></script>
    <!-- data-remove-node è opzionale: se impostato a true sostituisce <a> con <span> -->
+   <!-- imposta data-mode="warn" per evidenziare i link e chiedere conferma prima di aprirli -->
    <!-- imposta data-show-copy-button="false" per nascondere il pulsante "Copia link" -->
    <!-- imposta data-hover-feedback="title" per usare il tooltip nativo del browser -->
   ```
@@ -84,12 +85,12 @@ In questo modo le modifiche alle impostazioni restano concentrate in un file ded
 | `data-endpoint` | `/links/policy` | URL dell'endpoint server che restituisce l'azione per ogni host. |
 | `data-timeout` | `900` | Timeout della richiesta (ms). |
 | `data-cache-ttl` | `3600` | Durata cache lato client (secondi). |
-| `data-mode` | `strict` | Modalità operativa: `strict` mostra una modale per i link `warn`, `soft` li lascia cliccabili ma li evidenzia. |
+| `data-mode` | `strict` | Modalità operativa: `strict` richiede conferma in modale; `warn` evidenzia i link e mostra la modale al click; `soft` li evidenzia soltanto. |
 | `data-remove-node` | `false` | Se `true`, i link negati vengono sostituiti da `<span>` disabilitati. |
 | `data-show-copy-button` | `true` | Se impostato a `false`, nasconde il pulsante "Copia link" nella modale. |
 | `data-hover-feedback` | `title` | Determina come mostrare i messaggi su hover: `title` usa il tooltip nativo del browser, `tooltip` attiva la UI personalizzata. |
 | `data-warn-message` | Messaggio predefinito | Testo mostrato nella modale e nei messaggi su hover dei link in warning. |
-| `data-warn-highlight-class` | `slg-warn-highlight` | Classe CSS applicata ai link `warn` in modalità `soft`. |
+| `data-warn-highlight-class` | `slg-warn-highlight` | Classe CSS applicata ai link `warn` in modalità `soft` o `warn`. |
 | `data-exclude-selectors` | *(vuoto)* | Lista CSV di selettori CSS da escludere dalla scansione (`.footer a, #nav a.ignore`). |
 
 #### Come interpretare i TTL restituiti dal resolver
@@ -128,7 +129,7 @@ Il resolver restituisce anche un health check JSON (`GET ?health=1`) per permett
 ## Personalizzazione UI
 Lo stile della modale è iniettato direttamente dallo script e supporta modalità chiara/scura. È possibile sovrascrivere le classi `.slg-*` tramite CSS custom, mantenendo Tailwind CSS o altri framework come base.
 
-In modalità `soft` viene aggiunta la classe `slg-warn-highlight` ai link in warning. Sovrascrivi questa classe per adattare il visual (ad esempio con Tailwind CSS) oppure imposta `data-warn-highlight-class` con una classe personalizzata.
+In modalità `soft` o `warn` viene aggiunta la classe `slg-warn-highlight` ai link in warning. Sovrascrivi questa classe per adattare il visual (ad esempio con Tailwind CSS) oppure imposta `data-warn-highlight-class` con una classe personalizzata.
 
 Il comportamento dei messaggi su hover è configurabile tramite `data-hover-feedback`: impostandolo su `tooltip` viene mostrato un riquadro contestuale con stile personalizzato e posizionamento automatico; con il valore `title` viene invece utilizzato il tooltip nativo del browser, utile in scenari dove si preferisce un approccio minimale o non si vuole iniettare ulteriore markup.
 

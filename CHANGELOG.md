@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.4] - 2025-10-25
+### Fixed
+- Corretto il builder delle impostazioni per riconoscere `data-mode="warn"` e mantenere valida la modalità impostata tramite attributi o override manuali.
+
+### Changed
+- Aggiornati commenti e documentazione (`README.md`) per descrivere le tre modalità supportate (`strict`, `warn`, `soft`) e le relative evidenze sui link.
+
+## [1.5.3] - 2025-10-24
+### Changed
+- Commenti dei valori di default in `links-guard.settings.js` ora descrivono varianti, attributi `data-*` e metodi di override supportati.
+- Documentazione (`README.md`, `VERSION`) aggiornata alla release 1.5.3 con note sui nuovi commenti esplicativi.
+
 ## [1.5.2] - 2025-10-23
 ### Added
 - Commenti descrittivi per ogni opzione di `links-guard.settings.js`, così da chiarire al volo le varianti disponibili e il loro impatto.

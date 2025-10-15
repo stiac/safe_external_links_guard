@@ -52,6 +52,18 @@ class FakeScript {
 })();
 
 (() => {
+  const script = new FakeScript({ 'data-mode': 'warn' });
+  const cfg = SafeExternalLinksGuard.buildSettings(script);
+  assert.strictEqual(cfg.mode, 'warn', 'data-mode="warn" should enable warn mode');
+})();
+
+(() => {
+  const script = new FakeScript();
+  const cfg = SafeExternalLinksGuard.buildSettings(script, { mode: 'warn' });
+  assert.strictEqual(cfg.mode, 'warn', 'manual override should accept warn mode');
+})();
+
+(() => {
   const script = new FakeScript({ 'data-mode': 'invalid' });
   const cfg = SafeExternalLinksGuard.buildSettings(script);
   assert.strictEqual(cfg.mode, 'strict', 'invalid data-mode should fallback to strict');
