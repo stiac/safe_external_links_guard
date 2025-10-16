@@ -18,6 +18,16 @@
     root.SafeExternalLinksGuard || {});
 
   const DEFAULT_LANGUAGE = 'en';
+  // Mappa dei codici normalizzati -> forma canonica mostrata ai consumatori dell'API pubblica.
+  const CANONICAL_DISPLAY = {
+    'pt-br': 'pt-BR',
+    pt: 'pt'
+  };
+  // Alias aggiuntivi per normalizzare varianti regionali o codici legacy.
+  const LANGUAGE_ALIASES = {
+    'pt-pt': 'pt',
+    br: 'pt-br'
+  };
 
   // Catalogo di fallback per garantire sempre la disponibilità della lingua inglese
   // e delle lingue predefinite anche quando i file JSON non sono accessibili.
@@ -172,9 +182,12 @@
 
   let catalog = null;
   let activeLanguage = null;
+  let activeLanguageNormalized = null;
   let activeTranslator = null;
   const listeners = [];
   const translatorCache = new Map();
+  let sourceRefs = { base: null, preload: null };
+  let pendingLoad = null;
 
   const normalizeLanguageCode = (lang) => {
     if (!lang || typeof lang !== 'string') return '';
@@ -195,23 +208,118 @@
     return result;
   };
 
-  const ensureCatalog = () => {
-    if (catalog) return catalog;
-    let source = null;
+  /**
+   * Restituisce il codice lingua da esporre pubblicamente (es. `pt-BR`)
+   * partendo dalla forma normalizzata interna (lowercase).
+   */
+  const formatDisplayLanguage = (normalized) => {
+    if (!normalized) {
+      return DEFAULT_LANGUAGE;
+    }
+    if (CANONICAL_DISPLAY[normalized]) {
+      return CANONICAL_DISPLAY[normalized];
+    }
+    if (!normalized.includes('-')) {
+      return normalized;
+    }
+    const [base, region] = normalized.split('-');
+    if (base === 'pt' && region === 'br') {
+      return CANONICAL_DISPLAY['pt-br'];
+    }
+    if (region && region.length === 2) {
+      return `${base}-${region.toUpperCase()}`;
+    }
+    return normalized;
+  };
+
+  /**
+   * Risolve eventuali alias (pt-PT -> pt) contro il catalogo disponibile.
+   * Restituisce la chiave effettivamente presente nel catalogo oppure stringa vuota.
+   */
+  const resolveAlias = (normalized, data) => {
+    if (!normalized) return '';
+    if (data && data[normalized]) {
+      return normalized;
+    }
+    if (LANGUAGE_ALIASES[normalized] && data && data[LANGUAGE_ALIASES[normalized]]) {
+      return LANGUAGE_ALIASES[normalized];
+    }
+    if (normalized.includes('-')) {
+      const base = normalized.split('-')[0];
+      if (data && data[base]) {
+        return base;
+      }
+      if (LANGUAGE_ALIASES[base] && data && data[LANGUAGE_ALIASES[base]]) {
+        return LANGUAGE_ALIASES[base];
+      }
+    }
+    return '';
+  };
+
+  /**
+   * Individua la sorgente corrente delle traduzioni (Node, preload JS o fallback).
+   */
+  const loadBaseCatalog = () => {
     if (typeof module === 'object' && module.exports) {
       try {
         // eslint-disable-next-line global-require
-        source = require('./app/Services/Localization/translationRegistry.js');
+        return require('./app/Services/Localization/translationRegistry.js');
       } catch (err) {
-        source = null;
+        return null;
       }
     }
-    const globalData =
-      guardNamespace.preloadedTranslations || root.SafeExternalLinksGuardTranslations;
-    const base = source || globalData || FALLBACK_TRANSLATIONS;
-    catalog = mergeDeep({}, base);
+    return null;
+  };
+
+  const loadPreloadedCatalog = () =>
+    guardNamespace.preloadedTranslations || root.SafeExternalLinksGuardTranslations || null;
+
+  /**
+   * Converte un dizionario di traduzioni in una struttura con chiavi normalizzate.
+   */
+  const normaliseCatalogInput = (data, includeFallback = false) => {
+    if (!data || typeof data !== 'object') {
+      return includeFallback ? mergeDeep({}, FALLBACK_TRANSLATIONS) : {};
+    }
+    const result = {};
+    Object.keys(data).forEach((lang) => {
+      const normalized = normalizeLanguageCode(lang);
+      if (!normalized) return;
+      result[normalized] = mergeDeep(result[normalized] || {}, data[lang]);
+    });
+    return result;
+  };
+
+  /**
+   * Rigenera il catalogo interno partendo dalle sorgenti fornite
+   * e riapplica la lingua attiva per notificare eventuali listener.
+   */
+  const rebuildCatalog = (baseSource, preloadSource) => {
+    const normalisedBase = normaliseCatalogInput(baseSource);
+    const normalisedPreload = normaliseCatalogInput(preloadSource);
+    catalog = mergeDeep({}, FALLBACK_TRANSLATIONS);
+    catalog = mergeDeep(catalog, normalisedBase);
+    catalog = mergeDeep(catalog, normalisedPreload);
+    guardNamespace.preloadedTranslations = mergeDeep({}, normalisedPreload);
     if (!catalog[DEFAULT_LANGUAGE]) {
       catalog[DEFAULT_LANGUAGE] = deepClone(FALLBACK_TRANSLATIONS[DEFAULT_LANGUAGE]);
+    }
+    translatorCache.clear();
+    if (activeLanguageNormalized) {
+      const current = activeLanguageNormalized;
+      activeLanguageNormalized = null;
+      setLanguage(current);
+    }
+  };
+
+  const ensureCatalog = () => {
+    const base = loadBaseCatalog();
+    const preload = loadPreloadedCatalog();
+    const changed =
+      !catalog || sourceRefs.base !== base || sourceRefs.preload !== preload;
+    if (changed) {
+      rebuildCatalog(base, preload);
+      sourceRefs = { base, preload: guardNamespace.preloadedTranslations };
     }
     return catalog;
   };
@@ -219,12 +327,9 @@
   const fetchDictionary = (lang) => {
     const data = ensureCatalog();
     const normalized = normalizeLanguageCode(lang);
-    if (normalized && data[normalized]) {
-      return data[normalized];
-    }
-    if (normalized && normalized.includes('-')) {
-      const base = normalized.split('-')[0];
-      if (data[base]) return data[base];
+    const resolved = resolveAlias(normalized, data) || DEFAULT_LANGUAGE;
+    if (data[resolved]) {
+      return data[resolved];
     }
     return data[DEFAULT_LANGUAGE];
   };
@@ -264,20 +369,40 @@
     return undefined;
   };
 
+  /**
+   * Gestisce il fallback a catena per una lista di chiavi e applica le sostituzioni.
+   */
+  const translateChain = (lang, keys, replacements) => {
+    const chain = Array.isArray(keys) ? keys : [keys];
+    for (let i = 0; i < chain.length; i += 1) {
+      const candidate = chain[i];
+      if (typeof candidate !== 'string') {
+        continue;
+      }
+      const resolved = resolveKey(lang, candidate);
+      if (resolved != null) {
+        return applyReplacements(resolved, replacements);
+      }
+    }
+    const fallbackKey = chain[chain.length - 1];
+    if (typeof fallbackKey === 'string') {
+      return applyReplacements(fallbackKey, replacements);
+    }
+    return '';
+  };
+
   const buildTranslator = (lang) => {
     if (translatorCache.has(lang)) {
       return translatorCache.get(lang);
     }
     const translator = {
-      language: lang,
+      language: formatDisplayLanguage(lang),
       dictionary: deepClone(fetchDictionary(lang)),
       has(key) {
         return resolveKey(lang, key) != null;
       },
       t(key, replacements) {
-        const resolved = resolveKey(lang, key);
-        const text = resolved != null ? resolved : key;
-        return applyReplacements(text, replacements);
+        return translateChain(lang, key, replacements);
       }
     };
     translatorCache.set(lang, translator);
@@ -288,9 +413,17 @@
     const data = ensureCatalog();
     const normalized = normalizeLanguageCode(lang);
     if (!normalized) return DEFAULT_LANGUAGE;
-    if (data[normalized]) return normalized;
-    const base = normalized.split('-')[0];
-    if (data[base]) return base;
+    const resolved = resolveAlias(normalized, data);
+    if (resolved) {
+      return resolved;
+    }
+    if (normalized === 'pt-br' && data['pt-br']) {
+      return 'pt-br';
+    }
+    if (normalized && normalized.includes('-')) {
+      const base = normalized.split('-')[0];
+      if (data[base]) return base;
+    }
     return DEFAULT_LANGUAGE;
   };
 
@@ -339,14 +472,19 @@
       const candidate = candidates[i];
       const normalized = normalizeLanguageCode(candidate);
       if (!normalized) continue;
-      if (available.includes(normalized)) return normalized;
-      const base = normalized.split('-')[0];
-      if (available.includes(base)) return base;
-      if (normalized === 'br' && available.includes('pt-br')) return 'pt-br';
-      if (normalized === 'pt' && available.includes('pt')) return 'pt';
+      const resolved = resolveAlias(normalized, data);
+      if (resolved) return formatDisplayLanguage(resolved);
+      if (available.includes(normalized)) return formatDisplayLanguage(normalized);
+      if (normalized.includes('-')) {
+        const base = normalized.split('-')[0];
+        if (available.includes(base)) return formatDisplayLanguage(base);
+      }
+      if (normalized === 'br' && available.includes('pt-br')) {
+        return formatDisplayLanguage('pt-br');
+      }
     }
 
-    return DEFAULT_LANGUAGE;
+    return formatDisplayLanguage(DEFAULT_LANGUAGE);
   };
 
   const notifyLanguageChange = () => {
@@ -364,10 +502,13 @@
   };
 
   const setLanguage = (lang) => {
-    const next = findBestLanguage(lang);
-    if (activeLanguage === next) return activeLanguage;
-    activeLanguage = next;
-    activeTranslator = buildTranslator(next);
+    const target = findBestLanguage(lang);
+    if (activeLanguageNormalized === target && activeLanguage) {
+      return activeLanguage;
+    }
+    activeLanguageNormalized = target;
+    activeLanguage = formatDisplayLanguage(target);
+    activeTranslator = buildTranslator(target);
     notifyLanguageChange();
     return activeLanguage;
   };
@@ -376,15 +517,16 @@
     if (!lang || typeof dictionary !== 'object') return;
     const normalized = normalizeLanguageCode(lang);
     const data = ensureCatalog();
-    const merged = mergeDeep(data[normalized] ? data[normalized] : {}, dictionary);
-    data[normalized] = merged;
-    translatorCache.delete(normalized);
-    if (activeLanguage === normalized && !options.makeActive) {
-      activeTranslator = buildTranslator(activeLanguage);
+    const resolvedKey = resolveAlias(normalized, data) || normalized;
+    const merged = mergeDeep(data[resolvedKey] ? data[resolvedKey] : {}, dictionary);
+    data[resolvedKey] = merged;
+    translatorCache.delete(resolvedKey);
+    if (activeLanguageNormalized === resolvedKey && !options.makeActive) {
+      activeTranslator = buildTranslator(activeLanguageNormalized);
       notifyLanguageChange();
     }
     if (options.makeActive) {
-      setLanguage(normalized);
+      setLanguage(resolvedKey);
     }
   };
 
@@ -677,7 +819,17 @@
     }
 
     if (renderInitial) {
-      render();
+      if (pendingLoad) {
+        pendingLoad
+          .then(() => {
+            render();
+          })
+          .catch(() => {
+            render();
+          });
+      } else {
+        render();
+      }
     }
 
     return {
@@ -723,6 +875,72 @@
     onLanguageChange,
     registerLanguage,
     setLanguage,
+    /**
+     * Espone una promise che si risolve quando eventuali preload in corso terminano.
+     */
+    whenReady() {
+      if (pendingLoad) {
+        return pendingLoad.then(() => getTranslator());
+      }
+      return Promise.resolve(getTranslator());
+    },
+    /**
+     * Permette di precaricare un bundle di traduzioni (oggetto, Promise o factory).
+     * Restituisce una Promise risolta con il traduttore pronto all'uso.
+     */
+    loadTranslations(source) {
+      let loader;
+      if (typeof source === 'function') {
+        try {
+          loader = source();
+        } catch (err) {
+          loader = Promise.reject(err);
+        }
+      } else {
+        loader = source;
+      }
+
+      let loadPromise;
+      if (!loader) {
+        loadPromise = Promise.reject(new Error('No translation source provided'));
+      } else if (typeof loader.then === 'function') {
+        loadPromise = loader.then((data) => {
+          const base = loadBaseCatalog();
+          rebuildCatalog(base, data);
+          sourceRefs = { base, preload: guardNamespace.preloadedTranslations };
+          return getTranslator();
+        });
+      } else if (typeof loader === 'object') {
+        loadPromise = Promise.resolve(loader).then((data) => {
+          const base = loadBaseCatalog();
+          rebuildCatalog(base, data);
+          sourceRefs = { base, preload: guardNamespace.preloadedTranslations };
+          return getTranslator();
+        });
+      } else {
+        loadPromise = Promise.reject(new Error('Unsupported translation source type'));
+      }
+
+      pendingLoad = loadPromise
+        .catch((err) => {
+          if (typeof console !== 'undefined' && console.error) {
+            console.error('[SafeLinkGuard] Unable to preload translations', err);
+          }
+          // Garantisce comunque la disponibilità del traduttore anche in caso di errore.
+          const base = loadBaseCatalog();
+          const preload = loadPreloadedCatalog();
+          rebuildCatalog(base, preload);
+          sourceRefs = { base, preload: guardNamespace.preloadedTranslations };
+          return getTranslator();
+        })
+        .finally(() => {
+          const translator = getTranslator();
+          pendingLoad = null;
+          return translator;
+        });
+
+      return pendingLoad;
+    },
     createContentRenderer,
     t(key, replacements) {
       return getTranslator().t(key, replacements);

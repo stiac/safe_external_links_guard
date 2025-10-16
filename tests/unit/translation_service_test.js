@@ -4,52 +4,86 @@ const path = require('path');
 const { SafeExternalLinksGuard } = require(path.resolve(__dirname, '../../links-guard.i18n.js'));
 const i18n = SafeExternalLinksGuard.i18n;
 
-(() => {
-  const detected = i18n.detectLanguage({ lang: 'es', navigatorLanguages: ['en-US'] });
-  assert.strictEqual(detected, 'es', 'detectLanguage should prioritise explicit lang option');
-})();
+const run = async () => {
+  const detectedFromOption = i18n.detectLanguage({ lang: 'es', navigatorLanguages: ['en-US'] });
+  assert.strictEqual(
+    detectedFromOption,
+    'es',
+    'detectLanguage should prioritise explicit lang option'
+  );
 
-(() => {
-  const detected = i18n.detectLanguage({ search: '?lang=fr', navigatorLanguages: ['en-US'] });
-  assert.strictEqual(detected, 'fr', 'detectLanguage should read the lang query parameter');
-})();
+  const detectedFromQuery = i18n.detectLanguage({ search: '?lang=fr', navigatorLanguages: ['en-US'] });
+  assert.strictEqual(
+    detectedFromQuery,
+    'fr',
+    'detectLanguage should read the lang query parameter'
+  );
 
-(() => {
-  const detected = i18n.detectLanguage({ navigatorLanguages: ['pt-BR'] });
-  assert.strictEqual(detected, 'pt-br', 'detectLanguage should normalise navigator languages');
-})();
+  const detectedNavigator = i18n.detectLanguage({ navigatorLanguages: ['pt-BR'] });
+  assert.strictEqual(
+    detectedNavigator,
+    'pt-BR',
+    'detectLanguage should preserve the canonical code for supported regional languages'
+  );
 
-(() => {
+  const detectedFallback = i18n.detectLanguage({ navigatorLanguages: ['pt-PT'] });
+  assert.strictEqual(
+    detectedFallback,
+    'pt',
+    'detectLanguage should fallback to the base language when a regional variant is missing'
+  );
+
   i18n.setLanguage('it');
-  const translator = i18n.getTranslator();
-  assert.strictEqual(translator.t('modal.openButton'), 'Apri link', 'Italian translation for modal.openButton should match JSON value');
-})();
+  let translator = i18n.getTranslator();
+  assert.strictEqual(
+    translator.t('modal.openButton'),
+    'Apri link',
+    'Italian translation for modal.openButton should match JSON value'
+  );
 
-(() => {
   i18n.setLanguage('ru');
-  const translator = i18n.getTranslator();
-  assert.strictEqual(translator.t('modal.cancelButton'), 'Отмена', 'Russian translation for modal.cancelButton should match JSON value');
-})();
+  translator = i18n.getTranslator();
+  assert.strictEqual(
+    translator.t('modal.cancelButton'),
+    'Отмена',
+    'Russian translation for modal.cancelButton should match JSON value'
+  );
 
-(() => {
   i18n.registerLanguage('custom-demo', { modal: { openButton: 'Demo open' } });
   i18n.setLanguage('custom-demo');
-  const translator = i18n.getTranslator();
-  assert.strictEqual(translator.t('modal.openButton'), 'Demo open', 'Custom language should override provided keys');
+  translator = i18n.getTranslator();
+  assert.strictEqual(
+    translator.t('modal.openButton'),
+    'Demo open',
+    'Custom language should override provided keys'
+  );
   assert.strictEqual(
     translator.t('modal.cancelButton'),
     'Cancel',
     'Custom language should fallback to English when key is missing'
   );
-})();
 
-(() => {
-  i18n.setLanguage('unknown');
-  const translator = i18n.getTranslator();
-  assert.strictEqual(translator.language, 'en', 'Unknown language should fallback to default English');
-})();
+  i18n.setLanguage('pt-BR');
+  translator = i18n.getTranslator();
+  assert.strictEqual(
+    translator.language,
+    'pt-BR',
+    'Translator should expose the canonical language code for supported locales'
+  );
+  assert.strictEqual(
+    translator.t('modal.openButton'),
+    'Abrir link',
+    'Supported language should resolve translation keys from the matching bundle'
+  );
 
-(() => {
+  i18n.setLanguage('zh-CN');
+  translator = i18n.getTranslator();
+  assert.strictEqual(
+    translator.language,
+    'en',
+    'Unsupported languages should fallback to English translator'
+  );
+
   const createStubNode = () => {
     const attributes = {};
     return {
@@ -106,16 +140,14 @@ const i18n = SafeExternalLinksGuard.i18n;
   );
 
   renderer.disconnect();
-})();
 
-(() => {
-  const node = {
+  const shouldRenderNode = {
     textContent: 'Custom message'
   };
-  const renderer = i18n.createContentRenderer({
+  const rendererConditional = i18n.createContentRenderer({
     descriptors: [
       {
-        node,
+        node: shouldRenderNode,
         key: 'modal.title',
         shouldRender: () => false
       }
@@ -124,18 +156,16 @@ const i18n = SafeExternalLinksGuard.i18n;
   });
 
   assert.strictEqual(
-    node.textContent,
+    shouldRenderNode.textContent,
     'Custom message',
     'Descriptors with shouldRender=false must preserve existing content'
   );
 
-  renderer.disconnect();
-})();
+  rendererConditional.disconnect();
 
-(() => {
   i18n.setLanguage('es');
   const label = { textContent: '' };
-  const renderer = i18n.createContentRenderer({
+  const rendererFallback = i18n.createContentRenderer({
     descriptors: [
       {
         node: label,
@@ -152,19 +182,17 @@ const i18n = SafeExternalLinksGuard.i18n;
     'Renderer should fallback to provided keys when the primary key is missing'
   );
 
-  renderer.disconnect();
-})();
+  rendererFallback.disconnect();
 
-(() => {
   i18n.setLanguage('en');
   const node = { textContent: '' };
-  const renderer = i18n.createContentRenderer({
+  const rendererManual = i18n.createContentRenderer({
     autoBind: false,
     watch: false,
     renderInitial: false
   });
 
-  const unregister = renderer.register({ node, key: 'modal.copyButton' });
+  const unregister = rendererManual.register({ node, key: 'modal.copyButton' });
   assert.strictEqual(
     node.textContent,
     'Copy link',
@@ -174,14 +202,61 @@ const i18n = SafeExternalLinksGuard.i18n;
   unregister();
   node.textContent = 'Manual';
   i18n.setLanguage('fr');
-  renderer.render();
+  rendererManual.render();
   assert.strictEqual(
     node.textContent,
     'Manual',
     'Unregistered descriptors must not be updated after removal'
   );
 
-  renderer.disconnect();
-})();
+  rendererManual.disconnect();
 
-console.log('translation_service_test: OK');
+  i18n.setLanguage('es');
+  translator = i18n.getTranslator();
+  assert.strictEqual(
+    translator.t(['modal.nonexistent', 'modal.cancelButton']),
+    'Cancelar',
+    'Translator.t should resolve chained fallbacks before returning the key name'
+  );
+
+  await i18n.loadTranslations(
+    Promise.resolve({
+      'async-demo': {
+        modal: {
+          openButton: 'Async open'
+        }
+      }
+    })
+  );
+
+  i18n.setLanguage('async-demo');
+  await i18n.whenReady();
+  translator = i18n.getTranslator();
+  assert.strictEqual(
+    translator.t('modal.openButton'),
+    'Async open',
+    'Asynchronously loaded bundles should be available before rendering'
+  );
+
+  i18n.setLanguage('en');
+  translator = i18n.getTranslator();
+  assert.strictEqual(
+    translator.t('modal.missingKey'),
+    'modal.missingKey',
+    'Unknown keys without fallback must return the key name'
+  );
+
+  translator = i18n.getTranslator();
+  assert.strictEqual(
+    translator.language,
+    'en',
+    'Translator state should remain consistent after asynchronous loading'
+  );
+
+  console.log('translation_service_test: OK');
+};
+
+run().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
