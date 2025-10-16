@@ -30,6 +30,55 @@
     br: 'pt-br',
     'it-it': 'it'
   };
+  // Mapping dei ccTLD più comuni verso la lingua presumibile del sito.
+  const HOST_LANGUAGE_TLD_MAP = {
+    it: 'it-IT',
+    fr: 'fr-FR',
+    es: 'es-ES',
+    de: 'de-DE',
+    pt: 'pt-PT',
+    br: 'pt-BR',
+    ru: 'ru-RU',
+    mx: 'es-MX',
+    ar: 'es-AR',
+    cl: 'es-CL',
+    co: 'es-CO',
+    pe: 'es-PE',
+    uy: 'es-UY',
+    gb: 'en-GB',
+    uk: 'en-GB',
+    ie: 'en-IE',
+    us: 'en-US',
+    ca: 'en-CA',
+    au: 'en-AU',
+    nz: 'en-NZ'
+  };
+  // Token di sottodominio comuni che rimandano a versioni localizzate del sito.
+  const HOST_LANGUAGE_SUBDOMAIN_MAP = {
+    it: 'it-IT',
+    'it-it': 'it-IT',
+    fr: 'fr-FR',
+    'fr-fr': 'fr-FR',
+    es: 'es-ES',
+    'es-es': 'es-ES',
+    'es-mx': 'es-MX',
+    mx: 'es-MX',
+    'es-ar': 'es-AR',
+    ar: 'es-AR',
+    de: 'de-DE',
+    'de-de': 'de-DE',
+    pt: 'pt-PT',
+    'pt-pt': 'pt-PT',
+    'pt-br': 'pt-BR',
+    br: 'pt-BR',
+    ru: 'ru-RU',
+    'ru-ru': 'ru-RU',
+    en: 'en-US',
+    'en-gb': 'en-GB',
+    'en-us': 'en-US'
+  };
+  // Sottodomini da ignorare esplicitamente perché non legati alla localizzazione.
+  const HOST_LANGUAGE_IGNORED_TOKENS = new Set(['www', 'ww2', 'm', 'app', 'beta']);
   // Chiavi comuni utilizzate per salvare la preferenza linguistica nei vari storage del browser.
   const LANGUAGE_STORAGE_KEYS = [
     'SafeExternalLinksGuard.language',
@@ -705,7 +754,9 @@
    */
   const collectNavigatorLanguages = (options) => {
     if (options && Array.isArray(options.navigatorLanguages)) {
-      return options.navigatorLanguages;
+      if (options.navigatorLanguages.length) {
+        return options.navigatorLanguages;
+      }
     }
 
     const navigatorRef = options && options.navigator ? options.navigator : safeAccess(() => root.navigator);
@@ -730,6 +781,22 @@
         result.push(value);
       }
     });
+
+    const uaData = safeAccess(() => navigatorRef.userAgentData);
+    if (uaData) {
+      const uaLanguages = safeAccess(() => uaData.languages);
+      if (Array.isArray(uaLanguages)) {
+        uaLanguages.forEach((lang) => {
+          if (lang) {
+            result.push(lang);
+          }
+        });
+      }
+      const uaLocale = safeAccess(() => uaData.locale);
+      if (typeof uaLocale === 'string' && uaLocale) {
+        result.push(uaLocale);
+      }
+    }
 
     return result;
   };
@@ -759,19 +826,339 @@
     return locale || '';
   };
 
-  const detectLanguage = (options = {}) => {
-    const data = ensureCatalog();
+  const readDatasetLanguage = (options) => {
+    if (options && typeof options.datasetLang === 'string') {
+      return options.datasetLang;
+    }
+
+    const documentRef = options && options.document ? options.document : safeAccess(() => root.document);
+    if (!documentRef) {
+      return '';
+    }
+
+    const pickFromNode = (node) => {
+      if (!node) return '';
+
+      const dataset = safeAccess(() => node.dataset);
+      if (dataset && typeof dataset === 'object') {
+        const keys = ['lang', 'language', 'locale', 'langId', 'i18n'];
+        for (let i = 0; i < keys.length; i += 1) {
+          const key = keys[i];
+          if (typeof dataset[key] === 'string' && dataset[key].trim()) {
+            return dataset[key];
+          }
+        }
+      }
+
+      const attrs = ['data-lang', 'data-language', 'data-locale', 'data-ui-lang', 'data-ui-locale'];
+      for (let i = 0; i < attrs.length; i += 1) {
+        const attr = attrs[i];
+        const value = safeAccess(() =>
+          typeof node.getAttribute === 'function' ? node.getAttribute(attr) : node[attr]
+        );
+        if (typeof value === 'string' && value.trim()) {
+          return value;
+        }
+      }
+
+      return '';
+    };
+
+    const htmlNode = documentRef.documentElement || null;
+    const htmlLang = pickFromNode(htmlNode);
+    if (htmlLang) {
+      return htmlLang;
+    }
+
+    const bodyLang = pickFromNode(documentRef.body || null);
+    if (bodyLang) {
+      return bodyLang;
+    }
+
+    return '';
+  };
+
+  const collectMetaLanguages = (options) => {
+    if (options && Array.isArray(options.metaLanguages)) {
+      return options.metaLanguages;
+    }
+
+    const documentRef = options && options.document ? options.document : safeAccess(() => root.document);
+    if (!documentRef) {
+      return [];
+    }
+
+    const values = [];
+    const pushValue = (value) => {
+      if (typeof value === 'string' && value.trim()) {
+        values.push(value);
+      }
+    };
+
+    const selectors = [
+      'meta[property="og:locale"]',
+      'meta[property="og:locale:alternate"]',
+      'meta[name="language"]',
+      'meta[name="locale"]',
+      'meta[name="dc.language"]',
+      'meta[name="msapplication-locale"]'
+    ];
+
+    const queryNodes = (selector) => {
+      const list = safeAccess(() =>
+        typeof documentRef.querySelectorAll === 'function'
+          ? documentRef.querySelectorAll(selector)
+          : null
+      );
+      if (list && typeof list.length === 'number') {
+        return Array.prototype.slice.call(list);
+      }
+      const single = safeAccess(() =>
+        typeof documentRef.querySelector === 'function' ? documentRef.querySelector(selector) : null
+      );
+      return single ? [single] : [];
+    };
+
+    selectors.forEach((selector) => {
+      const nodes = queryNodes(selector);
+      nodes.forEach((node) => {
+        const content = safeAccess(() =>
+          node && typeof node.getAttribute === 'function' ? node.getAttribute('content') : node && node.content
+        );
+        if (typeof content === 'string' && content.trim()) {
+          pushValue(content);
+        }
+      });
+    });
+
+    return values;
+  };
+
+  const readScriptLanguageHint = (options) => {
+    if (options && typeof options.scriptLang === 'string') {
+      return options.scriptLang;
+    }
+
+    const documentRef = options && options.document ? options.document : safeAccess(() => root.document);
+    if (!documentRef) {
+      return '';
+    }
+
+    const pickFromNode = (node) => {
+      if (!node) return '';
+      const dataset = safeAccess(() => node.dataset);
+      if (dataset && typeof dataset === 'object') {
+        const keys = ['slgLang', 'slgLocale', 'lang', 'locale', 'language'];
+        for (let i = 0; i < keys.length; i += 1) {
+          const key = keys[i];
+          if (typeof dataset[key] === 'string' && dataset[key].trim()) {
+            return dataset[key];
+          }
+        }
+      }
+      const attrs = ['data-slg-lang', 'data-slg-locale', 'data-lang', 'data-locale', 'data-language'];
+      for (let i = 0; i < attrs.length; i += 1) {
+        const attr = attrs[i];
+        const value = safeAccess(() =>
+          typeof node.getAttribute === 'function' ? node.getAttribute(attr) : node[attr]
+        );
+        if (typeof value === 'string' && value.trim()) {
+          return value;
+        }
+      }
+      return '';
+    };
+
+    const currentScript = safeAccess(() => documentRef.currentScript);
+    const currentValue = pickFromNode(currentScript);
+    if (currentValue) {
+      return currentValue;
+    }
+
+    const scripts = safeAccess(() =>
+      typeof documentRef.querySelectorAll === 'function'
+        ? documentRef.querySelectorAll('script[data-slg-lang],script[data-lang],script[data-locale]')
+        : null
+    );
+    if (scripts && typeof scripts.length === 'number') {
+      for (let i = scripts.length - 1; i >= 0; i -= 1) {
+        const value = pickFromNode(scripts[i]);
+        if (value) {
+          return value;
+        }
+      }
+    }
+
+    return '';
+  };
+
+  const readPathLanguageHint = (options, data) => {
+    if (options && typeof options.pathLanguage === 'string') {
+      return options.pathLanguage;
+    }
+
+    let segments = [];
+    if (options && Array.isArray(options.pathSegments)) {
+      segments = options.pathSegments.filter(Boolean);
+    } else {
+      const locationRef = options && options.location ? options.location : safeAccess(() => root.location);
+      const pathname = locationRef && typeof locationRef.pathname === 'string' ? locationRef.pathname : '';
+      if (pathname) {
+        segments = pathname.split('/').filter(Boolean);
+      }
+    }
+
+    if (!segments.length) {
+      return '';
+    }
+
+    const parseSegment = (segment) => {
+      if (!segment || typeof segment !== 'string') {
+        return '';
+      }
+      const sanitized = segment.trim().replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, '').replace(/[_\s]+/g, '-');
+      if (!/^[A-Za-z]{2,3}(-[A-Za-z]{2})?$/.test(sanitized)) {
+        return '';
+      }
+      return sanitized;
+    };
+
+    const attempt = (segment) => {
+      const candidate = parseSegment(segment);
+      if (!candidate) {
+        return '';
+      }
+      const normalized = normalizeLanguageCode(candidate);
+      if (!normalized) {
+        return '';
+      }
+      if (!data) {
+        return candidate;
+      }
+      if (data[normalized]) {
+        return candidate;
+      }
+      if (normalized.includes('-')) {
+        const base = normalized.split('-')[0];
+        if (data[base]) {
+          return candidate;
+        }
+        const alias = LANGUAGE_ALIASES[normalized] || LANGUAGE_ALIASES[base];
+        if (alias && data[alias]) {
+          return candidate;
+        }
+      }
+      const alias = LANGUAGE_ALIASES[normalized];
+      if (alias && data[alias]) {
+        return candidate;
+      }
+      return '';
+    };
+
+    const first = attempt(segments[0]);
+    if (first) {
+      return first;
+    }
+
+    if (segments.length > 1) {
+      const combined = `${segments[0]}-${segments[1]}`;
+      const combinedCandidate = attempt(combined);
+      if (combinedCandidate) {
+        return combinedCandidate;
+      }
+    }
+
+    return '';
+  };
+
+  /**
+   * Inferisce la lingua dal nome host, utilizzando ccTLD e sottodomini dedicati.
+   * Utile quando gli header del browser sono oscurati da modalità privacy.
+   */
+  const readHostLanguageHint = (options, data) => {
+    if (options && typeof options.hostLanguage === 'string') {
+      return options.hostLanguage;
+    }
+
+    let hostname = '';
+    if (options && typeof options.hostname === 'string') {
+      hostname = options.hostname;
+    } else if (options && typeof options.host === 'string') {
+      hostname = options.host;
+    } else {
+      const locationRef = options && options.location ? options.location : safeAccess(() => root.location);
+      if (locationRef) {
+        if (typeof locationRef.hostname === 'string' && locationRef.hostname) {
+          hostname = locationRef.hostname;
+        } else if (typeof locationRef.host === 'string' && locationRef.host) {
+          hostname = locationRef.host;
+        }
+      }
+    }
+
+    if (!hostname || typeof hostname !== 'string') {
+      return '';
+    }
+
+    const sanitized = hostname.replace(/:\\d+$/, '').trim().toLowerCase();
+    if (!sanitized || /^(\d{1,3}\.){3}\d{1,3}$/.test(sanitized)) {
+      return '';
+    }
+
+    const segments = sanitized.split('.').filter(Boolean);
+    if (!segments.length) {
+      return '';
+    }
+
+    const attemptResolve = (candidate) => {
+      if (!candidate) {
+        return '';
+      }
+      const normalized = normalizeLanguageCode(candidate);
+      if (!normalized || !/^[a-z]{2,3}(-[a-z]{2})?$/.test(normalized)) {
+        return '';
+      }
+      if (!data) {
+        return candidate;
+      }
+      const resolved = resolveCandidateLanguage(candidate, data);
+      return resolved || candidate;
+    };
+
+    for (let i = 0; i < segments.length - 1; i += 1) {
+      const token = segments[i];
+      if (!token || HOST_LANGUAGE_IGNORED_TOKENS.has(token)) {
+        continue;
+      }
+      const mapped = HOST_LANGUAGE_SUBDOMAIN_MAP[token] || token;
+      const resolved = attemptResolve(mapped);
+      if (resolved) {
+        return resolved;
+      }
+    }
+
+    const tld = segments[segments.length - 1];
+    const mappedTld = HOST_LANGUAGE_TLD_MAP[tld];
+    if (mappedTld) {
+      const resolved = attemptResolve(mappedTld);
+      if (resolved) {
+        return resolved;
+      }
+    }
+
+    return '';
+  };
+
+  const gatherLanguageHints = (options = {}, data) => {
     const paramName = options.paramName || 'lang';
     const defaultLang = options.defaultLanguage || DEFAULT_LANGUAGE;
     const seen = new Set();
-    const candidates = [];
+    const hints = [];
 
-    const pushCandidate = (value) => {
+    const register = (value, source) => {
       if (!value) return;
       if (Array.isArray(value)) {
-        value.forEach((item) => {
-          pushCandidate(item);
-        });
+        value.forEach((item) => register(item, source));
         return;
       }
       if (typeof value !== 'string') {
@@ -786,7 +1173,7 @@
           if (!part) return;
           const token = part.split(';')[0].trim();
           if (token) {
-            pushCandidate(token);
+            register(token, source);
           }
         });
         return;
@@ -796,10 +1183,10 @@
         return;
       }
       seen.add(normalized);
-      candidates.push(trimmed);
+      hints.push({ value: trimmed, normalized, source });
     };
 
-    pushCandidate(options.lang);
+    register(options.lang, 'explicit');
 
     const search =
       Object.prototype.hasOwnProperty.call(options, 'search')
@@ -807,34 +1194,75 @@
         : typeof root.location === 'object'
         ? root.location.search
         : '';
-    pushCandidate(parseQueryLanguage(search, paramName));
+    register(parseQueryLanguage(search, paramName), 'query');
 
-    pushCandidate(readPersistedLanguage(options));
-    pushCandidate(readDocumentLanguage(options));
-    pushCandidate(collectNavigatorLanguages(options));
-    pushCandidate(readIntlLocale(options));
+    register(readScriptLanguageHint(options), 'script');
+    register(readPersistedLanguage(options), 'storage');
+    register(readDocumentLanguage(options), 'document');
+    register(readDatasetLanguage(options), 'dataset');
+    register(collectMetaLanguages(options), 'meta');
+    register(readPathLanguageHint(options, data), 'path');
+    register(readHostLanguageHint(options, data), 'host');
+    register(collectNavigatorLanguages(options), 'navigator');
+    register(readIntlLocale(options), 'intl');
 
     if (options && Array.isArray(options.additionalHints)) {
-      options.additionalHints.forEach((hint) => pushCandidate(hint));
+      options.additionalHints.forEach((hint) => register(hint, 'additional'));
     } else if (options && typeof options.additionalHints === 'string') {
-      pushCandidate(options.additionalHints);
+      register(options.additionalHints, 'additional');
     }
 
-    pushCandidate(defaultLang);
+    register(defaultLang, 'default');
     if (defaultLang !== DEFAULT_LANGUAGE) {
-      pushCandidate(DEFAULT_LANGUAGE);
+      register(DEFAULT_LANGUAGE, 'fallback');
     }
 
-    for (let i = 0; i < candidates.length; i += 1) {
-      const candidate = candidates[i];
-      const resolvedDisplay = resolveCandidateLanguage(candidate, data);
-      if (resolvedDisplay) {
-        return resolvedDisplay;
-      }
-    }
-
-    return formatDisplayLanguage(DEFAULT_LANGUAGE);
+    return hints;
   };
+
+  const collectLanguageContext = (options = {}) => {
+    const data = ensureCatalog();
+    const hints = gatherLanguageHints(options, data);
+    const resolved = [];
+    const resolvedSet = new Set();
+
+    for (let i = 0; i < hints.length; i += 1) {
+      const hint = hints[i];
+      const resolvedDisplay = resolveCandidateLanguage(hint.value, data);
+      if (!resolvedDisplay) {
+        continue;
+      }
+      const normalizedResolved = normalizeLanguageCode(resolvedDisplay);
+      if (!normalizedResolved || resolvedSet.has(normalizedResolved)) {
+        continue;
+      }
+      resolvedSet.add(normalizedResolved);
+      resolved.push({
+        language: resolvedDisplay,
+        normalized: normalizedResolved,
+        source: hint.source
+      });
+    }
+
+    if (!resolved.length) {
+      const fallback = formatDisplayLanguage(DEFAULT_LANGUAGE);
+      const normalizedFallback = normalizeLanguageCode(fallback) || DEFAULT_LANGUAGE;
+      resolved.push({
+        language: fallback,
+        normalized: normalizedFallback,
+        source: 'fallback'
+      });
+    }
+
+    return {
+      language: resolved[0].language,
+      languages: resolved.map((entry) => entry.language),
+      sources: resolved.map((entry) => ({ language: entry.language, source: entry.source })),
+      rawHints: hints
+    };
+  };
+
+  const detectLanguage = (options = {}) => collectLanguageContext(options).language;
 
   const notifyLanguageChange = () => {
     if (!listeners.length) return;
@@ -1212,6 +1640,7 @@
 
   const api = {
     DEFAULT_LANGUAGE,
+    collectLanguageContext,
     detectLanguage,
     getAvailableLanguages,
     getDictionary(lang) {

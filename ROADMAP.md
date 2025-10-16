@@ -7,6 +7,8 @@
 - [ ] Coprire con test automatici la serializzazione di `messageKey`/`messageFallbackKey` nel resolver PHP per garantire coerenza con i dizionari multilingua.
 - [ ] Pubblicare esempi di integrazione server-side del pixel di tracciamento (PHP/JS) e delle politiche di consenso GDPR.
 - [ ] Preparare una demo automatizzata che verifichi l'integrazione `SafeExternalLinksGuard.amp` all'interno di `<amp-script>` con dataset di policy precalcolato.
+- [ ] Automatizzare test cross-browser (Playwright/Sauce) per validare la nuova detection multi-sorgente in modalità privacy.
+- [ ] Raccogliere feedback sui domini reali per ampliare la mappatura TLD/sottodomini della heuristica `host` e coprire mercati aggiuntivi.
 
 ## Obiettivi a Medio Termine
 - [ ] Semplificare la gestione dei template della modale consentendo override tramite configurazione JSON.

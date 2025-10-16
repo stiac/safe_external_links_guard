@@ -1,4 +1,24 @@
 # Changelog
+## [1.9.3] - 2025-11-20
+### Added
+- Heuristica `host` in `links-guard.i18n.js` con mappe dedicate ai ccTLD e ai sottodomini multilingua per dedurre la lingua quando il browser oscura le proprie preferenze.
+
+### Changed
+- Pipeline `gatherLanguageHints` aggiornata per includere il suggerimento proveniente dall'host prima dei fallback sul browser, mantenendo la normalizzazione canonica dei codici (es. `it-IT`, `es-ES`).
+
+### Fixed
+- Rilevazione della lingua corretta nei browser in modalità anonima o con privacy elevata, evitando il ritorno all'inglese quando sono disponibili domini locali (`example.it`, `es.example.com`).
+
+## [1.9.2] - 2025-11-19
+### Added
+- Funzione `collectLanguageContext()` in `links-guard.i18n.js` per ottenere lingua principale, elenco di fallback e provenienza dei suggerimenti, riutilizzata anche dal tracciamento anonimo.
+
+### Changed
+- Rilevazione lingua potenziata con hint da dataset (`data-lang`, `data-slg-lang`), metatag semantici (`og:locale`, `dc.language`), segmenti della URL e `navigator.userAgentData`, garantendo il corretto funzionamento anche in modalità anonima o con fingerprinting ridotto.
+- Documentazione aggiornata (`README.md`) con il nuovo flusso di detection multilivello e l'esempio d'uso di `collectLanguageContext()`.
+
+### Fixed
+- Metadati di tracking sincronizzati con la lingua effettivamente rilevata anche quando `navigator.languages` è vuoto, evitando fallback indesiderati all'inglese.
 
 ## [1.9.1] - 2025-11-18
 ### Added
