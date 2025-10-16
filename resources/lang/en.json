@@ -1,6 +1,18 @@
 {
   "messages": {
-    "defaultWarn": "This link is not verified and may share your browsing data with a third-party site. Make sure the destination is trustworthy before continuing."
+    "defaultWarn": "This link is not verified and may share your browsing data with a third-party site. Make sure the destination is trustworthy before continuing.",
+    "denyDefault": "This domain is blocked. Proceed with caution.",
+    "endpointUnavailable": "Policy resolver temporarily unavailable. Proceed with caution.",
+    "timeout": "The request to verify this domain timed out. Proceed with caution.",
+    "error": "An error occurred while verifying this domain. Proceed with caution.",
+    "missingHost": "Host is missing from the request.",
+    "policy": {
+      "phishing": "Domain reported for phishing.",
+      "ruBlock": "All .ru sub-domains are blocked.",
+      "github": "Verified GitHub repository.",
+      "officialSubdomain": "Official tuo-sito.it sub-domain.",
+      "beta": "Beta environment: verify before continuing."
+    }
   },
   "modal": {
     "title": "Check that this link is safe",

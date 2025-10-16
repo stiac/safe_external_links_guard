@@ -1,6 +1,18 @@
 {
   "messages": {
-    "defaultWarn": "Dieser Link ist nicht verifiziert und könnte Ihre Browserdaten mit einer Drittseite teilen. Stellen Sie vor dem Fortfahren sicher, dass das Ziel vertrauenswürdig ist."
+    "defaultWarn": "Dieser Link ist nicht verifiziert und könnte Ihre Browserdaten mit einer Drittseite teilen. Stellen Sie vor dem Fortfahren sicher, dass das Ziel vertrauenswürdig ist.",
+    "denyDefault": "Domain blockiert. Bitte vorsichtig fortfahren.",
+    "endpointUnavailable": "Der Policy-Resolver ist vorübergehend nicht verfügbar. Bitte vorsichtig fortfahren.",
+    "timeout": "Die Domainprüfung hat das Zeitlimit überschritten. Bitte vorsichtig fortfahren.",
+    "error": "Beim Überprüfen der Domain ist ein Fehler aufgetreten. Bitte vorsichtig fortfahren.",
+    "missingHost": "Host in der Anfrage fehlt.",
+    "policy": {
+      "phishing": "Domain wegen Phishing gemeldet.",
+      "ruBlock": "Alle .ru-Subdomains werden blockiert.",
+      "github": "Verifiziertes GitHub-Repository.",
+      "officialSubdomain": "Offizieller tuo-sito.it-Subdomain.",
+      "beta": "Beta-Umgebung: vor dem Fortfahren prüfen."
+    }
   },
   "modal": {
     "title": "Prüfen Sie, ob dieser Link sicher ist",

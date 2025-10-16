@@ -2,29 +2,29 @@
 
 ## Informazioni Generali
 - **Progetto:** Safe External Links Guard
-- **Versione:** 1.7.1
-- **Data:** 2025-11-08
+- **Versione:** 1.7.4
+- **Data:** 2025-11-11
 - **Autore aggiornamento:** AI Development Assistant
 
 ## Stato Moduli
 | Modulo | Stato | Note |
 | --- | --- | --- |
-| Gestione modale (links-guard.js) | Manutenzione correttiva completata | Rimossa la ridefinizione duplicata di `applyModalTranslations`.
-| Localizzazione (links-guard.i18n.js) | Stabile | Nessuna modifica in questa release.
-| Documentazione | Aggiornata | README, CHANGELOG, VERSION allineati alla nuova patch.
+| Gestione modale (links-guard.js) | Aggiornato | Messaggi di warning/deny tradotti dinamicamente con descriptor e refresh al cambio lingua.
+| Localizzazione (links-guard.i18n.js) | Aggiornato | Nuove chiavi per messaggi di policy, errori di rete e fallback multilingua armonizzati con il resolver.
+| Documentazione | Aggiornata | README, CHANGELOG, VERSION e report allineati alla release 1.7.4.
 
 ## Attività Recenti
 | Data | Autore | Descrizione | Tempo (h) |
 | --- | --- | --- | --- |
-| 2025-11-08 | AI Development Assistant | Correzione errore di sintassi dovuto a doppia dichiarazione della funzione di traduzione della modale. | 1.0 |
+| 2025-11-11 | AI Development Assistant | Allineamento messaggi del resolver alla lingua utente (messageKey/fallback) con aggiornamento di modale, tooltip e traduzioni JSON. | 1.5 |
 
 ## Rischi e Note Tecniche
-- Monitorare eventuali regressioni legate al renderer i18n della modale: il flusso di inizializzazione dipende da `guardNamespace.i18n`.
-- Considerare test automatici che coprano il bootstrap della modale dopo il refactoring del renderer per evitare errori simili.
+- Verificare in staging che i messaggi provenienti dal resolver (inclusi errori di rete) vengano tradotti correttamente in tutte le lingue supportate.
+- Continuare a monitorare l'inizializzazione del renderer i18n per assicurare che i descriptor registrati vengano aggiornati dopo il cambio lingua.
 
 ## Dipendenze e Impatti
 - Nessuna nuova dipendenza introdotta.
-- Compatibilità retroattiva preservata; la patch non altera l'API pubblica.
+- Compatibilità retroattiva preservata; la risposta dell'endpoint espone `messageKey/messageFallbackKey` in modo opzionale mantenendo il fallback testuale legacy.
 
 ## Rendicontazione Economica (Opzionale)
 - Non applicabile per questa manutenzione correttiva.

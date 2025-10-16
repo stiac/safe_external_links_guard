@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.7.4] - 2025-11-11
+### Added
+- Chiavi di traduzione aggiuntive per i messaggi di policy (`messages.denyDefault`, `messages.policy.*`, errori di rete) in
+  `links-guard.i18n.js` e nei bundle JSON di `resources/lang/`, complete di test unitari per verificare la disponibilità delle
+  nuove stringhe multilingua.
+
+### Changed
+- `links-guard.js` normalizza e traduce i messaggi restituiti dall'endpoint (inclusi timeout ed errori) tramite descriptor
+  strutturati, aggiorna la cache delle policy e ritraduce automaticamente la modale e i tooltip al cambio lingua.
+- `links/policy/resolver.php` e `policy.php` espongono `messageKey` e `messageFallbackKey` per consentire al client di
+  recuperare il testo corretto nella lingua dell'utente mantenendo il fallback testuale legacy.
+
+### Fixed
+- I messaggi di warning/deny provenienti dal resolver vengono ora mostrati nella lingua dell'utente, con fallback coerenti in
+  caso di indisponibilità del servizio o errori di rete.
+
+## [1.7.3] - 2025-11-10
+### Added
+- Supporto al precaricamento asincrono dei dizionari tramite `SafeExternalLinksGuard.i18n.loadTranslations()` e `whenReady()`
+  per evitare flash di lingua errata prima del render della UI.
+- Fallback a catena nella funzione `t()` (accetta array di chiavi) e normalizzazione canonica dei codici lingua (`pt-BR`,
+  `pt-PT`) per coprire in modo affidabile le varianti regionali.
+- Test unitari estesi (`tests/unit/translation_service_test.js`) che verificano lingua supportata, non supportata, gestione
+  delle chiavi mancanti e caricamento asincrono dei bundle.
+
+### Fixed
+- Catalogo delle traduzioni rigenerato quando viene fornito un nuovo bundle esterno, garantendo l'applicazione dei testi corretti
+  e l'aggiornamento dei listener già registrati.
+
 ## [1.7.2] - 2025-11-09
 ### Fixed
 - Evitato il `ReferenceError` durante il bootstrap rimuovendo la registrazione anticipata di `handleLanguageChange` in `links-guard.js`, così l'handler viene agganciato solo dopo che la funzione e le sue dipendenze sono inizializzate.

@@ -36,6 +36,8 @@ if ($host === '') {
         'action' => 'warn',
         'ttl' => SLG_DEFAULT_WARN_TTL,
         'message' => 'Host non specificato.',
+        'messageKey' => SLG_MISSING_HOST_KEY,
+        'messageFallbackKey' => SLG_DEFAULT_WARN_MESSAGE_KEY,
     ]);
     exit;
 }

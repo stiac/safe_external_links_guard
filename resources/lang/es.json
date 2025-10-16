@@ -1,6 +1,18 @@
 {
   "messages": {
-    "defaultWarn": "Este enlace no está verificado y puede compartir tus datos de navegación con un sitio de terceros. Antes de continuar, asegúrate de que el destino sea de confianza."
+    "defaultWarn": "Este enlace no está verificado y puede compartir tus datos de navegación con un sitio de terceros. Antes de continuar, asegúrate de que el destino sea de confianza.",
+    "denyDefault": "Dominio bloqueado. Procede con precaución.",
+    "endpointUnavailable": "El resolvedor de políticas no está disponible temporalmente. Procede con precaución.",
+    "timeout": "La verificación del dominio superó el tiempo límite. Procede con precaución.",
+    "error": "Se produjo un error al verificar el dominio. Procede con precaución.",
+    "missingHost": "Falta el host en la solicitud.",
+    "policy": {
+      "phishing": "Dominio reportado por phishing.",
+      "ruBlock": "Se bloquean todos los subdominios .ru.",
+      "github": "Repositorio de GitHub verificado.",
+      "officialSubdomain": "Subdominio oficial de tuo-sito.it.",
+      "beta": "Entorno beta: verifica antes de continuar."
+    }
   },
   "modal": {
     "title": "Comprueba que este enlace sea seguro",
