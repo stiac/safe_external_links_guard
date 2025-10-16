@@ -1,6 +1,6 @@
 # Safe External Links Guard
 
-**Versione:** 1.9.4
+**Versione:** 1.9.3
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
@@ -198,6 +198,12 @@ const detectedFromRoute = SafeExternalLinksGuard.i18n.detectLanguage({
   location: { pathname: '/de/account' }
 });
 // detectedFromRoute === 'de'
+
+const detectedFromHost = SafeExternalLinksGuard.i18n.detectLanguage({
+  navigatorLanguages: [],
+  location: { hostname: 'supporto.tuo-sito.it' }
+});
+// detectedFromHost === 'it-IT'
 ```
 
 > **Nota:** i codici `it` e `it-IT` vengono ora mappati direttamente sul dizionario italiano, mantenendo la forma con suffisso regionale quando presente.
@@ -232,6 +238,8 @@ const context = SafeExternalLinksGuard.i18n.collectLanguageContext();
 ```
 
 Il metodo `SafeExternalLinksGuard.i18n.t(key)` restituisce il testo nella lingua attiva e, se una chiave non è tradotta, ricade automaticamente sulla versione inglese. È possibile passare un array di chiavi (`t(['ui.cta', 'modal.openButton'])`) per gestire fallback a catena senza controlli manuali. Per aggiungere nuove lingue è sufficiente creare un file JSON con la stessa struttura (sezioni `messages`, `modal`, `tooltip`) e registrarlo via `SafeExternalLinksGuard.i18n.registerLanguage('codice', dizionario)`. Il servizio espone inoltre `onLanguageChange` per reagire ai cambi di lingua in tempo reale e le utility `loadTranslations()`/`whenReady()` per precaricare i bundle prima del rendering della UI.
+
+Quando i browser oscurano gli header linguistici (modalità anonima o privacy elevata), il resolver sfrutta anche gli indizi presenti nell'URL (segmenti, sottodomini dedicati e ccTLD) per dedurre la localizzazione più probabile, mantenendo sempre come ultima risorsa il fallback inglese.
 
 #### Esempio di preload e integrazione rapida
 ```html

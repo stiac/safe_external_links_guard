@@ -30,6 +30,55 @@
     br: 'pt-br',
     'it-it': 'it'
   };
+  // Mapping dei ccTLD più comuni verso la lingua presumibile del sito.
+  const HOST_LANGUAGE_TLD_MAP = {
+    it: 'it-IT',
+    fr: 'fr-FR',
+    es: 'es-ES',
+    de: 'de-DE',
+    pt: 'pt-PT',
+    br: 'pt-BR',
+    ru: 'ru-RU',
+    mx: 'es-MX',
+    ar: 'es-AR',
+    cl: 'es-CL',
+    co: 'es-CO',
+    pe: 'es-PE',
+    uy: 'es-UY',
+    gb: 'en-GB',
+    uk: 'en-GB',
+    ie: 'en-IE',
+    us: 'en-US',
+    ca: 'en-CA',
+    au: 'en-AU',
+    nz: 'en-NZ'
+  };
+  // Token di sottodominio comuni che rimandano a versioni localizzate del sito.
+  const HOST_LANGUAGE_SUBDOMAIN_MAP = {
+    it: 'it-IT',
+    'it-it': 'it-IT',
+    fr: 'fr-FR',
+    'fr-fr': 'fr-FR',
+    es: 'es-ES',
+    'es-es': 'es-ES',
+    'es-mx': 'es-MX',
+    mx: 'es-MX',
+    'es-ar': 'es-AR',
+    ar: 'es-AR',
+    de: 'de-DE',
+    'de-de': 'de-DE',
+    pt: 'pt-PT',
+    'pt-pt': 'pt-PT',
+    'pt-br': 'pt-BR',
+    br: 'pt-BR',
+    ru: 'ru-RU',
+    'ru-ru': 'ru-RU',
+    en: 'en-US',
+    'en-gb': 'en-GB',
+    'en-us': 'en-US'
+  };
+  // Sottodomini da ignorare esplicitamente perché non legati alla localizzazione.
+  const HOST_LANGUAGE_IGNORED_TOKENS = new Set(['www', 'ww2', 'm', 'app', 'beta']);
   // Chiavi comuni utilizzate per salvare la preferenza linguistica nei vari storage del browser.
   const LANGUAGE_STORAGE_KEYS = [
     'SafeExternalLinksGuard.language',
@@ -1022,6 +1071,84 @@
     return '';
   };
 
+  /**
+   * Inferisce la lingua dal nome host, utilizzando ccTLD e sottodomini dedicati.
+   * Utile quando gli header del browser sono oscurati da modalità privacy.
+   */
+  const readHostLanguageHint = (options, data) => {
+    if (options && typeof options.hostLanguage === 'string') {
+      return options.hostLanguage;
+    }
+
+    let hostname = '';
+    if (options && typeof options.hostname === 'string') {
+      hostname = options.hostname;
+    } else if (options && typeof options.host === 'string') {
+      hostname = options.host;
+    } else {
+      const locationRef = options && options.location ? options.location : safeAccess(() => root.location);
+      if (locationRef) {
+        if (typeof locationRef.hostname === 'string' && locationRef.hostname) {
+          hostname = locationRef.hostname;
+        } else if (typeof locationRef.host === 'string' && locationRef.host) {
+          hostname = locationRef.host;
+        }
+      }
+    }
+
+    if (!hostname || typeof hostname !== 'string') {
+      return '';
+    }
+
+    const sanitized = hostname.replace(/:\\d+$/, '').trim().toLowerCase();
+    if (!sanitized || /^(\d{1,3}\.){3}\d{1,3}$/.test(sanitized)) {
+      return '';
+    }
+
+    const segments = sanitized.split('.').filter(Boolean);
+    if (!segments.length) {
+      return '';
+    }
+
+    const attemptResolve = (candidate) => {
+      if (!candidate) {
+        return '';
+      }
+      const normalized = normalizeLanguageCode(candidate);
+      if (!normalized || !/^[a-z]{2,3}(-[a-z]{2})?$/.test(normalized)) {
+        return '';
+      }
+      if (!data) {
+        return candidate;
+      }
+      const resolved = resolveCandidateLanguage(candidate, data);
+      return resolved || candidate;
+    };
+
+    for (let i = 0; i < segments.length - 1; i += 1) {
+      const token = segments[i];
+      if (!token || HOST_LANGUAGE_IGNORED_TOKENS.has(token)) {
+        continue;
+      }
+      const mapped = HOST_LANGUAGE_SUBDOMAIN_MAP[token] || token;
+      const resolved = attemptResolve(mapped);
+      if (resolved) {
+        return resolved;
+      }
+    }
+
+    const tld = segments[segments.length - 1];
+    const mappedTld = HOST_LANGUAGE_TLD_MAP[tld];
+    if (mappedTld) {
+      const resolved = attemptResolve(mappedTld);
+      if (resolved) {
+        return resolved;
+      }
+    }
+
+    return '';
+  };
+
   const gatherLanguageHints = (options = {}, data) => {
     const paramName = options.paramName || 'lang';
     const defaultLang = options.defaultLanguage || DEFAULT_LANGUAGE;
@@ -1075,6 +1202,7 @@
     register(readDatasetLanguage(options), 'dataset');
     register(collectMetaLanguages(options), 'meta');
     register(readPathLanguageHint(options, data), 'path');
+    register(readHostLanguageHint(options, data), 'host');
     register(collectNavigatorLanguages(options), 'navigator');
     register(readIntlLocale(options), 'intl');
 

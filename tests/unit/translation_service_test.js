@@ -124,6 +124,26 @@ const run = async () => {
     'detectLanguage should inspect URL path segments when browser APIs are not available'
   );
 
+  const detectedFromHostTld = i18n.detectLanguage({
+    navigatorLanguages: [],
+    location: { hostname: 'sicurezza.esempio.it' }
+  });
+  assert.strictEqual(
+    detectedFromHostTld,
+    'it-IT',
+    'detectLanguage should infer the language from country TLD when browser hints are missing'
+  );
+
+  const detectedFromHostSubdomain = i18n.detectLanguage({
+    navigatorLanguages: [],
+    location: { hostname: 'es.example.com' }
+  });
+  assert.strictEqual(
+    detectedFromHostSubdomain,
+    'es-ES',
+    'detectLanguage should leverage language-specific subdomains as a fallback hint'
+  );
+
   const detectedFromQualityList = i18n.detectLanguage({ navigatorLanguages: ['es-ES;q=0.8', 'en-US'] });
   assert.strictEqual(
     detectedFromQualityList,

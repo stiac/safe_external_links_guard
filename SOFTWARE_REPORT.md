@@ -2,18 +2,17 @@
 
 ## Informazioni Generali
 - **Progetto:** Safe External Links Guard
-- **Versione:** 1.9.4
-- **Data:** 2025-11-21
+- **Versione:** 1.9.3
+- **Data:** 2025-11-20
 - **Autore aggiornamento:** AI Development Assistant
 
 ## Stato Moduli
 | Modulo | Stato | Note |
 | --- | --- | --- |
 | Gestione modale (links-guard.js) | Aggiornato | Rilevazione automatica Reader/AMP con mantenimento del tooltip di sicurezza sui link `allow`, così l'avviso resta visibile anche quando la modale non è disponibile. |
-| Utility AMP (links-guard.js) | Aggiornato | Corretto il bootstrap di `collectExternalLinksForAmp()` eliminando la doppia dichiarazione di `url` che bloccava l'esecuzione in ambienti sandboxati. |
-| Localizzazione (links-guard.i18n.js) | Aggiornato | Introdotta `collectLanguageContext()`, nuovi hint da dataset/meta/URL e supporto a `navigator.userAgentData` per browser in modalità privacy. |
-| Documentazione | Aggiornata | README, CHANGELOG, VERSION e report allineati alla release 1.9.4 con evidenza del fix AMP precedente e della nuova gestione del parametro di tracciamento senza pixel. |
-| Configurazione (links-guard.settings.js) | Aggiornato | Mantiene `trackingEnabled` attivo anche senza endpoint del pixel, così il parametro personalizzato resta disponibile per campagne lato server; rimozione automatica degli spazi nel campo endpoint. |
+| Localizzazione (links-guard.i18n.js) | Aggiornato | Aggiunta heuristica basata su ccTLD/sottodomini (`host`) per dedurre la lingua anche in privacy mode e mantenuta la normalizzazione canonica dei codici. |
+| Documentazione | Aggiornata | README, CHANGELOG, VERSION e report aggiornati alla release 1.9.3 con esempi dell'inferenza lingua tramite dominio. |
+| Configurazione (links-guard.settings.js) | Aggiornato | Introdotto il flag `keepWarnMessageOnAllow` con auto-attivazione in contesti limitati e supporto negli snippet AMP/server-side. |
 
 ## Attività Recenti
 | Data | Autore | Descrizione | Tempo (h) |
@@ -25,8 +24,7 @@
 | 2025-11-17 | AI Development Assistant | Listener delegato per modalità lettura, utility `SafeExternalLinksGuard.amp`, documentazione AMP e nuovo test `amp_utils_test`. | 1.2 |
 | 2025-11-18 | AI Development Assistant | Persistenza dei messaggi di sicurezza sui link `allow` in Reader/AMP, nuova opzione `keepWarnMessageOnAllow`, aggiornamento test/documentazione e report. | 0.8 |
 | 2025-11-19 | AI Development Assistant | Refactoring della detection lingua con hint da dataset, metatag, path e `navigator.userAgentData`, nuovo contesto linguistico per il tracking e aggiornamento documentazione. | 0.9 |
-| 2025-11-20 | AI Development Assistant | Fix di regressione su `collectExternalLinksForAmp()` con rimozione della doppia dichiarazione `url` e verifica manuale su AMP/Reader. | 0.3 |
-| 2025-11-21 | AI Development Assistant | Ripristinata l'aggiunta del parametro di tracciamento anche senza endpoint del pixel e aggiornati i test/settings per coprire la configurazione ibrida. | 0.4 |
+| 2025-11-20 | AI Development Assistant | Estensione della detection con inferenza dal dominio (`host`), nuovi test unitari e aggiornamenti documentali alla release 1.9.3. | 0.6 |
 
 
 ## Rischi e Note Tecniche

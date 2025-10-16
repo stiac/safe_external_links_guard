@@ -1,14 +1,13 @@
 # Changelog
-## [1.9.4] - 2025-11-21
-### Changed
-- La normalizzazione delle impostazioni mantiene attivo `trackingEnabled` anche senza endpoint del pixel e pulisce gli spazi indesiderati, così l'integrazione può aggiungere il parametro personalizzato pur delegando la raccolta eventi al backend.
-
-### Fixed
-- I link esterni ricevono nuovamente il parametro di tracciamento configurato anche quando l'endpoint del pixel è vuoto, evitando di perdere gli identificatori delle campagne pur mantenendo opzionale l'invio del beacon client-side.
-
 ## [1.9.3] - 2025-11-20
+### Added
+- Heuristica `host` in `links-guard.i18n.js` con mappe dedicate ai ccTLD e ai sottodomini multilingua per dedurre la lingua quando il browser oscura le proprie preferenze.
+
+### Changed
+- Pipeline `gatherLanguageHints` aggiornata per includere il suggerimento proveniente dall'host prima dei fallback sul browser, mantenendo la normalizzazione canonica dei codici (es. `it-IT`, `es-ES`).
+
 ### Fixed
-- Rimossa la doppia dichiarazione della variabile `url` in `collectExternalLinksForAmp()` che generava un errore JavaScript in modalità AMP o Reader, impedendo l'inizializzazione della protezione.
+- Rilevazione della lingua corretta nei browser in modalità anonima o con privacy elevata, evitando il ritorno all'inglese quando sono disponibili domini locali (`example.it`, `es.example.com`).
 
 ## [1.9.2] - 2025-11-19
 ### Added
