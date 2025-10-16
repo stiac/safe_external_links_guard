@@ -1,4 +1,13 @@
 # Changelog
+## [1.10.0] - 2025-11-22
+### Added
+- Modalità debug controllabile via `debugMode`/`debugLevel` con livelli `basic` e `verbose`, comprensiva di log di configurazione, tracking e fallback.
+- API `SafeExternalLinksGuard.debug.exportAsJson()` e `getEntries()` per esportare i dati diagnostici in JSON o consultarli lato client.
+
+### Changed
+- Tutti i log runtime (policy, cache, i18n, tracking) vengono instradati tramite il nuovo debugger e rimangono silenti quando la modalità debug è disattivata.
+- I warning del fallback legacy dei settings vengono emessi soltanto tramite debug, evitando messaggi in console nei contesti di produzione.
+
 ## [1.9.4] - 2025-11-21
 ### Added
 - Test unitario `i18n_ready_queue_test.js` che verifica l'esecuzione della coda di bootstrap e la consegna della lingua iniziale ai listener registrati prima del caricamento del modulo.
