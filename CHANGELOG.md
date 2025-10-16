@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.11] - 2025-11-01
+### Fixed
+- Risolta l'invalidazione della cache client quando cambiano le impostazioni, evitando che le decisioni restino bloccate ai valori precedenti dopo il deploy.
+
+### Added
+- Attributo `data-config-version`, versione di configurazione predefinita e API `SafeLinkGuard.getConfigSignature()` per forzare e verificare il refresh degli asset e delle policy aggiornate.
+
 ## [1.5.10] - 2025-10-31
 ### Changed
 - Introdotto un effetto di fade-in/fade-out sulla modale di conferma, coordinato con la preferenza di movimento ridotto del sistema operativo per mantenere un'esperienza accessibile.

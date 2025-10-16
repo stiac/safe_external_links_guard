@@ -26,6 +26,7 @@ class FakeScript {
   assert.strictEqual(cfg.timeoutMs, SafeExternalLinksGuard.defaults.timeoutMs, 'timeoutMs should fallback to defaults');
   assert.strictEqual(cfg.cacheTtlSec, SafeExternalLinksGuard.defaults.cacheTtlSec, 'cacheTtlSec should fallback to defaults');
   assert.strictEqual(cfg.mode, 'strict', 'mode should fallback to strict when not provided');
+  assert.strictEqual(cfg.configVersion, SafeExternalLinksGuard.defaults.configVersion, 'configVersion should fallback to defaults');
 })();
 
 (() => {
@@ -44,6 +45,12 @@ class FakeScript {
   assert.strictEqual(cfg.removeNode, true, 'data-remove-node="true" should enable node removal');
   assert.deepStrictEqual(cfg.excludeSelectors, ['.ignore', '.skip'], 'data-exclude-selectors should produce cleaned array');
   assert.strictEqual(cfg.newTab, false, 'data-new-tab="false" should disable new tab opening');
+})();
+
+(() => {
+  const script = new FakeScript({ 'data-config-version': 'deploy-2025-11-01' });
+  const cfg = SafeExternalLinksGuard.buildSettings(script);
+  assert.strictEqual(cfg.configVersion, 'deploy-2025-11-01', 'data-config-version should override default version');
 })();
 
 (() => {
@@ -75,6 +82,15 @@ class FakeScript {
   const script = new FakeScript({ 'data-mode': 'invalid' });
   const cfg = SafeExternalLinksGuard.buildSettings(script);
   assert.strictEqual(cfg.mode, 'strict', 'invalid data-mode should fallback to strict');
+})();
+
+(() => {
+  const script = new FakeScript({ 'data-timeout': '1500' });
+  const baseCfg = SafeExternalLinksGuard.buildSettings(script);
+  const overrideCfg = SafeExternalLinksGuard.buildSettings(script, { timeoutMs: 900 });
+  const fingerprintA = SafeExternalLinksGuard.utils.computeSettingsFingerprint(baseCfg);
+  const fingerprintB = SafeExternalLinksGuard.utils.computeSettingsFingerprint(overrideCfg);
+  assert.notStrictEqual(fingerprintA, fingerprintB, 'fingerprint should change when configuration changes');
 })();
 
 console.log('settings_builder_test: OK');

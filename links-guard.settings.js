@@ -22,7 +22,8 @@
     warnHighlightClass: "slg-warn-highlight", // Classe CSS dei link warn in modalità `soft`/`warn`. Impostabile con `data-warn-highlight-class`.
     warnMessageDefault:
       "Questo link non è verificato. Procedi solo se ti fidi del sito.", // Messaggio fallback, modificabile con `data-warn-message`.
-    excludeSelectors: [] // Selettori da ignorare nella scansione. Accetta CSV tramite `data-exclude-selectors` o array via override.
+    excludeSelectors: [], // Selettori da ignorare nella scansione. Accetta CSV tramite `data-exclude-selectors` o array via override.
+    configVersion: "1.5.11" // Versione di configurazione usata per invalidare cache e asset in fase di deploy.
   };
 
   const VALID_MODES = new Set(["strict", "warn", "soft"]); // Modalità supportate: `strict` (solo modale), `warn` (modale + evidenza), `soft` (solo evidenza).
@@ -140,6 +141,10 @@
         getAttribute(scriptEl, "data-exclude-selectors")
       );
     }
+    if (hasDataAttribute(scriptEl, "data-config-version")) {
+      const version = getAttribute(scriptEl, "data-config-version");
+      cfg.configVersion = version || cfg.configVersion;
+    }
 
     return cfg;
   }; // Applica selettivamente gli attributi `data-*` presenti sul tag <script>.
@@ -159,7 +164,8 @@
       "zIndex",
       "maxConcurrent",
       "warnHighlightClass",
-      "warnMessageDefault"
+      "warnMessageDefault",
+      "configVersion"
     ];
     simpleKeys.forEach((key) => {
       if (Object.prototype.hasOwnProperty.call(overrides, key)) {
@@ -200,8 +206,44 @@
     if (!Array.isArray(cfg.excludeSelectors)) {
       cfg.excludeSelectors = [];
     }
+    if (cfg.configVersion != null && cfg.configVersion !== "") {
+      cfg.configVersion = String(cfg.configVersion);
+    } else {
+      cfg.configVersion = DEFAULTS.configVersion;
+    }
     return cfg;
   }; // Rifinisce la configurazione finale evitando stati inconsistenti.
+
+  const normalizeArray = (items) => {
+    if (!Array.isArray(items)) return [];
+    return items
+      .map((item) => String(item).trim())
+      .filter(Boolean)
+      .sort();
+  }; // Produce array ordinati per generare fingerprint stabili.
+
+  const computeSettingsFingerprint = (config) => {
+    const safeConfig = {
+      endpoint: String(config.endpoint || ""),
+      timeoutMs: Number.isFinite(config.timeoutMs) ? config.timeoutMs : 0,
+      cacheTtlSec: Number.isFinite(config.cacheTtlSec) ? config.cacheTtlSec : 0,
+      mode: String(config.mode || ""),
+      removeNode: Boolean(config.removeNode),
+      showCopyButton: Boolean(config.showCopyButton),
+      hoverFeedback: String(config.hoverFeedback || ""),
+      rel: normalizeArray(config.rel),
+      newTab: Boolean(config.newTab),
+      zIndex: Number.isFinite(config.zIndex) ? config.zIndex : 0,
+      maxConcurrent: Number.isFinite(config.maxConcurrent)
+        ? config.maxConcurrent
+        : 0,
+      warnHighlightClass: String(config.warnHighlightClass || ""),
+      warnMessageDefault: String(config.warnMessageDefault || ""),
+      excludeSelectors: normalizeArray(config.excludeSelectors),
+      configVersion: String(config.configVersion || "")
+    };
+    return JSON.stringify(safeConfig);
+  }; // Genera una firma stabile delle impostazioni correnti per invalidare cache e asset.
 
   const buildSettings = (scriptEl, overrides) => {
     const cfg = cloneDefaults();
@@ -213,13 +255,17 @@
   const namespace = (global.SafeExternalLinksGuard =
     global.SafeExternalLinksGuard || {});
 
-  namespace.defaults = Object.freeze({ ...cloneDefaults(), rel: [...DEFAULTS.rel] });
+  namespace.defaults = Object.freeze({
+    ...cloneDefaults(),
+    rel: [...DEFAULTS.rel]
+  });
   namespace.buildSettings = buildSettings;
   namespace.utils = {
     parseBoolean,
     parseInteger,
     parseList,
     parseMode,
-    parseHoverFeedback
+    parseHoverFeedback,
+    computeSettingsFingerprint
   };
 })(typeof window !== "undefined" ? window : this);

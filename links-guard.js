@@ -1,11 +1,12 @@
 /*!
- * Safe External Links Guard — v4.6
+ * Safe External Links Guard — v4.7
  * - Async, policy lato server, DENY immediato
  * - Normalizzazione action endpoint (allow|warn|deny)
  * - Blocco immediato da cache; sostituzione <a>→<span> aggiorna l’indice
  * - Modalità soft con evidenziazione configurabile e messaggi lato server
  * - Supporto a selettori esclusi definiti nell’attributo data-exclude-selectors
  * - Messaggi su hover configurabili (tooltip personalizzato oppure title="")
+ * - Cache policy isolata per configurazione con invalidazione automatica in deploy
 */
 (function () {
   "use strict";
@@ -20,6 +21,11 @@
     window.SafeExternalLinksGuard || {});
   const VALID_MODES = new Set(["strict", "warn", "soft"]);
   let buildSettings = guardNamespace.buildSettings;
+  let computeSettingsFingerprint =
+    guardNamespace.utils &&
+    typeof guardNamespace.utils.computeSettingsFingerprint === "function"
+      ? guardNamespace.utils.computeSettingsFingerprint
+      : null;
 
   if (typeof buildSettings !== "function") {
     // Fallback legacy: se il file links-guard.settings.js non è stato caricato,
@@ -39,7 +45,8 @@
       warnHighlightClass: "slg-warn-highlight",
       warnMessageDefault:
         "Questo link non è verificato. Procedi solo se ti fidi del sito.",
-      excludeSelectors: []
+      excludeSelectors: [],
+      configVersion: "1.5.11"
     };
 
     const getAttribute = (node, attr) => {
@@ -80,6 +87,37 @@
       if (!value) return "title";
       const normalized = value.trim().toLowerCase();
       return normalized === "tooltip" ? "tooltip" : "title";
+    };
+
+    const normalizeArray = (items) => {
+      if (!Array.isArray(items)) return [];
+      return items
+        .map((item) => String(item).trim())
+        .filter(Boolean)
+        .sort();
+    };
+
+    const fallbackComputeFingerprint = (config) => {
+      const safeConfig = {
+        endpoint: String(config.endpoint || ""),
+        timeoutMs: Number.isFinite(config.timeoutMs) ? config.timeoutMs : 0,
+        cacheTtlSec: Number.isFinite(config.cacheTtlSec) ? config.cacheTtlSec : 0,
+        mode: String(config.mode || ""),
+        removeNode: Boolean(config.removeNode),
+        showCopyButton: Boolean(config.showCopyButton),
+        hoverFeedback: String(config.hoverFeedback || ""),
+        rel: normalizeArray(config.rel),
+        newTab: Boolean(config.newTab),
+        zIndex: Number.isFinite(config.zIndex) ? config.zIndex : 0,
+        maxConcurrent: Number.isFinite(config.maxConcurrent)
+          ? config.maxConcurrent
+          : 0,
+        warnHighlightClass: String(config.warnHighlightClass || ""),
+        warnMessageDefault: String(config.warnMessageDefault || ""),
+        excludeSelectors: normalizeArray(config.excludeSelectors),
+        configVersion: String(config.configVersion || "")
+      };
+      return JSON.stringify(safeConfig);
     };
 
     if (typeof console !== "undefined" && typeof console.warn === "function") {
@@ -124,7 +162,10 @@
           fallbackDefaults.warnMessageDefault,
         excludeSelectors: parseList(
           getAttribute(scriptEl, "data-exclude-selectors") || ""
-        )
+        ),
+        configVersion:
+          getAttribute(scriptEl, "data-config-version") ||
+          fallbackDefaults.configVersion
       };
 
       if (!VALID_MODES.has(cfg.mode)) cfg.mode = "strict";
@@ -150,6 +191,18 @@
         parseHoverFeedback
       };
     }
+
+    if (
+      !guardNamespace.utils ||
+      typeof guardNamespace.utils.computeSettingsFingerprint !== "function"
+    ) {
+      guardNamespace.utils = {
+        ...(guardNamespace.utils || {}),
+        computeSettingsFingerprint: fallbackComputeFingerprint
+      };
+    }
+
+    computeSettingsFingerprint = fallbackComputeFingerprint;
   }
 
   const cfg = buildSettings(thisScript);
@@ -158,12 +211,20 @@
   if (!VALID_MODES.has(cfg.mode)) cfg.mode = "strict";
   if (cfg.hoverFeedback !== "tooltip") cfg.hoverFeedback = "title";
 
+  const configFingerprint =
+    typeof computeSettingsFingerprint === "function"
+      ? computeSettingsFingerprint(cfg)
+      : JSON.stringify(cfg);
+
+  guardNamespace.activeConfigSignature = configFingerprint;
+  guardNamespace.activeConfigVersion = cfg.configVersion;
+
   const hoverFeedback = createHoverFeedback(cfg);
   const useTooltip = hoverFeedback.useTooltip;
   const setHoverMessage = hoverFeedback.setMessage;
   const clearHoverMessage = hoverFeedback.clearMessage;
 
-  const policyCache = createPolicyCache(cfg);
+  const policyCache = createPolicyCache(cfg, configFingerprint);
 
   // Gestisce la navigazione effettiva verso un URL rispettando la configurazione
   // `newTab`. L'apertura preferisce una nuova scheda quando richiesto e torna
@@ -358,8 +419,17 @@
     };
   }
 
-  function createPolicyCache(config) {
-    const storageKey = "SLG_POLICY_CACHE_V3";
+  function hashFingerprint(str) {
+    let hash = 5381;
+    for (let i = 0; i < str.length; i += 1) {
+      hash = (hash * 33) ^ str.charCodeAt(i);
+    }
+    return (hash >>> 0).toString(36);
+  }
+
+  function createPolicyCache(config, fingerprint) {
+    const storageKeySuffix = fingerprint ? hashFingerprint(fingerprint) : "default";
+    const storageKey = `SLG_POLICY_CACHE_V3::${storageKeySuffix}`;
     const store = new Map();
 
     const nowSec = () => Math.floor(Date.now() / 1000);
@@ -1048,6 +1118,9 @@
     setMode(m) {
       const normalized = typeof m === "string" ? m.trim().toLowerCase() : "";
       cfg.mode = VALID_MODES.has(normalized) ? normalized : "strict";
+    },
+    getConfigSignature() {
+      return configFingerprint;
     }
   };
 })();
