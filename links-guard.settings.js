@@ -40,7 +40,7 @@
     excludeSelectors: [], // Selettori da ignorare nella scansione. Accetta CSV tramite `data-exclude-selectors` o array via override.
     configVersion: "1.6.0", // Versione di configurazione usata per invalidare cache e asset in fase di deploy.
     trackingEnabled: true, // Abilita il tracciamento dei click con parametro personalizzato. Override con `data-tracking-enabled`.
-    trackingParameter: "myclid", // Nome del parametro di tracciamento (es. myclid). Override con `data-tracking-parameter`.
+    trackingParameter: "myclid", // Nome del parametro di tracciamento (es. fbclid). Override con `data-tracking-parameter`.
     trackingPixelEndpoint: "", // Endpoint del pixel di raccolta dati. Impostabile con `data-tracking-pixel-endpoint`.
     trackingIncludeMetadata: true // Invia metadati anonimi (lingua, device, timezone). Disattivabile con `data-tracking-include-metadata`.
   };
