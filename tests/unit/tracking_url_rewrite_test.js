@@ -88,6 +88,31 @@ const ensureTrackingParameter = factory();
 })();
 
 (() => {
+  let generated = 0;
+  const result = ensureTrackingParameter(
+    'https://example.com/path?myclid=keep&foo=1',
+    'myclid',
+    () => {
+      generated += 1;
+      return 'uuid-new';
+    },
+    { forceNew: true }
+  );
+  assert.ok(result, 'il risultato deve esistere anche quando forziamo un nuovo valore');
+  assert.strictEqual(generated, 1, 'il generatore deve essere invocato quando forceNew è attivo');
+  assert.strictEqual(
+    result.href,
+    'https://example.com/path?myclid=uuid-new&foo=1',
+    'il valore esistente deve essere sostituito quando forceNew è attivo'
+  );
+  assert.strictEqual(
+    result.url.searchParams.get('myclid'),
+    'uuid-new',
+    'il nuovo valore deve essere presente nella query string'
+  );
+})();
+
+(() => {
   const result = ensureTrackingParameter('/relative/path?lang=it', 'myclid', () => 'uuid-4');
   assert.ok(result, 'gli URL relativi devono essere gestiti correttamente');
   assert.strictEqual(

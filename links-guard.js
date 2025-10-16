@@ -19,6 +19,14 @@
 
   const guardNamespace = (window.SafeExternalLinksGuard =
     window.SafeExternalLinksGuard || {});
+  /**
+   * Runtime controller responsabile della gestione avanzata del parametro
+   * di tracciamento `myclid` (o personalizzato). L'istanza viene inizializzata
+   * dopo la costruzione della configurazione per poter accedere alle impostazioni
+   * finali e condividere l'API pubblica sul namespace globale.
+   * @type {ReturnType<createMyclidTrackingRuntime>|null}
+   */
+  let trackingRuntime = null;
   let runtimeLanguageSnapshot = {
     preferred: null,
     alternatives: [],
@@ -1098,7 +1106,23 @@
       enabled: Boolean(config.trackingEnabled),
       parameter: config.trackingParameter,
       pixelEndpoint: config.trackingPixelEndpoint,
-      includeMetadata: Boolean(config.trackingIncludeMetadata)
+      includeMetadata: Boolean(config.trackingIncludeMetadata),
+      samplingRate: Number.isFinite(config.trackingSamplingRate)
+        ? config.trackingSamplingRate
+        : 1,
+      allowlist: Array.isArray(config.trackingAllowlist)
+        ? config.trackingAllowlist.length
+        : 0,
+      blocklist: Array.isArray(config.trackingBlocklist)
+        ? config.trackingBlocklist.length
+        : 0,
+      respectDnt: config.trackingRespectDnt !== false,
+      matrixPreset:
+        config.trackingCaptureMatrix &&
+        typeof config.trackingCaptureMatrix === "object" &&
+        config.trackingCaptureMatrix.activePreset
+          ? config.trackingCaptureMatrix.activePreset
+          : "standard"
     },
     cache: {
       ttl: config.cacheTtlSec,
@@ -1209,20 +1233,295 @@
     );
   }
 
+  const toURL = (href) => {
+    try {
+      return new URL(href, location.href);
+    } catch (err) {
+      return null;
+    }
+  };
+
+  const TRACKING_IGNORED_PROTOCOLS = /^(mailto:|tel:|javascript:)/i;
+
+  const detectDeviceType = (userAgent) => {
+    if (typeof userAgent !== "string" || !userAgent.trim()) {
+      return "unknown";
+    }
+    const ua = userAgent.toLowerCase();
+    if (/(smart[-\s]?tv|hbbtv|appletv|googletv|tizen|webos)/.test(ua)) {
+      return "tv";
+    }
+    if (
+      /(ipad|tablet|android(?!.*mobile)|kindle|silk|playbook|touch)/.test(ua)
+    ) {
+      return "tablet";
+    }
+    if (
+      /(mobile|iphone|ipod|blackberry|phone|opera mini|windows phone|android.*mobile)/.test(
+        ua
+      )
+    ) {
+      return "mobile";
+    }
+    return "desktop";
+  };
+
+  const generateTrackingId = () => {
+    if (typeof crypto !== "undefined" && crypto) {
+      if (typeof crypto.randomUUID === "function") {
+        return crypto.randomUUID();
+      }
+      if (typeof crypto.getRandomValues === "function") {
+        const buffer = new Uint8Array(16);
+        crypto.getRandomValues(buffer);
+        const toHex = (num) => num.toString(16).padStart(2, "0");
+        return (
+          toHex(buffer[0]) +
+          toHex(buffer[1]) +
+          toHex(buffer[2]) +
+          toHex(buffer[3]) +
+          "-" +
+          toHex(buffer[4]) +
+          toHex(buffer[5]) +
+          "-" +
+          toHex(buffer[6]) +
+          toHex(buffer[7]) +
+          "-" +
+          toHex(buffer[8]) +
+          toHex(buffer[9]) +
+          "-" +
+          toHex(buffer[10]) +
+          toHex(buffer[11]) +
+          toHex(buffer[12]) +
+          toHex(buffer[13]) +
+          toHex(buffer[14]) +
+          toHex(buffer[15])
+        );
+      }
+    }
+    return (
+      Date.now().toString(36) +
+      "-" +
+      Math.random().toString(36).slice(2, 10) +
+      "-" +
+      Math.random().toString(36).slice(2, 10)
+    );
+  };
+
+  const ensureTrackingParameter = (
+    href,
+    parameterName,
+    generator,
+    options = {}
+  ) => {
+    if (!href || !parameterName) {
+      return null;
+    }
+
+    const trimmedName = String(parameterName).trim();
+    if (!trimmedName) {
+      return null;
+    }
+
+    if (TRACKING_IGNORED_PROTOCOLS.test(href)) {
+      return null;
+    }
+
+    const urlObj = toURL(href);
+    if (!urlObj) {
+      return null;
+    }
+
+    const forceNew = Boolean(options && options.forceNew);
+    let trackingId = forceNew ? null : urlObj.searchParams.get(trimmedName);
+
+    if (!trackingId) {
+      trackingId =
+        typeof generator === "function"
+          ? generator(urlObj.searchParams.get(trimmedName))
+          : "";
+      if (!trackingId) {
+        return null;
+      }
+      urlObj.searchParams.set(trimmedName, trackingId);
+    } else if (forceNew) {
+      const regenerated =
+        typeof generator === "function"
+          ? generator(urlObj.searchParams.get(trimmedName))
+          : "";
+      if (regenerated) {
+        trackingId = regenerated;
+        urlObj.searchParams.set(trimmedName, trackingId);
+      }
+    }
+
+    return {
+      href: urlObj.href,
+      url: urlObj,
+      trackingId
+    };
+  };
+
+  const externalTrackingDefaults =
+    guardNamespace.tracking && guardNamespace.tracking.defaults
+      ? guardNamespace.tracking.defaults
+      : null;
+
+  if (
+    !trackingRuntime ||
+    typeof trackingRuntime.init !== "function" ||
+    typeof trackingRuntime.isEnabled !== "function"
+  ) {
+    trackingRuntime = createMyclidTrackingRuntime({
+      toURL,
+      detectDeviceType,
+      generateTrackingId,
+      ensureTrackingParameter,
+      getDocument: () => (typeof document !== "undefined" ? document : null),
+      getWindow: () => (typeof window !== "undefined" ? window : null),
+      getLocation: () =>
+        typeof window !== "undefined" && window
+          ? window.location || null
+          : null,
+      getNavigator: () => (typeof navigator !== "undefined" ? navigator : null),
+      getLanguageSnapshot: () => runtimeLanguageSnapshot,
+      debug,
+      getCrypto: () => (typeof crypto !== "undefined" ? crypto : null)
+    });
+  }
+
+  const sanitizeList = (value) =>
+    Array.isArray(value) ? value.filter((entry) => typeof entry === "string") : [];
+
+  const initialTrackingSettings = {
+    enabled: Boolean(cfg.trackingEnabled),
+    paramName: cfg.trackingParameter,
+    endpoint: cfg.trackingPixelEndpoint,
+    includeMetadata: Boolean(cfg.trackingIncludeMetadata),
+    samplingRate: Number.isFinite(cfg.trackingSamplingRate)
+      ? Math.min(Math.max(cfg.trackingSamplingRate, 0), 1)
+      : 1,
+    allowlist: sanitizeList(cfg.trackingAllowlist),
+    blocklist: sanitizeList(cfg.trackingBlocklist),
+    respectDnt: cfg.trackingRespectDnt !== false,
+    captureMatrix:
+      (cfg.trackingCaptureMatrix &&
+        typeof cfg.trackingCaptureMatrix === "object" &&
+        cfg.trackingCaptureMatrix) ||
+      (externalTrackingDefaults && externalTrackingDefaults.captureMatrix) ||
+      undefined,
+    timeoutMs: Number.isFinite(cfg.trackingTimeoutMs)
+      ? cfg.trackingTimeoutMs
+      : undefined,
+    retry: cfg.trackingRetry || undefined,
+    hmac: cfg.trackingHmac || undefined,
+    user: {
+      ipHash: cfg.trackingUserIpHash || null
+    },
+    request: {
+      campaignKeys: sanitizeList(cfg.trackingCampaignKeys || []),
+      utmKeys: sanitizeList(cfg.trackingUtmKeys || [])
+    }
+  };
+
+  const syncLegacyTrackingConfig = (settings) => {
+    if (!settings) return;
+    cfg.trackingEnabled = Boolean(settings.enabled);
+    cfg.trackingParameter = settings.paramName;
+    cfg.trackingPixelEndpoint = settings.endpoint;
+    cfg.trackingIncludeMetadata = Boolean(settings.includeMetadata);
+    if (Number.isFinite(settings.samplingRate)) {
+      cfg.trackingSamplingRate = Math.min(
+        Math.max(settings.samplingRate, 0),
+        1
+      );
+    }
+    cfg.trackingAllowlist = sanitizeList(settings.allowlist);
+    cfg.trackingBlocklist = sanitizeList(settings.blocklist);
+    cfg.trackingRespectDnt = settings.respectDnt !== false;
+    cfg.trackingCaptureMatrix = null;
+    if (settings.captureMatrix && typeof settings.captureMatrix === "object") {
+      try {
+        cfg.trackingCaptureMatrix = JSON.parse(
+          JSON.stringify(settings.captureMatrix)
+        );
+      } catch (err) {
+        cfg.trackingCaptureMatrix = settings.captureMatrix;
+      }
+    }
+    if (Number.isFinite(settings.timeoutMs)) {
+      cfg.trackingTimeoutMs = Math.max(0, settings.timeoutMs);
+    }
+    if (settings.retry && typeof settings.retry === "object") {
+      cfg.trackingRetry = { ...settings.retry };
+    }
+    if (settings.hmac && typeof settings.hmac === "object") {
+      cfg.trackingHmac = { ...settings.hmac };
+    }
+    if (settings.user && typeof settings.user === "object") {
+      cfg.trackingUserIpHash =
+        typeof settings.user.ipHash === "string" ? settings.user.ipHash : null;
+    }
+    if (settings.request && typeof settings.request === "object") {
+      cfg.trackingCampaignKeys = sanitizeList(settings.request.campaignKeys);
+      cfg.trackingUtmKeys = sanitizeList(settings.request.utmKeys);
+    }
+  };
+
+  if (trackingRuntime) {
+    trackingRuntime.onChange((settings) => {
+      syncLegacyTrackingConfig(settings);
+    });
+
+    trackingRuntime.init(initialTrackingSettings);
+    syncLegacyTrackingConfig(trackingRuntime.getSettings());
+
+    const existingTrackingApi = guardNamespace.tracking || {};
+    guardNamespace.tracking = {
+      ...existingTrackingApi,
+      init(settings) {
+        return trackingRuntime.init(settings);
+      },
+      enable() {
+        return trackingRuntime.enable();
+      },
+      disable() {
+        return trackingRuntime.disable();
+      },
+      setMatrix(matrix) {
+        return trackingRuntime.setMatrix(matrix);
+      },
+      getSettings() {
+        return trackingRuntime.getSettings();
+      },
+      recordInteraction(payload) {
+        return trackingRuntime.recordInteraction(payload);
+      },
+      runtime: trackingRuntime,
+      defaults: {
+        captureMatrix: trackingRuntime.getSettings().captureMatrix
+      }
+    };
+  }
+
   // Espone l'utility anche sul namespace globale per consentire test e riuso.
   if (!guardNamespace.utils) guardNamespace.utils = {};
   if (
-    typeof guardNamespace.utils.computeScrollLockPadding !== "function"
+    typeof guardNamespace.utils.computeScrollLockPadding !== "function" &&
+    typeof computeScrollLockPadding === "function"
   ) {
     guardNamespace.utils.computeScrollLockPadding = computeScrollLockPadding;
   }
-  guardNamespace.activeConfigSignature = configFingerprint;
+  if (typeof configFingerprint !== "undefined") {
+    guardNamespace.activeConfigSignature = configFingerprint;
+  }
   guardNamespace.activeConfigVersion = cfg.configVersion;
 
   // Rileva ambienti con restrizioni (Reader mode, AMP) per attivare fallback UI automatici.
   const detectLimitedExecutionContext = () => {
-    const docEl = document && document.documentElement;
-    const body = document && document.body;
+    const hasDocument = typeof document !== "undefined" && document;
+    const docEl = hasDocument ? document.documentElement : null;
+    const body = hasDocument ? document.body : null;
 
     const checkClassList = (element, classNames) => {
       if (!element || !element.classList) {
@@ -1312,38 +1611,1079 @@
 
   const keepWarnMessageOnAllow = Boolean(cfg.keepWarnMessageOnAllow);
 
-  const hoverFeedback = createHoverFeedback(cfg);
+  const hoverFeedbackFactory =
+    typeof createHoverFeedback === "function"
+      ? createHoverFeedback
+      : () => ({
+          useTooltip: cfg.hoverFeedback === "tooltip",
+          setMessage() {},
+          clearMessage() {}
+        });
+  const hoverFeedback = hoverFeedbackFactory(cfg);
   const useTooltip = hoverFeedback.useTooltip;
   const setHoverMessage = hoverFeedback.setMessage;
   const clearHoverMessage = hoverFeedback.clearMessage;
 
-  const policyCache = createPolicyCache(cfg, configFingerprint);
+  const policyCacheFactory =
+    typeof createPolicyCache === "function"
+      ? createPolicyCache
+      : () => ({
+          get() {
+            return null;
+          },
+          set() {},
+          purge() {},
+          stats() {
+            return {};
+          }
+        });
+  const cacheFingerprint =
+    typeof configFingerprint !== "undefined" ? configFingerprint : null;
+  const policyCache = policyCacheFactory(cfg, cacheFingerprint);
 
   // Gestisce la navigazione effettiva verso un URL rispettando la configurazione
   // `newTab`. L'apertura preferisce una nuova scheda quando richiesto e torna
   // al navigatore corrente se il browser blocca `window.open`.
-  const detectDeviceType = (userAgent) => {
-    if (typeof userAgent !== "string" || !userAgent.trim()) {
-      return "unknown";
+function createMyclidTrackingRuntime(deps) {
+  const {
+    toURL,
+    detectDeviceType,
+    generateTrackingId,
+    ensureTrackingParameter,
+    getDocument,
+    getWindow,
+    getLocation,
+    getNavigator,
+    getLanguageSnapshot,
+    debug,
+    getCrypto,
+    setTimeoutFn = setTimeout,
+    clearTimeoutFn = clearTimeout
+  } = deps || {};
+
+  const deepClone = (value) => {
+    if (Array.isArray(value)) {
+      return value.map((entry) => deepClone(entry));
     }
-    const ua = userAgent.toLowerCase();
-    if (/(smart[-\s]?tv|hbbtv|appletv|googletv|tizen|webos)/.test(ua)) {
-      return "tv";
+    if (value && typeof value === 'object') {
+      const clone = {};
+      for (const key of Object.keys(value)) {
+        clone[key] = deepClone(value[key]);
+      }
+      return clone;
     }
-    if (
-      /(ipad|tablet|android(?!.*mobile)|kindle|silk|playbook|touch)/.test(ua)
-    ) {
-      return "tablet";
-    }
-    if (
-      /(mobile|iphone|ipod|blackberry|phone|opera mini|windows phone|android.*mobile)/.test(
-        ua
-      )
-    ) {
-      return "mobile";
-    }
-    return "desktop";
+    return value;
   };
+
+  const deepMerge = (target, source) => {
+    if (!source || typeof source !== 'object') {
+      return target;
+    }
+    const output = Array.isArray(target) ? [...target] : { ...target };
+    for (const key of Object.keys(source)) {
+      const value = source[key];
+      if (Array.isArray(value)) {
+        output[key] = value.slice();
+        continue;
+      }
+      if (value && typeof value === 'object') {
+        output[key] = deepMerge(
+          output[key] && typeof output[key] === 'object' ? output[key] : {},
+          value
+        );
+        continue;
+      }
+      output[key] = value;
+    }
+    return output;
+  };
+
+  const normalizeList = (value) => {
+    if (Array.isArray(value)) {
+      return value
+        .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+        .filter(Boolean);
+    }
+    if (typeof value === 'string') {
+      return value
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    }
+    return [];
+  };
+
+  const DEFAULT_PRESETS = {
+    minimal: {
+      link: { href: true, host: true, path: false, query: false, hash: false, text: false },
+      page: { url: true, referrer: false, title: false },
+      user: { language: true, timezone: false, device: false, viewport: false, ipHash: false },
+      request: { source: true, campaign: false, utm: true, consent: true, dnt: true }
+    },
+    standard: {
+      link: { href: true, host: true, path: true, query: true, hash: true, text: false },
+      page: { url: true, referrer: true, title: true },
+      user: { language: true, timezone: true, device: true, viewport: true, ipHash: false },
+      request: { source: true, campaign: true, utm: true, consent: true, dnt: true }
+    },
+    extended: {
+      link: { href: true, host: true, path: true, query: true, hash: true, text: true },
+      page: { url: true, referrer: true, title: true },
+      user: { language: true, timezone: true, device: true, viewport: true, ipHash: true },
+      request: { source: true, campaign: true, utm: true, consent: true, dnt: true }
+    }
+  };
+
+  const DEFAULT_SETTINGS = {
+    enabled: false,
+    paramName: 'myclid',
+    endpoint: '',
+    includeMetadata: true,
+    samplingRate: 1,
+    allowlist: [],
+    blocklist: [],
+    respectDnt: true,
+    captureMatrix: {
+      activePreset: 'standard',
+      presets: deepClone(DEFAULT_PRESETS),
+      overrides: { domains: {}, pages: {} }
+    },
+    timeoutMs: 2500,
+    retry: { attempts: 1, backoffFactor: 2, delayMs: 150 },
+    hmac: {
+      enabled: false,
+      algorithm: 'SHA-256',
+      secret: '',
+      header: 'X-Myclid-Signature',
+      format: 'base64',
+      signer: null
+    },
+    user: { ipHash: null, ipResolver: null },
+    request: {
+      campaignKeys: ['campaign', 'cid', 'pk_campaign', 'mc_cid'],
+      utmKeys: [
+        'utm_source',
+        'utm_medium',
+        'utm_campaign',
+        'utm_term',
+        'utm_content'
+      ],
+      sourceResolver: null
+    },
+    consentResolver: null
+  };
+
+  const matrixPresets = () => deepClone(DEFAULT_PRESETS);
+
+  const matchDomain = (host, pattern) => {
+    if (!pattern || !host) return false;
+    const normalizedHost = host.toLowerCase();
+    const normalizedPattern = pattern.toLowerCase();
+    if (normalizedPattern.startsWith('*.')) {
+      const suffix = normalizedPattern.slice(1); // conserva il punto iniziale
+      return (
+        normalizedHost === normalizedPattern.slice(2) ||
+        normalizedHost.endsWith(suffix)
+      );
+    }
+    return normalizedHost === normalizedPattern;
+  };
+
+  const findBestDomainOverride = (host, overrides) => {
+    if (!host || !overrides) return null;
+    const entries = Object.entries(overrides);
+    let match = null;
+    let matchLength = 0;
+    entries.forEach(([pattern, config]) => {
+      if (!pattern) return;
+      if (matchDomain(host, pattern)) {
+        if (pattern.length > matchLength) {
+          match = config;
+          matchLength = pattern.length;
+        }
+      }
+    });
+    return match;
+  };
+
+  const matchPathPattern = (pathname, pattern) => {
+    if (!pattern) return false;
+    if (!pathname) pathname = '/';
+    if (pattern.endsWith('*')) {
+      const prefix = pattern.slice(0, -1);
+      return pathname.startsWith(prefix);
+    }
+    return pathname === pattern;
+  };
+
+  const findPageOverride = (pathname, overrides) => {
+    if (!overrides) return null;
+    let match = null;
+    let matchLength = 0;
+    Object.entries(overrides).forEach(([pattern, config]) => {
+      if (!pattern) return;
+      if (matchPathPattern(pathname, pattern)) {
+        if (pattern.length > matchLength) {
+          match = config;
+          matchLength = pattern.length;
+        }
+      }
+    });
+    return match;
+  };
+
+  const mergeMatrix = (base, override) => {
+    if (!override) return base;
+    const result = deepClone(base);
+    for (const section of Object.keys(override)) {
+      const sectionOverride = override[section];
+      if (!sectionOverride || typeof sectionOverride !== 'object') continue;
+      if (!result[section] || typeof result[section] !== 'object') {
+        result[section] = {};
+      }
+      for (const field of Object.keys(sectionOverride)) {
+        result[section][field] = Boolean(sectionOverride[field]);
+      }
+    }
+    return result;
+  };
+
+  const normalizeMatrixConfig = (captureMatrix = {}) => {
+    const normalized = {
+      activePreset: captureMatrix.activePreset || 'standard',
+      presets: deepClone(DEFAULT_PRESETS),
+      overrides: { domains: {}, pages: {} }
+    };
+
+    if (captureMatrix.presets && typeof captureMatrix.presets === 'object') {
+      normalized.presets = deepMerge(normalized.presets, captureMatrix.presets);
+    }
+    if (captureMatrix.overrides && typeof captureMatrix.overrides === 'object') {
+      const { domains, pages } = captureMatrix.overrides;
+      if (domains && typeof domains === 'object') {
+        normalized.overrides.domains = deepMerge({}, domains);
+      }
+      if (pages && typeof pages === 'object') {
+        normalized.overrides.pages = deepMerge({}, pages);
+      }
+    }
+    return normalized;
+  };
+
+  const normalizeSettings = (overrides = {}) => {
+    const settings = deepClone(DEFAULT_SETTINGS);
+    const source = overrides && typeof overrides === 'object' ? overrides : {};
+
+    if (typeof source.paramName === 'string') {
+      settings.paramName = source.paramName.trim() || settings.paramName;
+    }
+    if (typeof source.endpoint === 'string') {
+      settings.endpoint = source.endpoint.trim();
+    }
+    if (typeof source.includeMetadata === 'boolean') {
+      settings.includeMetadata = source.includeMetadata;
+    }
+    if (typeof source.enabled === 'boolean') {
+      settings.enabled = source.enabled;
+    }
+    if (typeof source.respectDnt === 'boolean') {
+      settings.respectDnt = source.respectDnt;
+    }
+    const sampling = parseFloat(source.samplingRate);
+    if (!Number.isNaN(sampling)) {
+      settings.samplingRate = Math.min(Math.max(sampling, 0), 1);
+    }
+    if (source.allowlist) {
+      settings.allowlist = normalizeList(source.allowlist);
+    }
+    if (source.blocklist) {
+      settings.blocklist = normalizeList(source.blocklist);
+    }
+    if (source.captureMatrix) {
+      settings.captureMatrix = normalizeMatrixConfig(source.captureMatrix);
+    }
+    if (source.timeoutMs && Number.isFinite(source.timeoutMs)) {
+      settings.timeoutMs = Math.max(0, source.timeoutMs);
+    }
+    if (source.retry && typeof source.retry === 'object') {
+      const retry = deepMerge(settings.retry, source.retry);
+      retry.attempts = Math.max(0, parseInt(retry.attempts, 10) || 0);
+      retry.backoffFactor = Math.max(1, Number(retry.backoffFactor) || 1);
+      retry.delayMs = Math.max(0, Number(retry.delayMs) || 0);
+      settings.retry = retry;
+    }
+    if (source.hmac && typeof source.hmac === 'object') {
+      const hmac = deepMerge(settings.hmac, source.hmac);
+      hmac.enabled = Boolean(hmac.enabled);
+      if (typeof hmac.header === 'string') {
+        hmac.header = hmac.header.trim() || settings.hmac.header;
+      }
+      if (typeof hmac.secret === 'string') {
+        hmac.secret = hmac.secret;
+      }
+      if (typeof hmac.algorithm === 'string') {
+        hmac.algorithm = hmac.algorithm.trim().toUpperCase() || 'SHA-256';
+      }
+      if (typeof hmac.format === 'string') {
+        const format = hmac.format.toLowerCase();
+        hmac.format = format === 'hex' ? 'hex' : 'base64';
+      }
+      if (typeof hmac.signer === 'function') {
+        hmac.signer = hmac.signer;
+      } else {
+        hmac.signer = null;
+      }
+      settings.hmac = hmac;
+    }
+    if (source.user && typeof source.user === 'object') {
+      const user = deepMerge(settings.user, source.user);
+      user.ipHash = typeof user.ipHash === 'string' ? user.ipHash : null;
+      user.ipResolver = typeof user.ipResolver === 'function' ? user.ipResolver : null;
+      settings.user = user;
+    }
+    if (source.request && typeof source.request === 'object') {
+      const requestCfg = deepMerge(settings.request, source.request);
+      requestCfg.campaignKeys = normalizeList(requestCfg.campaignKeys);
+      requestCfg.utmKeys = normalizeList(requestCfg.utmKeys);
+      if (!requestCfg.utmKeys.length) {
+        requestCfg.utmKeys = normalizeList(settings.request.utmKeys);
+      }
+      requestCfg.sourceResolver =
+        typeof requestCfg.sourceResolver === 'function'
+          ? requestCfg.sourceResolver
+          : null;
+      settings.request = requestCfg;
+    }
+    if (typeof source.consentResolver === 'function') {
+      settings.consentResolver = source.consentResolver;
+    }
+    return settings;
+  };
+
+  const state = {
+    settings: normalizeSettings(),
+    enabled: false,
+    secureEndpoint: false,
+    hasEndpoint: false,
+    consentGranted: true,
+    dntOptOut: false,
+    listeners: new Set()
+  };
+
+  const isDoNotTrackEnabled = () => {
+    if (!state.settings.respectDnt) {
+      return false;
+    }
+    const nav = typeof getNavigator === 'function' ? getNavigator() : null;
+    const dnt =
+      (nav && (nav.doNotTrack || nav.msDoNotTrack)) ||
+      (typeof window !== 'undefined' && window.doNotTrack);
+    if (typeof dnt === 'string') {
+      const normalized = dnt.toLowerCase();
+      return normalized === '1' || normalized === 'yes';
+    }
+    return false;
+  };
+
+  const evaluateConsent = () => {
+    if (typeof state.settings.consentResolver === 'function') {
+      try {
+        const result = state.settings.consentResolver();
+        if (result === false) {
+          return false;
+        }
+      } catch (err) {
+        if (debug && typeof debug.error === 'function') {
+          debug.error('Errore nel resolver di consenso', err, { scope: 'tracking' });
+        }
+      }
+    }
+    return true;
+  };
+
+  const recomputeFlags = () => {
+    state.dntOptOut = isDoNotTrackEnabled();
+    state.consentGranted = evaluateConsent();
+    state.hasEndpoint = Boolean(state.settings.endpoint);
+    state.secureEndpoint = state.hasEndpoint
+      ? /^https:\/\//i.test(state.settings.endpoint)
+      : false;
+    state.enabled = Boolean(state.settings.enabled) && state.consentGranted && !state.dntOptOut;
+  };
+
+  recomputeFlags();
+
+  const notifyChange = () => {
+    if (!state.listeners.size) return;
+    const snapshot = runtime.getSettings();
+    state.listeners.forEach((listener) => {
+      try {
+        listener(snapshot);
+      } catch (err) {
+        if (debug && typeof debug.error === 'function') {
+          debug.error('Listener tracking runtime fallito', err, { scope: 'tracking' });
+        }
+      }
+    });
+  };
+
+  const shouldTrackHost = (host) => {
+    if (!host) return true;
+    const normalized = host.toLowerCase();
+    if (state.settings.blocklist.length) {
+      const blocked = state.settings.blocklist.some((pattern) => matchDomain(normalized, pattern));
+      if (blocked) {
+        return false;
+      }
+    }
+    if (state.settings.allowlist.length) {
+      return state.settings.allowlist.some((pattern) => matchDomain(normalized, pattern));
+    }
+    return true;
+  };
+
+  const resolveMatrixForUrl = (urlObj) => {
+    const matrixCfg = state.settings.captureMatrix || normalizeMatrixConfig();
+    const presets = matrixCfg.presets && typeof matrixCfg.presets === 'object'
+      ? matrixCfg.presets
+      : matrixPresets();
+    const fallbackPreset = presets.standard || DEFAULT_PRESETS.standard;
+    const defaultPresetName = matrixCfg.activePreset && presets[matrixCfg.activePreset]
+      ? matrixCfg.activePreset
+      : 'standard';
+    let activeMatrix = deepClone(presets[defaultPresetName] || fallbackPreset);
+    let presetUsed = defaultPresetName;
+    const overridesApplied = [];
+
+    const domainOverrides = matrixCfg.overrides?.domains || {};
+    const pageOverrides = matrixCfg.overrides?.pages || {};
+
+    const host = urlObj?.host || '';
+    const pathname = urlObj?.pathname || '';
+
+    const domainOverride = findBestDomainOverride(host, domainOverrides);
+    if (domainOverride) {
+      if (domainOverride.preset && presets[domainOverride.preset]) {
+        activeMatrix = deepClone(presets[domainOverride.preset]);
+        presetUsed = domainOverride.preset;
+      }
+      if (domainOverride.matrix) {
+        activeMatrix = mergeMatrix(activeMatrix, domainOverride.matrix);
+      }
+      overridesApplied.push({ type: 'domain', pattern: host });
+    }
+
+    const pageOverride = findPageOverride(pathname, pageOverrides);
+    if (pageOverride) {
+      if (pageOverride.preset && presets[pageOverride.preset]) {
+        activeMatrix = deepClone(presets[pageOverride.preset]);
+        presetUsed = pageOverride.preset;
+      }
+      if (pageOverride.matrix) {
+        activeMatrix = mergeMatrix(activeMatrix, pageOverride.matrix);
+      }
+      overridesApplied.push({ type: 'page', pattern: pathname });
+    }
+
+    return { matrix: activeMatrix, preset: presetUsed, overridesApplied };
+  };
+
+  const applyMatrix = (matrix, context) => {
+    const result = {};
+    if (!matrix || !context) {
+      return result;
+    }
+    Object.keys(matrix).forEach((section) => {
+      const fields = matrix[section];
+      const data = context[section];
+      if (!fields || typeof fields !== 'object' || !data) {
+        return;
+      }
+      const filtered = {};
+      Object.keys(fields).forEach((field) => {
+        if (!fields[field]) return;
+        const value = data[field];
+        if (value === undefined || value === null) {
+          return;
+        }
+        if (typeof value === 'string') {
+          filtered[field] = value;
+        } else if (typeof value === 'object') {
+          if (Array.isArray(value)) {
+            if (value.length) {
+              filtered[field] = value.slice();
+            }
+          } else if (Object.keys(value).length) {
+            filtered[field] = deepClone(value);
+          }
+        } else {
+          filtered[field] = value;
+        }
+      });
+      if (Object.keys(filtered).length) {
+        result[section] = filtered;
+      }
+    });
+    return result;
+  };
+
+  const sampleEvent = () => {
+    const rate = Number(state.settings.samplingRate) || 0;
+    if (rate <= 0) return false;
+    if (rate >= 1) return true;
+    return Math.random() < rate;
+  };
+
+  const resolveCampaignParams = (urlObj) => {
+    const params = {};
+    if (!urlObj || !urlObj.searchParams) {
+      return params;
+    }
+    const keys = state.settings.request.campaignKeys;
+    keys.forEach((key) => {
+      if (!key) return;
+      if (urlObj.searchParams.has(key)) {
+        params[key] = urlObj.searchParams.get(key);
+      }
+    });
+    return params;
+  };
+
+  const resolveUtmParams = (urlObj) => {
+    const params = {};
+    if (!urlObj || !urlObj.searchParams) {
+      return params;
+    }
+    urlObj.searchParams.forEach((value, key) => {
+      if (key && key.toLowerCase().startsWith('utm_')) {
+        params[key] = value;
+      }
+    });
+    const keys = state.settings.request.utmKeys;
+    keys.forEach((key) => {
+      if (!key) return;
+      if (urlObj.searchParams.has(key)) {
+        params[key] = urlObj.searchParams.get(key);
+      }
+    });
+    return params;
+  };
+
+  const resolveSource = (options) => {
+    if (options && options.sourceOverride) {
+      return options.sourceOverride;
+    }
+    if (typeof state.settings.request.sourceResolver === 'function') {
+      try {
+        const resolved = state.settings.request.sourceResolver(options);
+        if (resolved) return resolved;
+      } catch (err) {
+        if (debug && typeof debug.warn === 'function') {
+          debug.warn('Source resolver error', err, { scope: 'tracking' });
+        }
+      }
+    }
+    if (options && options.event && options.event.type) {
+      return String(options.event.type);
+    }
+    return 'click';
+  };
+
+  const resolveViewport = () => {
+    const win = typeof getWindow === 'function' ? getWindow() : null;
+    if (!win) {
+      return null;
+    }
+    if (typeof win.innerWidth === 'number' && typeof win.innerHeight === 'number') {
+      return { width: win.innerWidth, height: win.innerHeight };
+    }
+    const doc = typeof getDocument === 'function' ? getDocument() : null;
+    const docEl = doc && doc.documentElement;
+    if (docEl && typeof docEl.clientWidth === 'number') {
+      return { width: docEl.clientWidth, height: docEl.clientHeight };
+    }
+    return null;
+  };
+
+  const resolveIpHash = async () => {
+    if (state.settings.user.ipHash) {
+      return state.settings.user.ipHash;
+    }
+    if (typeof state.settings.user.ipResolver === 'function') {
+      try {
+        const value = await state.settings.user.ipResolver();
+        if (typeof value === 'string' && value) {
+          return value;
+        }
+      } catch (err) {
+        if (debug && typeof debug.warn === 'function') {
+          debug.warn('Impossibile risolvere IP hash', err, { scope: 'tracking' });
+        }
+      }
+    }
+    return null;
+  };
+
+  const buildContext = async (options = {}) => {
+    const trackingContext = options.trackingContext;
+    if (!trackingContext || !trackingContext.href) {
+      return null;
+    }
+    const urlObj = trackingContext.url || toURL(trackingContext.href);
+    if (!urlObj) {
+      return null;
+    }
+    if (!shouldTrackHost(urlObj.host)) {
+      return null;
+    }
+    const locationObj = typeof getLocation === 'function' ? getLocation() : null;
+    const documentObj = typeof getDocument === 'function' ? getDocument() : null;
+    const navigatorObj = typeof getNavigator === 'function' ? getNavigator() : null;
+    const languageSnapshot = typeof getLanguageSnapshot === 'function'
+      ? getLanguageSnapshot()
+      : null;
+
+    const matrixInfo = resolveMatrixForUrl(urlObj);
+
+    const languages = [];
+    if (languageSnapshot && Array.isArray(languageSnapshot.alternatives)) {
+      languages.push(...languageSnapshot.alternatives);
+    }
+    if (
+      navigatorObj &&
+      Array.isArray(navigatorObj.languages) &&
+      navigatorObj.languages.length
+    ) {
+      navigatorObj.languages.forEach((lang) => {
+        if (languages.indexOf(lang) === -1) {
+          languages.push(lang);
+        }
+      });
+    }
+
+    const preferredLanguage =
+      (languageSnapshot && languageSnapshot.preferred) ||
+      (navigatorObj && navigatorObj.language) ||
+      (languages.length ? languages[0] : null);
+
+    const viewport = resolveViewport();
+    const consent = state.consentGranted;
+    const dntEnabled = state.dntOptOut;
+
+    const requestSource = resolveSource(options);
+    const campaignParams = resolveCampaignParams(urlObj);
+    const utmParams = resolveUtmParams(urlObj);
+
+    const ipHash = await resolveIpHash();
+
+    const context = {
+      timestamp: new Date().toISOString(),
+      trackingId: trackingContext.trackingId,
+      parameterName: state.settings.paramName,
+      destination: trackingContext.href,
+      original: trackingContext.originalHref || trackingContext.href,
+      link: {
+        href: urlObj.href,
+        host: urlObj.host,
+        path: urlObj.pathname,
+        query: urlObj.search ? urlObj.search.slice(1) : '',
+        hash: urlObj.hash ? urlObj.hash.slice(1) : '',
+        text:
+          options.anchor && typeof options.anchor.textContent === 'string'
+            ? options.anchor.textContent.trim()
+            : null,
+        rel: options.anchor && typeof options.anchor.rel === 'string'
+          ? options.anchor.rel
+          : null
+      },
+      page: {
+        url: locationObj && locationObj.href ? locationObj.href : null,
+        referrer: documentObj && typeof documentObj.referrer === 'string'
+          ? documentObj.referrer
+          : '',
+        title: documentObj && typeof documentObj.title === 'string'
+          ? documentObj.title
+          : null
+      },
+      user: {
+        language: preferredLanguage,
+        languages,
+        timeZone: (() => {
+          try {
+            return Intl && typeof Intl.DateTimeFormat === 'function'
+              ? new Intl.DateTimeFormat().resolvedOptions().timeZone
+              : null;
+          } catch (err) {
+            return null;
+          }
+        })(),
+        deviceType:
+          navigatorObj && navigatorObj.userAgent
+            ? detectDeviceType(navigatorObj.userAgent)
+            : 'unknown',
+        viewport,
+        ipHash
+      },
+      request: {
+        source: requestSource,
+        campaign: campaignParams,
+        utm: utmParams,
+        consent,
+        dnt: dntEnabled,
+        sampled: Boolean(options.sampled),
+        samplingRate: state.settings.samplingRate
+      },
+      matrix: matrixInfo.matrix,
+      matrixPreset: matrixInfo.preset,
+      matrixOverrides: matrixInfo.overridesApplied
+    };
+
+    return context;
+  };
+
+  const signPayload = async (serializedPayload) => {
+    const { hmac } = state.settings;
+    if (!hmac || !hmac.enabled) {
+      return null;
+    }
+    if (typeof hmac.signer === 'function') {
+      try {
+        return await hmac.signer(serializedPayload);
+      } catch (err) {
+        if (debug && typeof debug.warn === 'function') {
+          debug.warn('Firma HMAC personalizzata fallita', err, { scope: 'tracking' });
+        }
+      }
+      return null;
+    }
+    const crypto = typeof getCrypto === 'function' ? getCrypto() : null;
+    if (!crypto || !crypto.subtle || typeof crypto.subtle.importKey !== 'function') {
+      return null;
+    }
+    try {
+      const enc = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
+      if (!enc) return null;
+      const keyData = enc.encode(hmac.secret || '');
+      const key = await crypto.subtle.importKey(
+        'raw',
+        keyData,
+        { name: 'HMAC', hash: { name: hmac.algorithm || 'SHA-256' } },
+        false,
+        ['sign']
+      );
+      const signatureBuffer = await crypto.subtle.sign(
+        'HMAC',
+        key,
+        enc.encode(serializedPayload)
+      );
+      const bytes = Array.from(new Uint8Array(signatureBuffer));
+      if (hmac.format === 'hex') {
+        return bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
+      }
+      if (typeof btoa === 'function') {
+        const binary = bytes.map((b) => String.fromCharCode(b)).join('');
+        return btoa(binary);
+      }
+      return bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
+    } catch (err) {
+      if (debug && typeof debug.warn === 'function') {
+        debug.warn('Firma HMAC fallita', err, { scope: 'tracking' });
+      }
+      return null;
+    }
+  };
+
+  const dispatchPayload = async (payload, options = {}) => {
+    if (!state.enabled || !state.hasEndpoint || !payload) {
+      return false;
+    }
+    const endpoint = state.settings.endpoint;
+    if (!state.secureEndpoint) {
+      if (debug && typeof debug.warn === 'function') {
+        debug.warn('Endpoint non sicuro, payload non inviato', { endpoint }, {
+          scope: 'tracking'
+        });
+      }
+      return false;
+    }
+    let baseSerialized;
+    try {
+      baseSerialized = JSON.stringify(payload);
+    } catch (err) {
+      if (debug && typeof debug.error === 'function') {
+        debug.error('Serializzazione payload fallita', err, { scope: 'tracking' });
+      }
+      return false;
+    }
+    if (!baseSerialized) {
+      return false;
+    }
+    const signature = await signPayload(baseSerialized);
+    let finalPayload = payload;
+    let serialized = baseSerialized;
+    if (signature) {
+      finalPayload = { ...payload, signature };
+      try {
+        serialized = JSON.stringify(finalPayload);
+      } catch (err) {
+        serialized = baseSerialized;
+      }
+    }
+
+    if (debug && typeof debug.event === 'function') {
+      const details = state.settings.captureMatrix && options.verbose
+        ? { endpoint, payload: finalPayload }
+        : {
+            endpoint,
+            clid: finalPayload.clid || finalPayload.trackingId,
+            destination: finalPayload.link?.href || finalPayload.destination
+          };
+      debug.event('Invio tracking pixel', details, { scope: 'tracking' });
+    }
+
+    const nav = typeof getNavigator === 'function' ? getNavigator() : null;
+    if (nav && typeof nav.sendBeacon === 'function') {
+      try {
+        const blob = new Blob([serialized], { type: 'application/json' });
+        if (nav.sendBeacon(endpoint, blob)) {
+          return true;
+        }
+      } catch (err) {
+        // fallback fetch
+      }
+    }
+
+    const attemptFetch = async () => {
+      if (typeof fetch !== 'function') {
+        throw new Error('fetch unavailable');
+      }
+      const headers = { 'Content-Type': 'application/json' };
+      if (signature && state.settings.hmac.header) {
+        headers[state.settings.hmac.header] = signature;
+      }
+      const controller = state.settings.timeoutMs
+        ? new AbortController()
+        : null;
+      let timeoutId = null;
+      if (controller && state.settings.timeoutMs > 0) {
+        timeoutId = setTimeoutFn(() => {
+          controller.abort();
+        }, state.settings.timeoutMs);
+      }
+      try {
+        await fetch(endpoint, {
+          method: 'POST',
+          headers,
+          body: serialized,
+          keepalive: true,
+          credentials: 'omit',
+          mode: 'cors',
+          signal: controller ? controller.signal : undefined
+        });
+        return true;
+      } finally {
+        if (timeoutId) {
+          clearTimeoutFn(timeoutId);
+        }
+      }
+    };
+
+    const { attempts, backoffFactor, delayMs } = state.settings.retry;
+    let attempt = 0;
+    let currentDelay = Math.max(0, delayMs);
+    while (attempt <= attempts) {
+      try {
+        const success = await attemptFetch();
+        if (success) {
+          return true;
+        }
+      } catch (err) {
+        if (attempt >= attempts) {
+          break;
+        }
+      }
+      if (currentDelay > 0) {
+        await new Promise((resolve) => setTimeoutFn(resolve, currentDelay));
+        currentDelay *= backoffFactor;
+      }
+      attempt += 1;
+    }
+
+    try {
+      const pixel = new Image();
+      pixel.src = `${endpoint}?data=${encodeURIComponent(serialized)}`;
+      return true;
+    } catch (err) {
+      return false;
+    }
+  };
+
+  const runtime = {
+    init(overrides = {}) {
+      state.settings = normalizeSettings({ ...state.settings, ...overrides });
+      recomputeFlags();
+      notifyChange();
+      return runtime.getSettings();
+    },
+    enable() {
+      state.settings.enabled = true;
+      recomputeFlags();
+      notifyChange();
+      return state.enabled;
+    },
+    disable() {
+      state.settings.enabled = false;
+      recomputeFlags();
+      notifyChange();
+      return state.enabled;
+    },
+    setMatrix(matrixConfig) {
+      if (!matrixConfig) return runtime.getSettings();
+      if (typeof matrixConfig === 'string') {
+        state.settings.captureMatrix.activePreset = matrixConfig;
+      } else if (typeof matrixConfig === 'object') {
+        if (matrixConfig.activePreset) {
+          state.settings.captureMatrix.activePreset = matrixConfig.activePreset;
+        }
+        if (matrixConfig.presets) {
+          state.settings.captureMatrix.presets = deepMerge(
+            state.settings.captureMatrix.presets,
+            matrixConfig.presets
+          );
+        }
+        if (matrixConfig.overrides) {
+          state.settings.captureMatrix.overrides = deepMerge(
+            state.settings.captureMatrix.overrides,
+            matrixConfig.overrides
+          );
+        }
+        if (matrixConfig.matrix) {
+          const currentPreset =
+            state.settings.captureMatrix.presets[
+              state.settings.captureMatrix.activePreset
+            ] || DEFAULT_PRESETS.standard;
+          state.settings.captureMatrix.presets[
+            state.settings.captureMatrix.activePreset
+          ] = mergeMatrix(currentPreset, matrixConfig.matrix);
+        }
+      }
+      notifyChange();
+      return runtime.getSettings();
+    },
+    isEnabled() {
+      return state.enabled;
+    },
+    getSettings() {
+      return deepClone(state.settings);
+    },
+    getParameterName() {
+      return state.settings.paramName || 'myclid';
+    },
+    prepareNavigation(input, options = {}) {
+      if (!state.enabled) {
+        return null;
+      }
+      const href =
+        typeof input === 'string'
+          ? input
+          : input && typeof input.href === 'string'
+          ? input.href
+          : null;
+      if (!href) {
+        return null;
+      }
+      const parameter = runtime.getParameterName();
+      const forceNew = Boolean(options.forceNewId);
+      const ensureResult = ensureTrackingParameter(
+        href,
+        parameter,
+        () => generateTrackingId(),
+        { forceNew }
+      );
+      if (!ensureResult) {
+        return null;
+      }
+      const urlObj = ensureResult.url;
+      if (!shouldTrackHost(urlObj.host)) {
+        return null;
+      }
+      return {
+        href: ensureResult.href,
+        url: urlObj,
+        trackingId: ensureResult.trackingId,
+        originalHref:
+          (options.existingContext && options.existingContext.originalHref) || href,
+        parameterName: parameter,
+        generatedAt: new Date().toISOString()
+      };
+    },
+    async collectContext(options = {}) {
+      return buildContext(options);
+    },
+    buildPayload(context) {
+      if (!context) return null;
+      const matrix = context.matrix || resolveMatrixForUrl(toURL(context.destination));
+      const filteredSections = applyMatrix(matrix.matrix || matrix, context);
+      const payload = {
+        clid: context.trackingId,
+        trackingId: context.trackingId,
+        parameterName: context.parameterName,
+        ts: context.timestamp,
+        preset: context.matrixPreset || null,
+        link: filteredSections.link || {},
+        page: filteredSections.page || {},
+        user: filteredSections.user || {},
+        request: filteredSections.request || {},
+        destination: context.destination,
+        originalDestination: context.original
+      };
+      if (context.matrixOverrides && context.matrixOverrides.length) {
+        payload.matrixOverrides = context.matrixOverrides.map((item) => ({ ...item }));
+      }
+      return payload;
+    },
+    async dispatch(payload, options = {}) {
+      return dispatchPayload(payload, options);
+    },
+    async recordInteraction(options = {}) {
+      if (!state.enabled) {
+        return null;
+      }
+      const sampled = sampleEvent();
+      const trackingContext = options.trackingContext;
+      if (!trackingContext) {
+        return null;
+      }
+      const context = await buildContext({
+        ...options,
+        trackingContext,
+        sampled
+      });
+      if (!context) {
+        return null;
+      }
+      const payload = runtime.buildPayload(context);
+      if (!payload) {
+        return null;
+      }
+      payload.request.sampled = sampled;
+      if (sampled) {
+        runtime.dispatch(payload, options).catch(() => {});
+      }
+      return payload;
+    },
+    onChange(listener) {
+      if (typeof listener === 'function') {
+        state.listeners.add(listener);
+        return () => state.listeners.delete(listener);
+      }
+      return () => {};
+    }
+  };
+
+  return runtime;
+}
+
 
   const buildTrackingPayload = ({
     trackingId,
@@ -1353,257 +2693,68 @@
     metadata
   } = {}) => {
     const safeMetadata = metadata && typeof metadata === "object" ? metadata : {};
+    const resolvedParameter =
+      parameterName ||
+      (trackingRuntime
+        ? trackingRuntime.getParameterName()
+        : cfg.trackingParameter || "myclid");
     const payload = {
+      clid: trackingId || "",
       trackingId: trackingId || "",
-      parameterName: parameterName || "",
+      parameterName: resolvedParameter,
       destination: destination || "",
-      originalDestination: original || destination || ""
+      originalDestination: original || destination || "",
+      ts: safeMetadata.timestamp || safeMetadata.ts || new Date().toISOString(),
+      link: safeMetadata.link ? { ...safeMetadata.link } : {},
+      page: safeMetadata.page ? { ...safeMetadata.page } : {},
+      user: safeMetadata.user ? { ...safeMetadata.user } : {},
+      request: safeMetadata.request ? { ...safeMetadata.request } : {}
     };
-    if (safeMetadata.timestamp) {
-      payload.timestamp = safeMetadata.timestamp;
+    if (safeMetadata.matrixOverrides && safeMetadata.matrixOverrides.length) {
+      payload.matrixOverrides = safeMetadata.matrixOverrides.map((item) => ({
+        ...item
+      }));
     }
-    if (safeMetadata.referrer !== undefined) {
-      payload.referrer = safeMetadata.referrer;
-    }
-    if (safeMetadata.privacyMode) {
-      payload.privacyMode = safeMetadata.privacyMode;
-    }
-    if (safeMetadata.language) {
-      payload.language = safeMetadata.language;
-    }
-    if (Array.isArray(safeMetadata.languages) && safeMetadata.languages.length) {
-      payload.languages = safeMetadata.languages;
-    }
-    if (safeMetadata.timeZone) {
-      payload.timeZone = safeMetadata.timeZone;
-    }
-    if (safeMetadata.deviceType) {
-      payload.deviceType = safeMetadata.deviceType;
+    if (safeMetadata.preset) {
+      payload.preset = safeMetadata.preset;
     }
     return payload;
   };
 
-  const collectAnonymousMetadata = () => {
-    const base = {
-      timestamp: new Date().toISOString(),
-      referrer:
-        typeof document !== "undefined" && document
-          ? document.referrer || ""
-          : "",
-      privacyMode: cfg.trackingIncludeMetadata ? "extended" : "minimal"
-    };
-
-    if (!cfg.trackingIncludeMetadata) {
-      return base;
+  const resolveTrackingRuntime = () => {
+    if (trackingRuntime && typeof trackingRuntime.isEnabled === "function") {
+      return trackingRuntime;
     }
-
-    let languageResolved = false;
+    const namespaceRuntime =
+      guardNamespace &&
+      guardNamespace.tracking &&
+      guardNamespace.tracking.runtime;
     if (
-      guardNamespace.i18n &&
-      typeof guardNamespace.i18n.collectLanguageContext === "function"
+      namespaceRuntime &&
+      typeof namespaceRuntime.isEnabled === "function"
     ) {
-      try {
-        const context = guardNamespace.i18n.collectLanguageContext();
-        if (context && context.language) {
-          base.language = context.language;
-          languageResolved = true;
-        }
-        if (
-          context &&
-          Array.isArray(context.languages) &&
-          context.languages.length
-        ) {
-          base.languages = context.languages;
-        }
-      } catch (err) {
-        // In caso di errore inatteso, la detection manuale seguirà i fallback nativi.
-      }
+      return namespaceRuntime;
     }
-
-    if (!languageResolved && runtimeLanguageSnapshot.preferred) {
-      base.language = runtimeLanguageSnapshot.preferred;
-      languageResolved = true;
-    }
-    if (
-      (!base.languages || !base.languages.length) &&
-      Array.isArray(runtimeLanguageSnapshot.alternatives) &&
-      runtimeLanguageSnapshot.alternatives.length
-    ) {
-      base.languages = runtimeLanguageSnapshot.alternatives;
-    }
-
-    if (typeof navigator !== "undefined" && navigator) {
-      if (!languageResolved) {
-        const languages = Array.isArray(navigator.languages)
-          ? navigator.languages.filter(Boolean)
-          : [];
-        if (languages.length) {
-          base.language = languages[0];
-          base.languages = languages;
-        } else if (navigator.language) {
-          base.language = navigator.language;
-        }
-      } else if (!base.languages || !base.languages.length) {
-        const languages = Array.isArray(navigator.languages)
-          ? navigator.languages.filter(Boolean)
-          : [];
-        if (languages.length) {
-          base.languages = languages;
-        }
-      }
-      if (navigator.userAgent) {
-        base.deviceType = detectDeviceType(navigator.userAgent);
-      }
-    }
-    if (!base.deviceType) {
-      base.deviceType = "unknown";
-    }
-    try {
-      const tz =
-        typeof Intl !== "undefined" &&
-        Intl &&
-        typeof Intl.DateTimeFormat === "function"
-          ? new Intl.DateTimeFormat().resolvedOptions().timeZone
-          : null;
-      if (tz) {
-        base.timeZone = tz;
-      }
-    } catch (errTz) {
-      // La timezone potrebbe non essere disponibile: ignoriamo l'errore.
-    }
-    if (cfg.debugMode && cfg.debugLevel === "verbose") {
-      debug.verbose(
-        "Metadati anonimi generati",
-        base,
-        { scope: "tracking" }
-      );
-    }
-    return base;
+    return null;
   };
 
-  // Espressione usata per escludere protocolli che non devono essere modificati.
-  const TRACKING_IGNORED_PROTOCOLS = /^(mailto:|tel:|javascript:)/i;
-
-  const generateTrackingId = () => {
-    if (typeof crypto !== "undefined" && crypto) {
-      if (typeof crypto.randomUUID === "function") {
-        return crypto.randomUUID();
-      }
-      if (typeof crypto.getRandomValues === "function") {
-        const buffer = new Uint8Array(16);
-        crypto.getRandomValues(buffer);
-        const toHex = (num) => num.toString(16).padStart(2, "0");
-        return (
-          toHex(buffer[0]) +
-          toHex(buffer[1]) +
-          toHex(buffer[2]) +
-          toHex(buffer[3]) +
-          "-" +
-          toHex(buffer[4]) +
-          toHex(buffer[5]) +
-          "-" +
-          toHex(buffer[6]) +
-          toHex(buffer[7]) +
-          "-" +
-          toHex(buffer[8]) +
-          toHex(buffer[9]) +
-          "-" +
-          toHex(buffer[10]) +
-          toHex(buffer[11]) +
-          toHex(buffer[12]) +
-          toHex(buffer[13]) +
-          toHex(buffer[14]) +
-          toHex(buffer[15])
-        );
-      }
-    }
-    return (
-      Date.now().toString(36) +
-      "-" +
-      Math.random().toString(36).slice(2, 10) +
-      "-" +
-      Math.random().toString(36).slice(2, 10)
-    );
-  };
-
-  /**
-   * Garantisce la presenza del parametro di tracciamento sull'URL fornito.
-   * Restituisce i dettagli necessari senza modificare link non supportati.
-   * @param {string} href URL originale da analizzare.
-   * @param {string} parameterName Nome del parametro da applicare.
-   * @param {() => string} generator Funzione che produce il valore quando assente.
-   * @returns {{ href: string, url: URL, trackingId: string }|null}
-   */
-  const ensureTrackingParameter = (href, parameterName, generator) => {
-    if (!href || !parameterName) {
+  const prepareTrackedNavigation = (urlLike, options = {}) => {
+    const activeRuntime = resolveTrackingRuntime();
+    if (!activeRuntime || !activeRuntime.isEnabled()) {
       return null;
     }
 
-    const trimmedName = String(parameterName).trim();
-    if (!trimmedName) {
-      return null;
-    }
+    const prepared = activeRuntime.prepareNavigation(urlLike, {
+      forceNewId: Boolean(options.forceNewId),
+      existingContext: options.existingContext || null
+    });
 
-    if (TRACKING_IGNORED_PROTOCOLS.test(href)) {
-      return null;
-    }
-
-    const urlObj = toURL(href);
-    if (!urlObj) {
-      return null;
-    }
-
-    let trackingId = urlObj.searchParams.get(trimmedName);
-    if (!trackingId) {
-      trackingId = typeof generator === "function" ? generator() : "";
-      if (!trackingId) {
-        return null;
-      }
-      urlObj.searchParams.set(trimmedName, trackingId);
-    }
-
-    return {
-      href: urlObj.href,
-      url: urlObj,
-      trackingId
-    };
-  };
-
-  const prepareTrackedNavigation = (urlLike) => {
-    if (!cfg.trackingEnabled) {
-      return null;
-    }
-    const originalHref =
-      typeof urlLike === "string"
-        ? urlLike
-        : typeof urlLike?.href === "string"
-        ? urlLike.href
-        : null;
-    if (!originalHref) {
-      return null;
-    }
-    const parameterName = (cfg.trackingParameter || "myclid").trim();
-    if (!parameterName) {
-      return null;
-    }
-
-    const applied = ensureTrackingParameter(
-      originalHref,
-      parameterName,
-      generateTrackingId
-    );
-
-    if (!applied) {
-      return null;
-    }
-
-    const { href, url: urlObj, trackingId } = applied;
-    if (cfg.debugMode) {
+    if (prepared && cfg.debugMode) {
       const detail = {
-        parameter: parameterName,
-        trackingId,
-        destination: href,
-        original: originalHref
+        parameter: prepared.parameterName,
+        trackingId: prepared.trackingId,
+        destination: prepared.href,
+        original: prepared.originalHref
       };
       const level = cfg.debugLevel === "verbose" ? "verbose" : "basic";
       debug.event("Parametro di tracking applicato", detail, {
@@ -1611,13 +2762,8 @@
         level
       });
     }
-    return {
-      href,
-      originalHref,
-      trackingId,
-      url: urlObj,
-      parameterName
-    };
+
+    return prepared;
   };
 
   /**
@@ -1632,7 +2778,8 @@
     state = null,
     context = null
   ) => {
-    if (!cfg.trackingEnabled || !anchor) {
+    const activeRuntime = resolveTrackingRuntime();
+    if (!activeRuntime || !activeRuntime.isEnabled() || !anchor) {
       return null;
     }
 
@@ -1644,7 +2791,10 @@
     const trackingContext =
       context && context.href
         ? context
-        : prepareTrackedNavigation(baseSource);
+        : prepareTrackedNavigation(baseSource, {
+            forceNewId: false,
+            existingContext: state || null
+          });
     if (!trackingContext || !trackingContext.href) {
       return null;
     }
@@ -1666,81 +2816,33 @@
     if (state && typeof state === "object") {
       state.url = trackingContext.url;
       state.trackingId = trackingContext.trackingId;
+      state.parameterName = trackingContext.parameterName;
+      if (trackingContext.originalHref) {
+        state.originalHref = trackingContext.originalHref;
+      }
+      if (trackingContext.generatedAt) {
+        state.trackingGeneratedAt = trackingContext.generatedAt;
+      }
     }
 
     return trackingContext;
   };
 
-  const dispatchTrackingPixel = (payload) => {
-    if (!cfg.trackingEnabled || !cfg.trackingPixelEndpoint) {
+  const dispatchTrackingPixel = (payload, options = {}) => {
+    if (!trackingRuntime || !payload) {
       return;
     }
-    if (!payload || typeof payload !== "object") {
-      return;
-    }
-    let serialized = null;
     try {
-      serialized = JSON.stringify(payload);
-    } catch (errSerialize) {
-      return;
-    }
-    if (!serialized) {
-      return;
-    }
-
-    const endpoint = cfg.trackingPixelEndpoint;
-    if (cfg.debugMode) {
-      const details =
-        cfg.debugLevel === "verbose"
-          ? { endpoint, payload }
-          : {
-              endpoint,
-              trackingId: payload.trackingId,
-              destination: payload.destination
-            };
-      debug.event("Invio tracking pixel", details, {
-        scope: "tracking",
-        level: cfg.debugLevel === "verbose" ? "verbose" : "basic"
-      });
-    }
-
-    try {
-      if (
-        typeof navigator !== "undefined" &&
-        navigator &&
-        typeof navigator.sendBeacon === "function"
-      ) {
-        const blob = new Blob([serialized], { type: "application/json" });
-        const sent = navigator.sendBeacon(endpoint, blob);
-        if (sent) {
-          return;
-        }
+      const dispatchResult = trackingRuntime.dispatch(payload, options);
+      if (dispatchResult && typeof dispatchResult.then === "function") {
+        dispatchResult.catch(() => {});
       }
-    } catch (errBeacon) {
-      // Alcuni browser potrebbero lanciare eccezioni su sendBeacon: fallback sotto.
-    }
-
-    if (typeof fetch === "function") {
-      try {
-        fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: serialized,
-          keepalive: true,
-          credentials: "omit",
-          mode: "cors"
-        }).catch(() => {});
-        return;
-      } catch (errFetch) {
-        // In caso di eccezione si passa al fallback immagine.
+    } catch (errDispatch) {
+      if (cfg.debugMode) {
+        debug.warn("Invio tracking pixel fallito", serializeError(errDispatch), {
+          scope: "tracking"
+        });
       }
-    }
-
-    try {
-      const pixel = new Image();
-      pixel.src = `${endpoint}?data=${encodeURIComponent(serialized)}`;
-    } catch (errImage) {
-      // Ultimo fallback: se anche l'immagine fallisce non possiamo registrare l'evento.
     }
   };
 
@@ -1768,6 +2870,8 @@
   const followExternalUrl = (urlLike, options = {}) => {
     const anchor = options.element || null;
     let trackingContext = options.trackingContext || null;
+    const event = options.event || null;
+    const sourceOverride = options.source || null;
     let href =
       typeof urlLike === "string"
         ? urlLike
@@ -1775,9 +2879,13 @@
         ? urlLike.href
         : null;
 
-    if (cfg.trackingEnabled) {
+    if (trackingRuntime && trackingRuntime.isEnabled()) {
       if (!trackingContext || !trackingContext.href) {
-        trackingContext = prepareTrackedNavigation(urlLike);
+        const existingState = anchor ? anchorStates.get(anchor) || null : null;
+        trackingContext = prepareTrackedNavigation(urlLike, {
+          forceNewId: true,
+          existingContext: existingState
+        });
       }
 
       if (trackingContext?.href) {
@@ -1795,16 +2903,24 @@
           }
         }
 
-        if (cfg.trackingPixelEndpoint) {
-          const metadata = collectAnonymousMetadata();
-          const payload = buildTrackingPayload({
-            trackingId: trackingContext.trackingId,
-            parameterName: trackingContext.parameterName,
-            destination: trackingContext.href,
-            original: trackingContext.originalHref,
-            metadata
+        try {
+          const maybePromise = trackingRuntime.recordInteraction({
+            anchor,
+            trackingContext,
+            event,
+            sourceOverride
           });
-          dispatchTrackingPixel(payload);
+          if (maybePromise && typeof maybePromise.catch === "function") {
+            maybePromise.catch(() => {});
+          }
+        } catch (errRecord) {
+          if (cfg.debugMode) {
+            debug.warn(
+              "Registrazione tracking fallita",
+              serializeError(errRecord),
+              { scope: "tracking" }
+            );
+          }
         }
       }
     }
@@ -2165,7 +3281,6 @@
   // ===== Utility =====
   const ORIGIN_HOST = location.host.toLowerCase();
   const isHttpLike = (href) => /^(https?:)?\/\//i.test(href);
-  const toURL = (href) => { try { return new URL(href, location.href); } catch { return null; } };
   const isExternal = (url) => url && url.host.toLowerCase() !== ORIGIN_HOST;
 
   const ensureAttrs = (a) => {
@@ -2243,7 +3358,10 @@
   };
 
   const disableLink = (a, reason = null, hostForIndex = null, policyMeta = null) => {
-    const message = reason || defaultDenyMessage;
+    const normalizedReason = normalizeMessageDescriptor(reason);
+    const message =
+      translateMessageDescriptor(normalizedReason || reason, defaultDenyMessage) ||
+      defaultDenyMessage;
     const previousState = anchorStates.get(a) || null;
     const originalHref = (() => {
       try {
@@ -2307,8 +3425,13 @@
       if (policyMeta && Number.isFinite(policyMeta.cachedAt)) {
         state.policy.cachedAt = policyMeta.cachedAt;
       }
-      if (policyMeta && policyMeta.message) {
-        state.policy.messageDescriptor = sanitizeDetails(policyMeta.message);
+      const descriptorFromMeta = policyMeta?.message
+        ? sanitizeDetails(policyMeta.message)
+        : null;
+      if (descriptorFromMeta) {
+        state.policy.messageDescriptor = descriptorFromMeta;
+      } else if (normalizedReason) {
+        state.policy.messageDescriptor = sanitizeDetails(normalizedReason);
       }
       return state;
     })();
@@ -2591,7 +3714,7 @@
           }
           node.replaceWith(clone);
           mapReplaceNode(host, node, clone);
-          if (cfg.trackingEnabled) {
+          if (trackingRuntime && trackingRuntime.isEnabled()) {
             const cloneState = anchorStates.get(clone) || null;
             applyTrackingParameterToAnchor(clone, cloneState);
           }
@@ -3482,7 +4605,7 @@
     let { url, host } = state;
     let trackingContext = null;
 
-    if (cfg.trackingEnabled) {
+    if (trackingRuntime && trackingRuntime.isEnabled()) {
       trackingContext = applyTrackingParameterToAnchor(
         anchor,
         state
@@ -3518,7 +4641,8 @@
       if (action === "allow") {
         followExternalUrl(trackingContext?.url || url, {
           element: anchor,
-          trackingContext
+          trackingContext,
+          event
         });
       } else if (action === "warn") {
         if (cfg.mode !== "soft") {
@@ -3540,7 +4664,8 @@
 
     followExternalUrl(trackingContext?.url || url, {
       element: anchor,
-      trackingContext
+      trackingContext,
+      event
     });
   };
 
@@ -3690,10 +4815,7 @@
 
       if (policy.action === "deny") {
         results.denied += 1;
-        const denyMessage =
-          translateMessageDescriptor(policy.message, defaultDenyMessage) ||
-          defaultDenyMessage;
-        disableLink(node, denyMessage, host, {
+        disableLink(node, policy.message || null, host, {
           source: "amp",
           message: policy.message || null
         });

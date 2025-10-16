@@ -1,4 +1,14 @@
 # Changelog
+## [1.11.0] - 2025-11-27
+### Added
+- Runtime avanzato `createMyclidTrackingRuntime` in `links-guard.js` con matrice di cattura configurabile, sampling, allowlist/blocklist, rispetto Do Not Track, retry e supporto HMAC opzionale, completo di API pubbliche (`init`, `enable`, `disable`, `setMatrix`, `getSettings`, `onChange`).
+- Nuovi preset, attributi `data-*` e normalizzatori in `links-guard.settings.js` per gestire sampling, allowlist/blocklist, preset della matrice, timeout, retry e firma del payload.
+- Test unitari aggiornati (`tracking_url_rewrite_test.js`, `tracking_parameter_application_test.js`, `tracking_payload_test.js`, `settings_builder_test.js`) per coprire il runtime avanzato e le nuove impostazioni.
+
+### Changed
+- Documentazione aggiornata (`README.md`) con descrizione del runtime `myclid`, esempi di matrice di cattura e tabella estesa degli attributi di configurazione.
+- `syncLegacyTrackingConfig` sincronizza nuovamente sampling, matrici, retry e chiavi UTM verso `cfg`, mantenendo allineate le impostazioni legacy quando il runtime viene aggiornato a caldo.
+
 ## [1.10.4] - 2025-11-26
 ### Fixed
 - Il parametro di tracking `myclid` viene ora applicato subito ai link consentiti e sincronizzato con lo stato interno,

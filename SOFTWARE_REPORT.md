@@ -2,8 +2,8 @@
 
 ## Informazioni Generali
 - **Progetto:** Safe External Links Guard
-- **Versione:** 1.10.4
-- **Data:** 2025-11-26
+- **Versione:** 1.11.0
+- **Data:** 2025-11-27
 - **Autore aggiornamento:** AI Development Assistant
 
 ## Stato Moduli
@@ -11,8 +11,9 @@
 | --- | --- | --- |
 | Gestione modale (links-guard.js) | Aggiornato | Rilevazione automatica Reader/AMP con mantenimento del tooltip di sicurezza sui link `allow`, così l'avviso resta visibile anche quando la modale non è disponibile. |
 | Localizzazione (links-guard.i18n.js) | Aggiornato | Coda `__i18nReadyQueue` e fallback localizzati nel core per garantire la traduzione della modale anche quando il modulo i18n non viene caricato dal browser. |
-| Documentazione | Aggiornata | README, CHANGELOG, VERSION e report aggiornati alla release 1.9.3 con esempi dell'inferenza lingua tramite dominio. |
-| Configurazione (links-guard.settings.js) | Aggiornato | Introdotto il flag `keepWarnMessageOnAllow` con auto-attivazione in contesti limitati e supporto negli snippet AMP/server-side. |
+| Tracciamento clic (links-guard.js) | Aggiornato | Runtime `myclid` modulare con matrice di cattura, sampling, rispetto DNT, retry e firma HMAC opzionale, più API pubblica `SafeExternalLinksGuard.tracking`. |
+| Configurazione (links-guard.settings.js) | Aggiornato | Nuovi parser per sampling, allowlist/blocklist, preset matrice, timeout/retry e campi HMAC, completi di attributi `data-*` dedicati. |
+| Documentazione | Aggiornata | README, CHANGELOG, VERSION e report aggiornati alla release 1.11.0 con esempi di matrice di cattura e API runtime. |
 
 ## Attività Recenti
 | Data | Autore | Descrizione | Tempo (h) |
@@ -28,16 +29,20 @@
 | 2025-11-21 | AI Development Assistant | Implementazione della coda di bootstrap i18n per garantire la traduzione corretta anche con caricamenti asincroni degli script e relativo aggiornamento documentale/test. | 0.5 |
 | 2025-11-25 | AI Development Assistant | Fallback multilingua lato client per browser che bloccano il modulo i18n, nuovo test di regressione e documentazione aggiornata alla release 1.10.3. | 0.6 |
 | 2025-11-26 | AI Development Assistant | Ripristino dei metadati di policy nei log verbose dei link rimossi, arricchimento della diagnostica con host/URL/messaggi e nuovo test `debug_policy_summary_test`. | 0.5 |
+| 2025-11-27 | AI Development Assistant | Refactoring del tracciamento `myclid` con runtime modulare, matrice di cattura configurabile, syncing legacy e aggiornamento documentazione/test per la release 1.11.0. | 1.6 |
 
 
 ## Rischi e Note Tecniche
 - Validare in staging il flusso di consenso prima di abilitare `trackingEnabled`, verificando che il parametro personalizzato non interferisca con redirect esistenti.
 - Assicurarsi che l'endpoint del pixel gestisca correttamente richieste POST `keepalive` e il fallback tramite query string codificata.
 - Verificare i limiti di `<amp-script>` (dimensione bundle, mutazioni consentite) sugli ambienti AMP e predisporre fallback server-side per i domini in deny.
+- Testare i preset e gli override della matrice di cattura su domini reali per evitare che campi esclusi vengano inviati involontariamente e per confermare il rispetto di allowlist/blocklist.
+- Gestire i segreti HMAC al di fuori del markup pubblico (override JS o variabili lato server) e ruotarli periodicamente per limitare l'esposizione.
 
 ## Dipendenze e Impatti
 - Nessuna nuova dipendenza introdotta.
 - Compatibilità retroattiva preservata: di default il tracciamento resta disattivato; quando viene abilitato senza endpoint, solo l'URL viene arricchito mantenendo opzionale l'invio del pixel.
+- L'API `SafeExternalLinksGuard.tracking` espone metodi pubblici: verificare eventuali override legacy affinché non sovrascrivano il nuovo runtime.
 
 ## Rendicontazione Economica (Opzionale)
 - Non applicabile per questa manutenzione correttiva.

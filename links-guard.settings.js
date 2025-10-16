@@ -43,6 +43,17 @@
     trackingParameter: "myclid", // Nome del parametro di tracciamento (es. myclid). Override con `data-tracking-parameter`.
     trackingPixelEndpoint: "", // Endpoint del pixel di raccolta dati. Impostabile con `data-tracking-pixel-endpoint`.
     trackingIncludeMetadata: true, // Invia metadati anonimi (lingua, device, timezone). Disattivabile con `data-tracking-include-metadata`.
+    trackingSamplingRate: 1, // Percentuale di campionamento dei click (0-1). Configurabile con `data-tracking-sampling-rate`.
+    trackingAllowlist: [], // Elenco domini consentiti per il tracciamento. Override con `data-tracking-allowlist`.
+    trackingBlocklist: [], // Elenco domini esclusi dal tracciamento. Override con `data-tracking-blocklist`.
+    trackingRespectDnt: true, // Rispetta Do Not Track del browser. Override con `data-tracking-respect-dnt`.
+    trackingCaptureMatrix: null, // Matrice di cattura personalizzata. Configurabile via override JS o attributi JSON.
+    trackingTimeoutMs: 2500, // Timeout (ms) per l'invio del pixel. Override con `data-tracking-timeout-ms`.
+    trackingRetry: { attempts: 1, backoffFactor: 2, delayMs: 150 }, // Strategia di retry del pixel.
+    trackingHmac: null, // Configurazione HMAC opzionale. Override via JS o data attribute.
+    trackingUserIpHash: null, // Hash IP utente pseudonimizzato. Override con `data-tracking-user-ip-hash`.
+    trackingCampaignKeys: [], // Chiavi campagne aggiuntive per il payload. Override con `data-tracking-campaign-keys`.
+    trackingUtmKeys: [], // Chiavi UTM extra per il payload. Override con `data-tracking-utm-keys`.
     keepWarnMessageOnAllow: false, // Mantiene il messaggio di avviso anche per i link consentiti (utile in contesti limitati).
     debugMode: false, // Modalità debug disattivata di default. Attivabile con `data-debug-mode` o override JS.
     debugLevel: "basic" // Livello di dettaglio dei log (`basic` o `verbose`). Configurabile con `data-debug-level` o override JS.
@@ -73,6 +84,12 @@
     const parsed = parseInt(value, 10);
     return Number.isFinite(parsed) ? parsed : defaultValue;
   }; // Interpreta i valori numerici mantenendo fallback sicuri.
+
+  const parseFloatNumber = (value, defaultValue) => {
+    if (value == null || value === "") return defaultValue;
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : defaultValue;
+  }; // Gestisce valori decimali mantenendo fallback sicuri.
 
   const parseList = (value) => {
     if (value == null || value === "") return [];
@@ -117,7 +134,12 @@
       warnMessageDefault,
       keepWarnMessageOnAllow: DEFAULTS.keepWarnMessageOnAllow,
       rel: [...DEFAULTS.rel],
-      excludeSelectors: [...DEFAULTS.excludeSelectors]
+      excludeSelectors: [...DEFAULTS.excludeSelectors],
+      trackingAllowlist: [...DEFAULTS.trackingAllowlist],
+      trackingBlocklist: [...DEFAULTS.trackingBlocklist],
+      trackingRetry: { ...DEFAULTS.trackingRetry },
+      trackingCampaignKeys: [...DEFAULTS.trackingCampaignKeys],
+      trackingUtmKeys: [...DEFAULTS.trackingUtmKeys]
     };
   }; // Produce una copia isolata dei valori di default aggiornando il messaggio di avviso alla lingua corrente.
 
@@ -218,6 +240,127 @@
       );
       cfg.trackingPixelEndpoint = endpointAttr || cfg.trackingPixelEndpoint;
     }
+    if (hasDataAttribute(scriptEl, "data-tracking-sampling-rate")) {
+      const rate = parseFloatNumber(
+        getAttribute(scriptEl, "data-tracking-sampling-rate"),
+        cfg.trackingSamplingRate
+      );
+      cfg.trackingSamplingRate = Math.min(Math.max(rate, 0), 1);
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-allowlist")) {
+      cfg.trackingAllowlist = parseList(
+        getAttribute(scriptEl, "data-tracking-allowlist")
+      );
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-blocklist")) {
+      cfg.trackingBlocklist = parseList(
+        getAttribute(scriptEl, "data-tracking-blocklist")
+      );
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-respect-dnt")) {
+      cfg.trackingRespectDnt = parseBoolean(
+        getAttribute(scriptEl, "data-tracking-respect-dnt"),
+        cfg.trackingRespectDnt
+      );
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-matrix-preset")) {
+      const preset = getAttribute(scriptEl, "data-tracking-matrix-preset");
+      cfg.trackingCaptureMatrix = {
+        ...(cfg.trackingCaptureMatrix || {}),
+        activePreset: preset || "standard"
+      };
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-matrix-overrides")) {
+      const rawOverrides = getAttribute(
+        scriptEl,
+        "data-tracking-matrix-overrides"
+      );
+      if (rawOverrides) {
+        try {
+          const parsedOverrides = JSON.parse(rawOverrides);
+          cfg.trackingCaptureMatrix = {
+            ...(cfg.trackingCaptureMatrix || {}),
+            overrides: parsedOverrides
+          };
+        } catch (err) {
+          if (typeof console !== "undefined" && console?.warn) {
+            console.warn(
+              "SafeExternalLinksGuard: data-tracking-matrix-overrides non è un JSON valido",
+              err
+            );
+          }
+        }
+      }
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-timeout-ms")) {
+      cfg.trackingTimeoutMs = parseInteger(
+        getAttribute(scriptEl, "data-tracking-timeout-ms"),
+        cfg.trackingTimeoutMs
+      );
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-retry-attempts")) {
+      cfg.trackingRetry.attempts = parseInteger(
+        getAttribute(scriptEl, "data-tracking-retry-attempts"),
+        cfg.trackingRetry.attempts
+      );
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-retry-delay")) {
+      cfg.trackingRetry.delayMs = parseInteger(
+        getAttribute(scriptEl, "data-tracking-retry-delay"),
+        cfg.trackingRetry.delayMs
+      );
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-retry-backoff")) {
+      cfg.trackingRetry.backoffFactor = parseFloatNumber(
+        getAttribute(scriptEl, "data-tracking-retry-backoff"),
+        cfg.trackingRetry.backoffFactor
+      );
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-hmac-secret")) {
+      const secret = getAttribute(scriptEl, "data-tracking-hmac-secret");
+      cfg.trackingHmac = {
+        ...(cfg.trackingHmac || {}),
+        secret
+      };
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-hmac-algorithm")) {
+      const algorithm = getAttribute(
+        scriptEl,
+        "data-tracking-hmac-algorithm"
+      );
+      cfg.trackingHmac = {
+        ...(cfg.trackingHmac || {}),
+        algorithm
+      };
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-hmac-format")) {
+      const format = getAttribute(scriptEl, "data-tracking-hmac-format");
+      cfg.trackingHmac = {
+        ...(cfg.trackingHmac || {}),
+        format
+      };
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-hmac-header")) {
+      const header = getAttribute(scriptEl, "data-tracking-hmac-header");
+      cfg.trackingHmac = {
+        ...(cfg.trackingHmac || {}),
+        header
+      };
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-user-ip-hash")) {
+      const ipHash = getAttribute(scriptEl, "data-tracking-user-ip-hash");
+      cfg.trackingUserIpHash = ipHash || cfg.trackingUserIpHash;
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-campaign-keys")) {
+      cfg.trackingCampaignKeys = parseList(
+        getAttribute(scriptEl, "data-tracking-campaign-keys")
+      );
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-utm-keys")) {
+      cfg.trackingUtmKeys = parseList(
+        getAttribute(scriptEl, "data-tracking-utm-keys")
+      );
+    }
     if (hasDataAttribute(scriptEl, "data-tracking-include-metadata")) {
       cfg.trackingIncludeMetadata = parseBoolean(
         getAttribute(scriptEl, "data-tracking-include-metadata"),
@@ -249,6 +392,10 @@
       "trackingParameter",
       "trackingPixelEndpoint",
       "trackingIncludeMetadata",
+      "trackingSamplingRate",
+      "trackingRespectDnt",
+      "trackingTimeoutMs",
+      "trackingUserIpHash",
       "keepWarnMessageOnAllow",
       "debugMode",
       "debugLevel"
@@ -276,6 +423,67 @@
       } else {
         cfg.excludeSelectors = [];
       }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(overrides, "trackingAllowlist")) {
+      const value = overrides.trackingAllowlist;
+      cfg.trackingAllowlist = Array.isArray(value)
+        ? [...value]
+        : value != null
+        ? parseList(String(value))
+        : [];
+    }
+
+    if (Object.prototype.hasOwnProperty.call(overrides, "trackingBlocklist")) {
+      const value = overrides.trackingBlocklist;
+      cfg.trackingBlocklist = Array.isArray(value)
+        ? [...value]
+        : value != null
+        ? parseList(String(value))
+        : [];
+    }
+
+    if (Object.prototype.hasOwnProperty.call(overrides, "trackingCaptureMatrix")) {
+      const value = overrides.trackingCaptureMatrix;
+      if (value && typeof value === "object") {
+        cfg.trackingCaptureMatrix = { ...value };
+      } else if (value == null) {
+        cfg.trackingCaptureMatrix = null;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(overrides, "trackingRetry")) {
+      const value = overrides.trackingRetry;
+      if (value && typeof value === "object") {
+        cfg.trackingRetry = { ...cfg.trackingRetry, ...value };
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(overrides, "trackingHmac")) {
+      const value = overrides.trackingHmac;
+      if (value && typeof value === "object") {
+        cfg.trackingHmac = { ...(cfg.trackingHmac || {}), ...value };
+      } else if (value === null) {
+        cfg.trackingHmac = null;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(overrides, "trackingCampaignKeys")) {
+      const value = overrides.trackingCampaignKeys;
+      cfg.trackingCampaignKeys = Array.isArray(value)
+        ? [...value]
+        : value != null
+        ? parseList(String(value))
+        : [];
+    }
+
+    if (Object.prototype.hasOwnProperty.call(overrides, "trackingUtmKeys")) {
+      const value = overrides.trackingUtmKeys;
+      cfg.trackingUtmKeys = Array.isArray(value)
+        ? [...value]
+        : value != null
+        ? parseList(String(value))
+        : [];
     }
 
     return cfg;
@@ -306,6 +514,136 @@
       ? String(cfg.trackingPixelEndpoint).trim()
       : "";
     cfg.trackingIncludeMetadata = Boolean(cfg.trackingIncludeMetadata);
+    const rate = Number(cfg.trackingSamplingRate);
+    cfg.trackingSamplingRate = Number.isFinite(rate)
+      ? Math.min(Math.max(rate, 0), 1)
+      : DEFAULTS.trackingSamplingRate;
+    cfg.trackingAllowlist = Array.isArray(cfg.trackingAllowlist)
+      ? cfg.trackingAllowlist
+      : cfg.trackingAllowlist
+      ? parseList(String(cfg.trackingAllowlist))
+      : [];
+    cfg.trackingBlocklist = Array.isArray(cfg.trackingBlocklist)
+      ? cfg.trackingBlocklist
+      : cfg.trackingBlocklist
+      ? parseList(String(cfg.trackingBlocklist))
+      : [];
+    cfg.trackingRespectDnt = cfg.trackingRespectDnt !== false;
+    if (cfg.trackingCaptureMatrix && typeof cfg.trackingCaptureMatrix === "object") {
+      const matrix = { ...cfg.trackingCaptureMatrix };
+      const overrides =
+        matrix.overrides && typeof matrix.overrides === "object"
+          ? { ...matrix.overrides }
+          : {};
+      overrides.domains =
+        overrides.domains && typeof overrides.domains === "object"
+          ? { ...overrides.domains }
+          : {};
+      overrides.pages =
+        overrides.pages && typeof overrides.pages === "object"
+          ? { ...overrides.pages }
+          : {};
+      const attachDotNotationAliases = (container) => {
+        if (!container || typeof container !== "object") {
+          return;
+        }
+        Object.keys(container).forEach((pattern) => {
+          if (!pattern || pattern.indexOf(".") === -1) {
+            return;
+          }
+          const value = container[pattern];
+          const segments = pattern.split(".").filter(Boolean);
+          if (!segments.length) {
+            return;
+          }
+          let cursor = container;
+          for (let i = 0; i < segments.length; i += 1) {
+            const segment = segments[i];
+            const isLast = i === segments.length - 1;
+            const descriptor = Object.getOwnPropertyDescriptor(cursor, segment);
+            if (isLast) {
+              Object.defineProperty(cursor, segment, {
+                value,
+                enumerable: false,
+                configurable: true,
+                writable: true
+              });
+            } else {
+              if (!descriptor || typeof descriptor.value !== "object" || !descriptor.value) {
+                Object.defineProperty(cursor, segment, {
+                  value: {},
+                  enumerable: false,
+                  configurable: true,
+                  writable: true
+                });
+              }
+              cursor = cursor[segment];
+            }
+          }
+        });
+      };
+      attachDotNotationAliases(overrides.domains);
+      matrix.overrides = overrides;
+      cfg.trackingCaptureMatrix = matrix;
+    } else {
+      cfg.trackingCaptureMatrix = null;
+    }
+    const timeout = Number(cfg.trackingTimeoutMs);
+    cfg.trackingTimeoutMs = Number.isFinite(timeout)
+      ? Math.max(0, timeout)
+      : DEFAULTS.trackingTimeoutMs;
+    if (!cfg.trackingRetry || typeof cfg.trackingRetry !== "object") {
+      cfg.trackingRetry = { ...DEFAULTS.trackingRetry };
+    } else {
+      cfg.trackingRetry = {
+        attempts: Math.max(
+          0,
+          parseInt(cfg.trackingRetry.attempts, 10) || DEFAULTS.trackingRetry.attempts
+        ),
+        backoffFactor: Math.max(
+          1,
+          Number(cfg.trackingRetry.backoffFactor) || DEFAULTS.trackingRetry.backoffFactor
+        ),
+        delayMs: Math.max(
+          0,
+          Number(cfg.trackingRetry.delayMs) || DEFAULTS.trackingRetry.delayMs
+        )
+      };
+    }
+    if (cfg.trackingHmac && typeof cfg.trackingHmac === "object") {
+      const hmac = { ...cfg.trackingHmac };
+      hmac.secret = typeof hmac.secret === "string" ? hmac.secret : "";
+      hmac.algorithm =
+        typeof hmac.algorithm === "string" && hmac.algorithm
+          ? hmac.algorithm.toUpperCase()
+          : "SHA-256";
+      hmac.format =
+        typeof hmac.format === "string" && hmac.format.toLowerCase() === "hex"
+          ? "hex"
+          : "base64";
+      hmac.header =
+        typeof hmac.header === "string" && hmac.header
+          ? hmac.header
+          : "X-Myclid-Signature";
+      hmac.enabled = Boolean(hmac.enabled || hmac.secret);
+      cfg.trackingHmac = hmac;
+    } else {
+      cfg.trackingHmac = null;
+    }
+    cfg.trackingUserIpHash =
+      typeof cfg.trackingUserIpHash === "string" && cfg.trackingUserIpHash
+        ? cfg.trackingUserIpHash
+        : null;
+    cfg.trackingCampaignKeys = Array.isArray(cfg.trackingCampaignKeys)
+      ? cfg.trackingCampaignKeys
+      : cfg.trackingCampaignKeys
+      ? parseList(String(cfg.trackingCampaignKeys))
+      : [];
+    cfg.trackingUtmKeys = Array.isArray(cfg.trackingUtmKeys)
+      ? cfg.trackingUtmKeys
+      : cfg.trackingUtmKeys
+      ? parseList(String(cfg.trackingUtmKeys))
+      : [];
     cfg.debugMode = Boolean(cfg.debugMode);
     if (!VALID_DEBUG_LEVELS.has(String(cfg.debugLevel || "").toLowerCase())) {
       cfg.debugLevel = DEFAULTS.debugLevel;
@@ -372,6 +710,7 @@
   namespace.utils = {
     parseBoolean,
     parseInteger,
+    parseFloatNumber,
     parseList,
     parseMode,
     parseHoverFeedback,
