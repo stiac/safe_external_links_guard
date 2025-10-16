@@ -2,8 +2,8 @@
 
 ## Informazioni Generali
 - **Progetto:** Safe External Links Guard
-- **Versione:** 1.10.3
-- **Data:** 2025-11-25
+- **Versione:** 1.10.4
+- **Data:** 2025-11-26
 - **Autore aggiornamento:** AI Development Assistant
 
 ## Stato Moduli
@@ -27,6 +27,7 @@
 | 2025-11-20 | AI Development Assistant | Estensione della detection con inferenza dal dominio (`host`), nuovi test unitari e aggiornamenti documentali alla release 1.9.3. | 0.6 |
 | 2025-11-21 | AI Development Assistant | Implementazione della coda di bootstrap i18n per garantire la traduzione corretta anche con caricamenti asincroni degli script e relativo aggiornamento documentale/test. | 0.5 |
 | 2025-11-25 | AI Development Assistant | Fallback multilingua lato client per browser che bloccano il modulo i18n, nuovo test di regressione e documentazione aggiornata alla release 1.10.3. | 0.6 |
+| 2025-11-26 | AI Development Assistant | Ripristino dei metadati di policy nei log verbose dei link rimossi, arricchimento della diagnostica con host/URL/messaggi e nuovo test `debug_policy_summary_test`. | 0.5 |
 
 
 ## Rischi e Note Tecniche
