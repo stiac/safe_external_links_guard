@@ -337,11 +337,6 @@
 
   const policyCache = createPolicyCache(cfg, configFingerprint);
 
-  if (guardNamespace.i18n && typeof guardNamespace.i18n.onLanguageChange === "function") {
-    guardNamespace.i18n.onLanguageChange(handleLanguageChange);
-  }
-  handleLanguageChange();
-
   // Gestisce la navigazione effettiva verso un URL rispettando la configurazione
   // `newTab`. L'apertura preferisce una nuova scheda quando richiesto e torna
   // al navigatore corrente se il browser blocca `window.open`.

@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.7.2] - 2025-11-09
+### Fixed
+- Evitato il `ReferenceError` durante il bootstrap rimuovendo la registrazione anticipata di `handleLanguageChange` in `links-guard.js`, così l'handler viene agganciato solo dopo che la funzione e le sue dipendenze sono inizializzate.
+
 ## [1.7.1] - 2025-11-08
 ### Fixed
 - Evitata la doppia dichiarazione della funzione `applyModalTranslations` in `links-guard.js`, eliminando l'errore di sintassi
