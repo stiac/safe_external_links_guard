@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.7.0] - 2025-11-07
+### Added
+- API `createContentRenderer` nel modulo `links-guard.i18n.js` per gestire contenuti multilingua in modo professionale tramite
+  descriptor, binding automatici `data-slg-i18n` e aggiornamenti reattivi su cambio lingua.
+- Test unitari aggiuntivi in `tests/unit/translation_service_test.js` che coprono binding testuale, attributi mappati, fallback
+  dedicati, condizioni di rendering e deregistrazione dei descriptor.
+
+### Changed
+- La modale gestita da `links-guard.js` utilizza ora il renderer di contenuti i18n per sincronizzare pulsanti, etichette e
+  attributi ARIA, semplificando l'estensione dell'interfaccia a nuovi componenti localizzati.
+
+### Fixed
+- Risolto il `ReferenceError` generato da `handleLanguageChange` durante il bootstrap spostando la sottoscrizione all'evento di
+  cambio lingua dopo la definizione della funzione.
+
+## [1.6.0] - 2025-11-06
+### Added
+- Modulo `links-guard.i18n.js` con rilevazione automatica della lingua, fallback inglese e API per gestire traduzioni personalizzate.
+- Cataloghi JSON in `resources/lang/` e registro Node `app/Services/Localization/translationRegistry.js` per centralizzare i testi multilingua.
+- Test `node tests/unit/translation_service_test.js` per validare il comportamento del servizio di localizzazione.
+
+### Changed
+- `links-guard.js` e `links-guard.settings.js` ora consumano il servizio i18n, aggiornando dinamicamente la modale e il messaggio di avviso in base alla lingua selezionata.
+- Template HTML della modale e documentazione (`README.md`) aggiornati con testi neutrali in inglese, attributo `data-slg-element="host-label"` e snippet che include il nuovo modulo di traduzione.
+
 ## [1.5.15] - 2025-11-05
 ### Added
 - Template HTML dedicato (`links/modal-template.html`) per la modale, caricabile come `<template>` o tramite namespace JavaScript per personalizzare il layout senza modificare `links-guard.js`.
