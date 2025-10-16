@@ -9,6 +9,8 @@ declare(strict_types=1);
 const SLG_DEFAULT_WARN_TTL = 900;
 // TTL di default per risposte allow/deny qualora non specificato.
 const SLG_DEFAULT_DECISION_TTL = 3600;
+// Messaggio mostrato quando il dominio non compare in nessuna regola esplicita.
+const SLG_DEFAULT_WARN_MESSAGE = 'Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile.';
 
 /**
  * Elenco delle regole di policy applicate in ordine.
@@ -97,6 +99,6 @@ function slg_resolve_policy(string $host): array
     return [
         'action' => 'warn',
         'ttl' => SLG_DEFAULT_WARN_TTL,
-        'message' => 'Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile.',
+        'message' => SLG_DEFAULT_WARN_MESSAGE,
     ];
 }

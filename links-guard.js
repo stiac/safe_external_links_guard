@@ -20,6 +20,8 @@
   const guardNamespace = (window.SafeExternalLinksGuard =
     window.SafeExternalLinksGuard || {});
   const VALID_MODES = new Set(["strict", "warn", "soft"]);
+  const DEFAULT_WARN_MESSAGE =
+    "Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile."; // Messaggio predefinito mostrato quando il dominio non è presente nelle liste di policy.
 
   /**
    * Calcola la quantità di padding da applicare al body quando la scrollbar
@@ -58,10 +60,9 @@
       zIndex: 999999,
       maxConcurrent: 4,
       warnHighlightClass: "slg-warn-highlight",
-      warnMessageDefault:
-        "Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile.",
+      warnMessageDefault: DEFAULT_WARN_MESSAGE,
       excludeSelectors: [],
-      configVersion: "1.5.13"
+      configVersion: "1.5.14"
     };
 
     const getAttribute = (node, attr) => {
