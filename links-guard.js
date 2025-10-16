@@ -797,13 +797,36 @@
     guardNamespace.utils.ensureTrackingParameter = ensureTrackingParameter;
   }
 
-  const followExternalUrl = (urlLike) => {
-    let href = typeof urlLike === "string" ? urlLike : urlLike?.href;
+  const followExternalUrl = (urlLike, options = {}) => {
+    const anchor = options.element || null;
+    let trackingContext = options.trackingContext || null;
+    let href =
+      typeof urlLike === "string"
+        ? urlLike
+        : typeof urlLike?.href === "string"
+        ? urlLike.href
+        : null;
 
-    let trackingContext = null;
     if (cfg.trackingEnabled && cfg.trackingPixelEndpoint) {
-      trackingContext = prepareTrackedNavigation(urlLike);
+      if (!trackingContext || !trackingContext.href) {
+        trackingContext = prepareTrackedNavigation(urlLike);
+      }
+
       if (trackingContext?.href) {
+        href = trackingContext.href;
+
+        if (anchor) {
+          try {
+            anchor.href = trackingContext.href;
+          } catch (errSetHref) {
+            try {
+              anchor.setAttribute("href", trackingContext.href);
+            } catch (errSetAttr) {
+              // Se non è possibile aggiornare l'attributo continuiamo comunque la navigazione.
+            }
+          }
+        }
+
         const metadata = collectAnonymousMetadata();
         const payload = buildTrackingPayload({
           trackingId: trackingContext.trackingId,
@@ -813,7 +836,6 @@
           metadata
         });
         dispatchTrackingPixel(payload);
-        href = trackingContext.href;
       }
     }
 
@@ -1933,7 +1955,7 @@
     if (!href || href.startsWith("#")) { a.dataset.safeLinkGuard = "1"; return; }
     if (/^(mailto:|tel:|javascript:|blob:|data:)/i.test(href)) { a.dataset.safeLinkGuard = "1"; return; }
 
-    const url = toURL(href);
+    let url = toURL(href);
     if (!url || !isHttpLike(url.href)) { a.dataset.safeLinkGuard = "1"; return; }
     if (!isExternal(url)) { a.dataset.safeLinkGuard = "1"; return; }
 
@@ -1958,6 +1980,25 @@
     // Intercettiamo sempre il click standard per evitare aperture duplicate
     // causate da handler inline o da altri listener registrati a valle.
     a.addEventListener("click", async (e) => {
+      let trackingContext = null;
+      if (cfg.trackingEnabled && cfg.trackingPixelEndpoint) {
+        trackingContext = prepareTrackedNavigation(url);
+        if (trackingContext?.href) {
+          try {
+            a.href = trackingContext.href;
+          } catch (errSetHref) {
+            try {
+              a.setAttribute("href", trackingContext.href);
+            } catch (errSetAttr) {
+              // Se non è possibile aggiornare l'attributo continuiamo comunque.
+            }
+          }
+          if (trackingContext.url) {
+            url = trackingContext.url;
+          }
+        }
+      }
+
       const isModified =
         e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1;
       if (isModified) return;
@@ -1971,7 +2012,10 @@
         const action = await getPolicy(host);
         applyPolicyToHost(host, action);
         if (action === "allow") {
-          followExternalUrl(url);
+          followExternalUrl(trackingContext?.url || url, {
+            element: a,
+            trackingContext
+          });
         } else if (action === "warn") {
           if (cfg.mode !== "soft") {
             showModal(url, policyCache.get(host)?.message);
@@ -1991,7 +2035,10 @@
         return;
       }
 
-      followExternalUrl(url);
+      followExternalUrl(trackingContext?.url || url, {
+        element: a,
+        trackingContext
+      });
     }, { capture: true });
   };
 
