@@ -34,7 +34,7 @@
 
 ## Dipendenze e Impatti
 - Nessuna nuova dipendenza introdotta.
-- Compatibilità retroattiva preservata: il tracciamento è disattivo per impostazione predefinita e non altera gli URL quando il pixel non è configurato.
+- Compatibilità retroattiva preservata: di default il tracciamento resta disattivato; quando viene abilitato senza endpoint, solo l'URL viene arricchito mantenendo opzionale l'invio del pixel.
 
 ## Rendicontazione Economica (Opzionale)
 - Non applicabile per questa manutenzione correttiva.

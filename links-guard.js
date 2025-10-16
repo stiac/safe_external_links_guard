@@ -962,7 +962,7 @@
         ? urlLike.href
         : null;
 
-    if (cfg.trackingEnabled && cfg.trackingPixelEndpoint) {
+    if (cfg.trackingEnabled) {
       if (!trackingContext || !trackingContext.href) {
         trackingContext = prepareTrackedNavigation(urlLike);
       }
@@ -982,15 +982,17 @@
           }
         }
 
-        const metadata = collectAnonymousMetadata();
-        const payload = buildTrackingPayload({
-          trackingId: trackingContext.trackingId,
-          parameterName: trackingContext.parameterName,
-          destination: trackingContext.href,
-          original: trackingContext.originalHref,
-          metadata
-        });
-        dispatchTrackingPixel(payload);
+        if (cfg.trackingPixelEndpoint) {
+          const metadata = collectAnonymousMetadata();
+          const payload = buildTrackingPayload({
+            trackingId: trackingContext.trackingId,
+            parameterName: trackingContext.parameterName,
+            destination: trackingContext.href,
+            original: trackingContext.originalHref,
+            metadata
+          });
+          dispatchTrackingPixel(payload);
+        }
       }
     }
 
@@ -2232,7 +2234,7 @@
     let { url, host } = state;
     let trackingContext = null;
 
-    if (cfg.trackingEnabled && cfg.trackingPixelEndpoint) {
+    if (cfg.trackingEnabled) {
       trackingContext = prepareTrackedNavigation(url);
       if (trackingContext?.href) {
         try {
@@ -2323,29 +2325,6 @@
       if (!url || !isHttpLike(url.href) || !isExternal(url)) {
         return;
       }
-      const url = toURL(href);
-      if (!url || !isHttpLike(url.href) || !isExternal(url)) {
-        return;
-      }
-
-      results.push({
-        index,
-        href: url.href,
-        host: url.host.toLowerCase(),
-        origin: url.origin,
-        text: options.includeText ? (node.textContent || "").trim() : undefined,
-        id: typeof node.getAttribute === "function" ? node.getAttribute("id") : undefined
-      });
-    });
-
-    return results;
-  };
-
-  const normalizeAmpPolicies = (policies) => {
-    const map = new Map();
-    if (!policies) {
-      return map;
-    }
 
       results.push({
         index,
