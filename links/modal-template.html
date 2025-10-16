@@ -1,0 +1,49 @@
+<!-- Template base per la finestra modale di Safe External Links Guard.
+     Personalizza liberamente il markup mantenendo gli attributi data-slg-* -->
+<template id="slg-modal-template">
+  <div data-slg-root class="slg-overlay slg--hidden">
+    <div class="slg-wrap">
+      <div class="slg-dialog" data-slg-element="dialog" role="dialog" aria-modal="true" aria-labelledby="slg-title" aria-describedby="slg-message" tabindex="-1">
+        <div class="slg-header">
+          <h2 id="slg-title" class="slg-title" data-slg-element="title">Controlla che questo link sia sicuro</h2>
+          <button
+            type="button"
+            class="slg-close"
+            data-slg-element="close"
+            aria-label="Chiudi"
+            title="Chiudi"
+          >✕</button>
+        </div>
+        <div class="slg-body">
+          <p id="slg-message" data-slg-element="message">Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile.</p>
+          <p>
+            Host:
+            <span id="slg-host" class="slg-host" data-slg-element="host"></span>
+          </p>
+          <div class="slg-actions">
+            <a
+              id="slg-open"
+              class="slg-btn primary"
+              data-slg-element="open"
+              href="#"
+              rel="noopener noreferrer nofollow"
+              target="_blank"
+            >Apri link</a>
+            <button
+              id="slg-copy"
+              class="slg-btn secondary"
+              data-slg-element="copy"
+              type="button"
+            >Copia link</button>
+            <button
+              id="slg-cancel"
+              class="slg-btn secondary"
+              data-slg-element="cancel"
+              type="button"
+            >Annulla</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>

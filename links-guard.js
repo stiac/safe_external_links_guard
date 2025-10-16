@@ -863,11 +863,92 @@
   };
 
   // ===== Modale + apertura robusta =====
+  const MODAL_TEMPLATE_ID = "slg-modal-template";
+  const MODAL_ROOT_SELECTOR = "[data-slg-root]";
+  const modalElementSelector = (name) => `[data-slg-element="${name}"]`;
+  const MODAL_SELECTORS = {
+    dialog: modalElementSelector("dialog"),
+    title: modalElementSelector("title"),
+    message: modalElementSelector("message"),
+    host: modalElementSelector("host"),
+    open: modalElementSelector("open"),
+    cancel: modalElementSelector("cancel"),
+    close: modalElementSelector("close"),
+    copy: modalElementSelector("copy")
+  };
+  const DEFAULT_MODAL_TEMPLATE = `
+    <div data-slg-root class="slg-overlay slg--hidden">
+      <div class="slg-wrap">
+        <div class="slg-dialog" data-slg-element="dialog">
+          <div class="slg-header">
+            <h2 id="slg-title" class="slg-title" data-slg-element="title">Controlla che questo link sia sicuro</h2>
+            <button type="button" class="slg-close" data-slg-element="close" aria-label="Chiudi" title="Chiudi">✕</button>
+          </div>
+          <div class="slg-body">
+            <p id="slg-message" data-slg-element="message">${DEFAULT_WARN_MESSAGE}</p>
+            <p>Host: <span id="slg-host" class="slg-host" data-slg-element="host"></span></p>
+            <div class="slg-actions">
+              <a id="slg-open" class="slg-btn primary" data-slg-element="open" rel="noopener noreferrer nofollow" target="_blank">Apri link</a>
+              <button id="slg-copy" class="slg-btn secondary" data-slg-element="copy" type="button">Copia link</button>
+              <button id="slg-cancel" class="slg-btn secondary" data-slg-element="cancel" type="button">Annulla</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
   let modalRoot = null;
+  let modalElements = null;
   let pendingUrl = null;
   let pendingMessage = null;
   let lastFocused = null;
   let scrollLockState = null;
+
+  /**
+   * Restituisce il template HTML della modale da utilizzare, preferendo
+   * eventuali template definiti nel DOM o esposti su `SafeExternalLinksGuard`.
+   * Il fallback mantiene la compatibilità con le versioni precedenti creando
+   * dinamicamente la struttura standard.
+   * @returns {HTMLElement}
+   */
+  const ensureModalTemplateElement = () => {
+    const domTemplate = document.getElementById(MODAL_TEMPLATE_ID);
+    if (domTemplate && typeof domTemplate === "object") {
+      guardNamespace.templates = guardNamespace.templates || {};
+      guardNamespace.templates.modal = domTemplate;
+      return domTemplate;
+    }
+
+    const namespaceTemplates = guardNamespace.templates;
+    if (namespaceTemplates && namespaceTemplates.modal) {
+      const candidate = namespaceTemplates.modal;
+      if (candidate && typeof candidate === "object") {
+        return candidate;
+      }
+      if (typeof candidate === "string") {
+        const tpl = document.createElement("template");
+        tpl.id = MODAL_TEMPLATE_ID;
+        tpl.innerHTML = candidate;
+        namespaceTemplates.modal = tpl;
+        return tpl;
+      }
+    }
+
+    const fallback = document.createElement("template");
+    fallback.id = MODAL_TEMPLATE_ID;
+    fallback.innerHTML = DEFAULT_MODAL_TEMPLATE;
+    guardNamespace.templates = guardNamespace.templates || {};
+    guardNamespace.templates.modal = fallback;
+    return fallback;
+  };
+
+  const queryModalElement = (root, selector, fallbackSelector) => {
+    if (!root) return null;
+    const primary = selector ? root.querySelector(selector) : null;
+    if (primary) return primary;
+    if (!fallbackSelector) return null;
+    return root.querySelector(fallbackSelector);
+  };
 
   /**
    * Applica un padding aggiuntivo al body quando la scrollbar scompare per
@@ -909,52 +990,104 @@
   };
 
   const buildModal = () => {
-    const root = document.createElement("div");
+    const templateEl = ensureModalTemplateElement();
+    const fragment = templateEl.content
+      ? templateEl.content.cloneNode(true)
+      : document.importNode(templateEl, true);
+
+    const container = document.createElement("div");
+    container.appendChild(fragment);
+    const root =
+      container.querySelector(MODAL_ROOT_SELECTOR) || container.firstElementChild;
+    if (!root) {
+      throw new Error("SafeExternalLinksGuard: template della modale non valido");
+    }
+
     root.id = "slg-modal-root";
-    root.className = "slg-overlay slg--hidden";
+    if (root.classList && !root.classList.contains("slg-overlay")) {
+      root.classList.add("slg-overlay");
+    }
+    if (root.classList && !root.classList.contains("slg--hidden")) {
+      root.classList.add("slg--hidden");
+    }
     root.style.zIndex = String(cfg.zIndex);
 
-    const wrap = document.createElement("div");
-    wrap.className = "slg-wrap";
-    root.appendChild(wrap);
+    const dialog = queryModalElement(
+      root,
+      MODAL_SELECTORS.dialog,
+      ".slg-dialog"
+    );
+    if (!dialog) {
+      throw new Error(
+        "SafeExternalLinksGuard: impossibile trovare l'elemento dialog nel template"
+      );
+    }
 
-    const dialog = document.createElement("div");
-    dialog.className = "slg-dialog";
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-modal", "true");
     dialog.setAttribute("aria-labelledby", "slg-title");
     dialog.setAttribute("aria-describedby", "slg-message");
-    dialog.tabIndex = -1;
-    wrap.appendChild(dialog);
+    if (dialog.tabIndex !== -1) {
+      dialog.tabIndex = -1;
+    }
 
-    const header = document.createElement("div");
-    header.className = "slg-header";
-    header.innerHTML = `
-      <h2 id="slg-title" class="slg-title">Controlla che questo link sia sicuro</h2>
-      <button type="button" class="slg-close" aria-label="Chiudi" title="Chiudi">✕</button>
-    `;
-    dialog.appendChild(header);
+    const titleEl = queryModalElement(
+      root,
+      MODAL_SELECTORS.title,
+      "#slg-title"
+    );
+    if (titleEl && !titleEl.id) {
+      titleEl.id = "slg-title";
+    }
 
-    const body = document.createElement("div");
-    body.className = "slg-body";
-    const copyButtonMarkup = cfg.showCopyButton
-      ? '<button id="slg-copy" class="slg-btn secondary" type="button">Copia link</button>'
-      : "";
-    body.innerHTML = `
-      <p id="slg-message">${cfg.warnMessageDefault}</p>
-      <p>Host: <span id="slg-host" class="slg-host"></span></p>
-      <div class="slg-actions">
-        <a id="slg-open" class="slg-btn primary" rel="noopener noreferrer nofollow" target="_blank">Apri link</a>
-        ${copyButtonMarkup}
-        <button id="slg-cancel" class="slg-btn secondary" type="button">Annulla</button>
-      </div>
-    `;
-    dialog.appendChild(body);
+    const messageEl = queryModalElement(
+      root,
+      MODAL_SELECTORS.message,
+      "#slg-message"
+    );
+    if (messageEl && !messageEl.id) {
+      messageEl.id = "slg-message";
+    }
 
-    const closeBtn = header.querySelector(".slg-close");
-    const cancelBtn = body.querySelector("#slg-cancel");
-    const openLink = body.querySelector("#slg-open");
-    const copyBtn = body.querySelector("#slg-copy");
+    const hostEl = queryModalElement(
+      root,
+      MODAL_SELECTORS.host,
+      "#slg-host"
+    );
+    if (hostEl && !hostEl.id) {
+      hostEl.id = "slg-host";
+    }
+
+    const openLink = queryModalElement(
+      root,
+      MODAL_SELECTORS.open,
+      "#slg-open"
+    );
+    if (!openLink) {
+      throw new Error(
+        "SafeExternalLinksGuard: il template della modale richiede un elemento con data-slg-element=\"open\""
+      );
+    }
+
+    const cancelBtn = queryModalElement(
+      root,
+      MODAL_SELECTORS.cancel,
+      "#slg-cancel"
+    );
+    const closeBtn = queryModalElement(
+      root,
+      MODAL_SELECTORS.close,
+      ".slg-close"
+    );
+    const copyBtn = queryModalElement(
+      root,
+      MODAL_SELECTORS.copy,
+      "#slg-copy"
+    );
+
+    if (copyBtn) {
+      copyBtn.hidden = !cfg.showCopyButton;
+    }
 
     // Impediamo che gli elementi della modale vengano presi in carico dalla scansione principale
     // marcandoli come interni fin dalla creazione. Questo evita che la logica di protezione
@@ -996,8 +1129,12 @@
     };
 
     root.addEventListener("click", (e) => { if (e.target === root) hide(); });
-    closeBtn.addEventListener("click", hide);
-    cancelBtn.addEventListener("click", hide);
+    if (closeBtn) {
+      closeBtn.addEventListener("click", hide);
+    }
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", hide);
+    }
 
     openLink.addEventListener("click", (e) => {
       const href = openLink.getAttribute("href");
@@ -1021,6 +1158,16 @@
       });
     }
 
+    modalElements = {
+      dialog,
+      message: messageEl,
+      host: hostEl,
+      open: openLink,
+      cancel: cancelBtn,
+      close: closeBtn,
+      copy: copyBtn
+    };
+
     return { root, dialog };
   };
 
@@ -1041,16 +1188,21 @@
     ensureModal();
     pendingUrl = url;
     pendingMessage = message || cfg.warnMessageDefault;
-    modalRoot.querySelector("#slg-host").textContent = url.host;
-    const openEl = modalRoot.querySelector("#slg-open");
-    openEl.setAttribute("href", url.href);
-    if (cfg.newTab) {
-      openEl.setAttribute("target", "_blank");
-    } else {
-      openEl.removeAttribute("target");
+    if (modalElements?.host) {
+      modalElements.host.textContent = url.host;
     }
-    openEl.setAttribute("rel", "noopener noreferrer nofollow");
-    modalRoot.querySelector("#slg-message").textContent = pendingMessage;
+    if (modalElements?.open) {
+      modalElements.open.setAttribute("href", url.href);
+      if (cfg.newTab) {
+        modalElements.open.setAttribute("target", "_blank");
+      } else {
+        modalElements.open.removeAttribute("target");
+      }
+      modalElements.open.setAttribute("rel", "noopener noreferrer nofollow");
+    }
+    if (modalElements?.message) {
+      modalElements.message.textContent = pendingMessage;
+    }
     lastFocused = document.activeElement;
     modalRoot.classList.remove("slg--hidden");
     requestAnimationFrame(() => {
@@ -1058,10 +1210,10 @@
     });
     applyScrollLockCompensation();
     document.body.classList.add("slg-no-scroll");
-    const dialog = modalRoot.querySelector(".slg-dialog");
-    dialog.focus();
+    if (modalElements?.dialog && typeof modalElements.dialog.focus === "function") {
+      modalElements.dialog.focus();
+    }
   };
-
   // ===== Scansione =====
   const processAnchor = (a) => {
     if (!a || a.dataset.safeLinkGuard === "1") return;

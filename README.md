@@ -1,11 +1,11 @@
 # Safe External Links Guard
 
-**Versione:** 1.5.14
+**Versione:** 1.5.15
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
 
-Con la versione 1.5.0 la logica interna è stata riorganizzata in moduli indipendenti (tooltip, cache, coda delle richieste) per semplificare la manutenzione e migliorare la leggibilità del codice. La release 1.5.6 assicura che i click sui link consentiti vengano gestiti una sola volta, prevenendo aperture duplicate anche quando sono presenti handler `onclick` personalizzati, e mantiene il supporto diretto all'attributo `data-new-tab` nel file di configurazione. La release 1.5.7 migliora la gestione dei timeout di rete, restituendo messaggi più chiari e degradando a warning in modo controllato quando la policy non risponde in tempo utile. La release 1.5.8 evita i doppi redirect quando si apre un link dalla modale in una nuova scheda, mantenendo l'utente nella pagina originale, mentre la release 1.5.9 protegge la modale dagli automatismi della scansione dei link e ne affina l'accessibilità generale. La release 1.5.10 introduce una transizione di fade-in/fade-out per la modale, rispettosa delle preferenze di movimento ridotto dell'utente e allineata a un'esperienza più professionale, la release 1.5.11 risolve i problemi di cache in fase di deploy generando automaticamente una nuova firma di configurazione e aggiungendo l'attributo `data-config-version` per forzare aggiornamenti mirati, mentre la release 1.5.12 mantiene stabile il layout durante l'apertura della modale compensando la sparizione della scrollbar. La release 1.5.14 aggiorna inoltre il messaggio di avviso predefinito per i domini non presenti nelle liste per chiarire i rischi di condivisione dei dati di navigazione verso terze parti e supportare scelte più consapevoli.
+Con la versione 1.5.0 la logica interna è stata riorganizzata in moduli indipendenti (tooltip, cache, coda delle richieste) per semplificare la manutenzione e migliorare la leggibilità del codice. La release 1.5.6 assicura che i click sui link consentiti vengano gestiti una sola volta, prevenendo aperture duplicate anche quando sono presenti handler `onclick` personalizzati, e mantiene il supporto diretto all'attributo `data-new-tab` nel file di configurazione. La release 1.5.7 migliora la gestione dei timeout di rete, restituendo messaggi più chiari e degradando a warning in modo controllato quando la policy non risponde in tempo utile. La release 1.5.8 evita i doppi redirect quando si apre un link dalla modale in una nuova scheda, mantenendo l'utente nella pagina originale, mentre la release 1.5.9 protegge la modale dagli automatismi della scansione dei link e ne affina l'accessibilità generale. La release 1.5.10 introduce una transizione di fade-in/fade-out per la modale, rispettosa delle preferenze di movimento ridotto dell'utente e allineata a un'esperienza più professionale, la release 1.5.11 risolve i problemi di cache in fase di deploy generando automaticamente una nuova firma di configurazione e aggiungendo l'attributo `data-config-version` per forzare aggiornamenti mirati, mentre la release 1.5.12 mantiene stabile il layout durante l'apertura della modale compensando la sparizione della scrollbar. La release 1.5.14 aggiorna inoltre il messaggio di avviso predefinito per i domini non presenti nelle liste per chiarire i rischi di condivisione dei dati di navigazione verso terze parti e supportare scelte più consapevoli, mentre la release 1.5.15 introduce un template HTML dedicato per la modale che rende più semplice modificarne la struttura senza intervenire direttamente sul codice JavaScript.
 
 Lo script:
 - impone attributi di sicurezza (`rel`, `target`) sui link esterni;
@@ -61,7 +61,32 @@ Lo script:
    <!-- imposta data-hover-feedback="title" per usare il tooltip nativo del browser -->
   ```
   Adatta `src` e `data-endpoint` ai percorsi effettivi del tuo sito.
-3. Assicurati che l'endpoint PHP sia raggiungibile e configurato con le tue liste di allow/deny.
+3. Aggiungi alla pagina (tipicamente subito dopo l'inclusione degli script o nel footer) il template HTML della modale. Copia il contenuto di `links/modal-template.html` e personalizzalo mantenendo gli attributi `data-slg-*` per collegare i campi dinamici:
+   ```html
+   <template id="slg-modal-template">
+     <div data-slg-root class="slg-overlay slg--hidden">
+       <div class="slg-wrap">
+         <div class="slg-dialog" data-slg-element="dialog">
+           <div class="slg-header">
+             <h2 class="slg-title" data-slg-element="title">Controlla che questo link sia sicuro</h2>
+             <button type="button" class="slg-close" data-slg-element="close" aria-label="Chiudi" title="Chiudi">✕</button>
+           </div>
+           <div class="slg-body">
+             <p data-slg-element="message">Testo di avviso personalizzato</p>
+             <p>Host: <span class="slg-host" data-slg-element="host"></span></p>
+             <div class="slg-actions">
+               <a class="slg-btn primary" data-slg-element="open">Apri link</a>
+               <button class="slg-btn secondary" data-slg-element="copy" type="button">Copia link</button>
+               <button class="slg-btn secondary" data-slg-element="cancel" type="button">Annulla</button>
+             </div>
+           </div>
+         </div>
+       </div>
+     </div>
+   </template>
+   ```
+   Se il template non è presente, lo script utilizza automaticamente il fallback integrato per garantire la retrocompatibilità.
+4. Assicurati che l'endpoint PHP sia raggiungibile e configurato con le tue liste di allow/deny.
 
 Lo script legge gli attributi `data-*` dal tag `<script>` per adattare il comportamento senza necessità di ricompilazione. Quando un attributo `data-*` non è presente vengono utilizzati i valori definiti in `links-guard.settings.js`, mentre gli override manuali possono sempre intervenire tramite JavaScript.
 Se `links-guard.settings.js` non è caricato, `links-guard.js` utilizza comunque un fallback legacy, ma verrà mostrato un avviso in console per ricordare di includere il file di impostazioni centralizzato.
@@ -141,10 +166,12 @@ In modalità `soft` o `warn` viene aggiunta la classe `slg-warn-highlight` ai li
 
 Il comportamento dei messaggi su hover è configurabile tramite `data-hover-feedback`: impostandolo su `tooltip` viene mostrato un riquadro contestuale con stile personalizzato e posizionamento automatico; con il valore `title` viene invece utilizzato il tooltip nativo del browser, utile in scenari dove si preferisce un approccio minimale o non si vuole iniettare ulteriore markup.
 
+La struttura della modale può essere modificata senza intervenire su `links-guard.js` caricando un template personalizzato (come illustrato nella sezione di installazione). In alternativa è possibile impostare `SafeExternalLinksGuard.templates.modal` a un elemento `<template>` o a una stringa HTML prima di eseguire lo script: la logica di creazione userà automaticamente la versione più recente rispettando i riferimenti dinamici (`data-slg-element="open"`, `data-slg-element="message"`, ecc.).
+
 ## Sviluppo
 - Il codice JavaScript è autonomo e non richiede build. È stato introdotto il supporto all'esclusione di selettori via attributo `data-exclude-selectors` e al messaggio personalizzato lato server.
 - Commenta e documenta eventuali modifiche future per facilitare la manutenzione condivisa.
-- Aggiungi test automatici nello spazio `tests/` quando introduci nuove funzionalità. Esegui i test esistenti con `php tests/unit/policy_resolver_test.php`, `node tests/unit/settings_builder_test.js` e `node tests/unit/scroll_lock_utils_test.js`.
+- Aggiungi test automatici nello spazio `tests/` quando introduci nuove funzionalità. Esegui i test esistenti con `php tests/unit/policy_resolver_test.php`, `node tests/unit/settings_builder_test.js`, `node tests/unit/scroll_lock_utils_test.js` e `node tests/unit/modal_template_test.js`.
 
 ## Versionamento
 Questo progetto segue [Semantic Versioning](https://semver.org/). Aggiorna `VERSION`, `CHANGELOG.md` e questa pagina a ogni rilascio.
