@@ -2323,29 +2323,6 @@
       if (!url || !isHttpLike(url.href) || !isExternal(url)) {
         return;
       }
-      const url = toURL(href);
-      if (!url || !isHttpLike(url.href) || !isExternal(url)) {
-        return;
-      }
-
-      results.push({
-        index,
-        href: url.href,
-        host: url.host.toLowerCase(),
-        origin: url.origin,
-        text: options.includeText ? (node.textContent || "").trim() : undefined,
-        id: typeof node.getAttribute === "function" ? node.getAttribute("id") : undefined
-      });
-    });
-
-    return results;
-  };
-
-  const normalizeAmpPolicies = (policies) => {
-    const map = new Map();
-    if (!policies) {
-      return map;
-    }
 
       results.push({
         index,

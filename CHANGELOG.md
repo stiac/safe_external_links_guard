@@ -1,4 +1,8 @@
 # Changelog
+## [1.9.3] - 2025-11-20
+### Fixed
+- Rimossa la doppia dichiarazione della variabile `url` in `collectExternalLinksForAmp()` che generava un errore JavaScript in modalità AMP o Reader, impedendo l'inizializzazione della protezione.
+
 ## [1.9.2] - 2025-11-19
 ### Added
 - Funzione `collectLanguageContext()` in `links-guard.i18n.js` per ottenere lingua principale, elenco di fallback e provenienza dei suggerimenti, riutilizzata anche dal tracciamento anonimo.
