@@ -43,10 +43,13 @@
     trackingParameter: "myclid", // Nome del parametro di tracciamento (es. myclid). Override con `data-tracking-parameter`.
     trackingPixelEndpoint: "", // Endpoint del pixel di raccolta dati. Impostabile con `data-tracking-pixel-endpoint`.
     trackingIncludeMetadata: true, // Invia metadati anonimi (lingua, device, timezone). Disattivabile con `data-tracking-include-metadata`.
-    keepWarnMessageOnAllow: false // Mantiene il messaggio di avviso anche per i link consentiti (utile in contesti limitati).
+    keepWarnMessageOnAllow: false, // Mantiene il messaggio di avviso anche per i link consentiti (utile in contesti limitati).
+    debugMode: false, // Modalità debug disattivata di default. Attivabile con `data-debug-mode` o override JS.
+    debugLevel: "basic" // Livello di dettaglio dei log (`basic` o `verbose`). Configurabile con `data-debug-level` o override JS.
   };
 
   const VALID_MODES = new Set(["strict", "warn", "soft"]); // Modalità supportate: `strict` (solo modale), `warn` (modale + evidenza), `soft` (solo evidenza).
+  const VALID_DEBUG_LEVELS = new Set(["basic", "verbose"]);
 
   const truthyValues = new Set(["true", "1", "yes", "on"]);
   const falsyValues = new Set(["false", "0", "no", "off"]);
@@ -85,6 +88,15 @@
     if (VALID_MODES.has(normalized)) return normalized;
     return defaultValue;
   }; // Garantisce che la modalità sia una tra "strict", "warn" o "soft" (fallback al default in caso di valore non valido).
+
+  const parseDebugLevel = (value, defaultValue) => {
+    if (!value) return defaultValue;
+    const normalized = value.trim().toLowerCase();
+    if (VALID_DEBUG_LEVELS.has(normalized)) {
+      return normalized;
+    }
+    return defaultValue;
+  }; // Normalizza il livello di debug garantendo valori `basic` o `verbose`.
 
   const parseHoverFeedback = (value, defaultValue) => {
     if (!value) return defaultValue;
@@ -173,6 +185,18 @@
         cfg.keepWarnMessageOnAllow
       );
     }
+    if (hasDataAttribute(scriptEl, "data-debug-mode")) {
+      cfg.debugMode = parseBoolean(
+        getAttribute(scriptEl, "data-debug-mode"),
+        cfg.debugMode
+      );
+    }
+    if (hasDataAttribute(scriptEl, "data-debug-level")) {
+      cfg.debugLevel = parseDebugLevel(
+        getAttribute(scriptEl, "data-debug-level"),
+        cfg.debugLevel
+      );
+    }
     if (hasDataAttribute(scriptEl, "data-config-version")) {
       const version = getAttribute(scriptEl, "data-config-version");
       cfg.configVersion = version || cfg.configVersion;
@@ -225,7 +249,9 @@
       "trackingParameter",
       "trackingPixelEndpoint",
       "trackingIncludeMetadata",
-      "keepWarnMessageOnAllow"
+      "keepWarnMessageOnAllow",
+      "debugMode",
+      "debugLevel"
     ];
     simpleKeys.forEach((key) => {
       if (Object.prototype.hasOwnProperty.call(overrides, key)) {
@@ -280,6 +306,12 @@
       ? String(cfg.trackingPixelEndpoint).trim()
       : "";
     cfg.trackingIncludeMetadata = Boolean(cfg.trackingIncludeMetadata);
+    cfg.debugMode = Boolean(cfg.debugMode);
+    if (!VALID_DEBUG_LEVELS.has(String(cfg.debugLevel || "").toLowerCase())) {
+      cfg.debugLevel = DEFAULTS.debugLevel;
+    } else {
+      cfg.debugLevel = String(cfg.debugLevel).trim().toLowerCase();
+    }
     return cfg;
   }; // Rifinisce la configurazione finale evitando stati inconsistenti.
 
@@ -314,7 +346,13 @@
       trackingParameter: String(config.trackingParameter || ""),
       trackingPixelEndpoint: String(config.trackingPixelEndpoint || ""),
       trackingIncludeMetadata: Boolean(config.trackingIncludeMetadata),
-      keepWarnMessageOnAllow: Boolean(config.keepWarnMessageOnAllow)
+      keepWarnMessageOnAllow: Boolean(config.keepWarnMessageOnAllow),
+      debugMode: Boolean(config.debugMode),
+      debugLevel: VALID_DEBUG_LEVELS.has(
+        String(config.debugLevel || "").toLowerCase()
+      )
+        ? String(config.debugLevel).toLowerCase()
+        : DEFAULTS.debugLevel
     };
     return JSON.stringify(safeConfig);
   }; // Genera una firma stabile delle impostazioni correnti per invalidare cache e asset.

@@ -20,6 +20,260 @@
   const guardNamespace = (window.SafeExternalLinksGuard =
     window.SafeExternalLinksGuard || {});
   const VALID_MODES = new Set(["strict", "warn", "soft"]);
+  const DEBUG_LEVELS = new Set(["basic", "verbose"]);
+
+  /**
+   * Converte un oggetto Error in una rappresentazione serializzabile.
+   * @param {Error|any} error
+   * @returns {{ name: string, message: string, stack?: string }|null}
+   */
+  const serializeError = (error) => {
+    if (!error || typeof error !== "object") {
+      return null;
+    }
+    return {
+      name: error.name || "Error",
+      message:
+        typeof error.message === "string"
+          ? error.message
+          : String(error.message || error),
+      stack:
+        typeof error.stack === "string" && error.stack.trim()
+          ? error.stack
+          : undefined
+    };
+  };
+
+  const sanitizeDetails = (value, depth = 0) => {
+    if (
+      value == null ||
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      return value;
+    }
+    if (value instanceof Error) {
+      return serializeError(value);
+    }
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    if (typeof value === "function") {
+      return `[function ${value.name || "anonymous"}]`;
+    }
+    if (Array.isArray(value)) {
+      if (depth > 2) {
+        return value.length;
+      }
+      return value.slice(0, 20).map((item) => sanitizeDetails(item, depth + 1));
+    }
+    if (typeof value === "object") {
+      if (depth > 2) {
+        try {
+          return Object.keys(value);
+        } catch (err) {
+          return `[object depth-limit]`;
+        }
+      }
+      const output = {};
+      const keys = Object.keys(value);
+      for (let i = 0; i < keys.length; i += 1) {
+        const key = keys[i];
+        const current = value[key];
+        if (
+          current &&
+          typeof current === "object" &&
+          typeof current.tagName === "string"
+        ) {
+          output[key] = `<${current.tagName.toLowerCase()}>`;
+          continue;
+        }
+        try {
+          output[key] = sanitizeDetails(current, depth + 1);
+        } catch (err) {
+          output[key] = `[unserializable:${typeof current}]`;
+        }
+      }
+      return output;
+    }
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (err) {
+      return String(value);
+    }
+  };
+
+  const getConsoleMethod = (type) => {
+    if (typeof console === "undefined") {
+      return null;
+    }
+    if (type === "error" && typeof console.error === "function") {
+      return "error";
+    }
+    if (type === "warn" && typeof console.warn === "function") {
+      return "warn";
+    }
+    if (type === "info" && typeof console.info === "function") {
+      return "info";
+    }
+    if (typeof console.log === "function") {
+      return "log";
+    }
+    return null;
+  };
+
+  const createDebugManager = () => {
+    const entries = [];
+    let state = {
+      enabled: false,
+      level: "basic",
+      context: {},
+      updatedAt: null
+    };
+
+    const record = (type, message, details, meta = {}) => {
+      const levelCandidate =
+        typeof meta.level === "string"
+          ? meta.level.trim().toLowerCase()
+          : "basic";
+      const level = DEBUG_LEVELS.has(levelCandidate)
+        ? levelCandidate
+        : "basic";
+      const scope =
+        typeof meta.scope === "string" && meta.scope.trim()
+          ? meta.scope.trim()
+          : null;
+      const tags = Array.isArray(meta.tags)
+        ? meta.tags.filter((tag) => typeof tag === "string" && tag.trim())
+        : [];
+      const persistAlways = Boolean(meta.persistWhenDisabled);
+      const entry = {
+        timestamp: new Date().toISOString(),
+        type,
+        level,
+        message,
+        scope,
+        tags: tags.length ? tags : undefined,
+        details:
+          details === undefined ? null : sanitizeDetails(details, meta.depth || 0)
+      };
+      if (!state.enabled && !persistAlways) {
+        return entry;
+      }
+      entries.push(entry);
+      if (level === "verbose" && state.level !== "verbose") {
+        return entry;
+      }
+      const method = getConsoleMethod(type === "event" ? "info" : type);
+      if (!method) {
+        return entry;
+      }
+      const labelScope = scope ? `[${scope}]` : "";
+      const label = `[SafeLinkGuard][${type.toUpperCase()}]${labelScope} ${message}`;
+      const payload = entry.details === null ? undefined : entry.details;
+      try {
+        if (payload !== undefined) {
+          console[method](label, payload);
+        } else {
+          console[method](label);
+        }
+      } catch (err) {
+        // Evita che errori del console logger interrompano il flusso principale.
+      }
+      return entry;
+    };
+
+    return {
+      configure(options = {}) {
+        const enabled =
+          typeof options.enabled === "boolean"
+            ? options.enabled
+            : Boolean(options.debugMode);
+        const requestedLevel =
+          typeof options.level === "string"
+            ? options.level
+            : typeof options.debugLevel === "string"
+            ? options.debugLevel
+            : "";
+        const normalizedLevel = DEBUG_LEVELS.has(
+          String(requestedLevel || "").toLowerCase()
+        )
+          ? String(requestedLevel).trim().toLowerCase()
+          : "basic";
+        state = {
+          enabled,
+          level: normalizedLevel,
+          context: options.context ? sanitizeDetails(options.context) : {},
+          updatedAt: new Date().toISOString()
+        };
+        const contextDetails = {
+          level: normalizedLevel,
+          context: state.context
+        };
+        record(
+          "info",
+          enabled
+            ? `Modalità debug attiva (livello: ${normalizedLevel})`
+            : "Modalità debug disattivata",
+          contextDetails,
+          { scope: "debug", persistWhenDisabled: true }
+        );
+        return { ...state };
+      },
+      info(message, details, meta) {
+        return record("info", message, details, meta);
+      },
+      warn(message, details, meta) {
+        return record("warn", message, details, meta);
+      },
+      error(message, details, meta) {
+        const payload =
+          details instanceof Error ? serializeError(details) : details;
+        return record("error", message, payload, meta);
+      },
+      event(message, details, meta) {
+        return record("event", message, details, meta);
+      },
+      verbose(message, details, meta) {
+        const mergedMeta = { ...(meta || {}), level: "verbose" };
+        return record("info", message, details, mergedMeta);
+      },
+      getState() {
+        return { ...state };
+      },
+      getEntries() {
+        return entries.map((entry) => ({ ...entry }));
+      },
+      exportAsJson(options = {}) {
+        const payload = {
+          generatedAt: new Date().toISOString(),
+          state: { ...state },
+          entries: entries.map((entry) => ({ ...entry }))
+        };
+        if (options.pretty === false) {
+          return JSON.stringify(payload);
+        }
+        return JSON.stringify(payload, null, 2);
+      }
+    };
+  };
+
+  if (typeof guardNamespace.createDebugManager !== "function") {
+    guardNamespace.createDebugManager = () => createDebugManager();
+  }
+
+  const hasExistingDebug =
+    guardNamespace.debug &&
+    typeof guardNamespace.debug.info === "function" &&
+    typeof guardNamespace.debug.exportAsJson === "function" &&
+    guardNamespace.debug.__isStub !== true;
+
+  const debug = hasExistingDebug
+    ? guardNamespace.debug
+    : guardNamespace.createDebugManager();
+
+  guardNamespace.debug = debug;
 
   const FALLBACK_WARN_MESSAGE =
     "This link is not verified and may share your browsing data with a third-party site. Make sure the destination is trustworthy before continuing.";
@@ -279,8 +533,10 @@
     typeof guardNamespace.utils.computeSettingsFingerprint === "function"
       ? guardNamespace.utils.computeSettingsFingerprint
       : null;
+  let usingLegacySettings = false;
 
   if (typeof buildSettings !== "function") {
+    usingLegacySettings = true;
     // Fallback legacy: se il file links-guard.settings.js non è stato caricato,
     // ricostruiamo la configurazione mantenendo la compatibilità con le versioni precedenti.
     const fallbackDefaults = {
@@ -303,7 +559,9 @@
       trackingParameter: "myclid",
       trackingPixelEndpoint: "",
       trackingIncludeMetadata: true,
-      keepWarnMessageOnAllow: false
+      keepWarnMessageOnAllow: false,
+      debugMode: false,
+      debugLevel: "basic"
     };
 
     const getAttribute = (node, attr) => {
@@ -346,6 +604,12 @@
       return normalized === "tooltip" ? "tooltip" : "title";
     };
 
+    const parseDebugLevel = (value) => {
+      if (!value) return "basic";
+      const normalized = value.trim().toLowerCase();
+      return DEBUG_LEVELS.has(normalized) ? normalized : "basic";
+    };
+
     const normalizeArray = (items) => {
       if (!Array.isArray(items)) return [];
       return items
@@ -382,11 +646,11 @@
       return JSON.stringify(safeConfig);
     };
 
-    if (typeof console !== "undefined" && typeof console.warn === "function") {
-      console.warn(
-        "[SafeLinkGuard] links-guard.settings.js non caricato: utilizzo configurazione legacy."
-      );
-    }
+    debug.warn(
+      "Configurazione legacy attiva: links-guard.settings.js non caricato",
+      { fallbackDefaults },
+      { scope: "bootstrap", persistWhenDisabled: true }
+    );
 
     buildSettings = (scriptEl) => {
       const cfg = {
@@ -446,6 +710,14 @@
         keepWarnMessageOnAllow: parseBoolean(
           getAttribute(scriptEl, "data-keep-warn-on-allow"),
           fallbackDefaults.keepWarnMessageOnAllow
+        ),
+        debugMode: parseBoolean(
+          getAttribute(scriptEl, "data-debug-mode"),
+          fallbackDefaults.debugMode
+        ),
+        debugLevel: parseDebugLevel(
+          getAttribute(scriptEl, "data-debug-level"),
+          fallbackDefaults.debugLevel
         )
       };
 
@@ -456,6 +728,8 @@
       }
       cfg.keepWarnMessageOnAllow = Boolean(cfg.keepWarnMessageOnAllow);
       cfg.trackingEnabled = Boolean(cfg.trackingEnabled);
+      cfg.debugMode = Boolean(cfg.debugMode);
+      cfg.debugLevel = parseDebugLevel(String(cfg.debugLevel || ""));
       return cfg;
     };
 
@@ -471,7 +745,8 @@
         parseInteger,
         parseList,
         parseMode,
-        parseHoverFeedback
+        parseHoverFeedback,
+        parseDebugLevel
       };
     }
 
@@ -494,6 +769,133 @@
   if (!VALID_MODES.has(cfg.mode)) cfg.mode = "strict";
   if (cfg.hoverFeedback !== "tooltip") cfg.hoverFeedback = "title";
 
+  const configFingerprint =
+    typeof computeSettingsFingerprint === "function"
+      ? computeSettingsFingerprint(cfg)
+      : JSON.stringify(cfg);
+
+  const summarizeConfigForDebug = (config, fingerprint) => ({
+    mode: config.mode,
+    endpoint: config.endpoint,
+    timeoutMs: config.timeoutMs,
+    cacheTtlSec: config.cacheTtlSec,
+    maxConcurrent: config.maxConcurrent,
+    ui: {
+      hoverFeedback: config.hoverFeedback,
+      showCopyButton: config.showCopyButton,
+      warnHighlightClass: config.warnHighlightClass,
+      keepWarnMessageOnAllow: Boolean(config.keepWarnMessageOnAllow)
+    },
+    tracking: {
+      enabled: Boolean(config.trackingEnabled),
+      parameter: config.trackingParameter,
+      pixelEndpoint: config.trackingPixelEndpoint,
+      includeMetadata: Boolean(config.trackingIncludeMetadata)
+    },
+    cache: {
+      ttl: config.cacheTtlSec,
+      fingerprint: fingerprint || null
+    }
+  });
+
+  const collectRuntimeLanguageSnapshot = () => {
+    const snapshot = {
+      preferred: null,
+      alternatives: [],
+      documentLang:
+        typeof document !== "undefined" &&
+        document?.documentElement?.lang
+          ? document.documentElement.lang
+          : null,
+      sources: []
+    };
+
+    if (
+      guardNamespace.i18n &&
+      typeof guardNamespace.i18n.collectLanguageContext === "function"
+    ) {
+      try {
+        const context = guardNamespace.i18n.collectLanguageContext();
+        if (context?.language) {
+          snapshot.preferred = context.language;
+        }
+        if (Array.isArray(context?.languages)) {
+          snapshot.alternatives = context.languages;
+        }
+        if (Array.isArray(context?.sources)) {
+          snapshot.sources = context.sources;
+        }
+      } catch (errCollectContext) {
+        debug.warn(
+          "Errore durante la raccolta del contesto lingua",
+          serializeError(errCollectContext),
+          { scope: "i18n" }
+        );
+      }
+    }
+
+    if (typeof navigator !== "undefined" && navigator) {
+      if (!snapshot.preferred) {
+        const languages = Array.isArray(navigator.languages)
+          ? navigator.languages.filter(Boolean)
+          : [];
+        if (languages.length) {
+          snapshot.preferred = languages[0];
+          snapshot.alternatives = languages;
+        } else if (navigator.language) {
+          snapshot.preferred = navigator.language;
+          if (!snapshot.alternatives.length) {
+            snapshot.alternatives = [navigator.language];
+          }
+        }
+      }
+    }
+
+    if (!snapshot.preferred && snapshot.documentLang) {
+      snapshot.preferred = snapshot.documentLang;
+    }
+
+    if (cfg.debugMode && cfg.debugLevel === "verbose") {
+      debug.verbose(
+        "Contesto linguistico calcolato",
+        snapshot,
+        { scope: "i18n" }
+      );
+    }
+
+    return snapshot;
+  };
+
+  const configSource = usingLegacySettings ? "legacy" : "module";
+
+  debug.configure({
+    enabled: Boolean(cfg.debugMode),
+    level: cfg.debugLevel,
+    context: {
+      configVersion: cfg.configVersion,
+      source: configSource,
+      endpoint: cfg.endpoint
+    }
+  });
+
+  if (cfg.debugMode) {
+    debug.info(
+      "Configurazione attiva",
+      summarizeConfigForDebug(cfg, configFingerprint),
+      { scope: "config" }
+    );
+    debug.verbose(
+      "Configurazione completa",
+      cfg,
+      { scope: "config" }
+    );
+    debug.info(
+      "Lingua preferita rilevata",
+      collectRuntimeLanguageSnapshot(),
+      { scope: "i18n" }
+    );
+  }
+
   // Espone l'utility anche sul namespace globale per consentire test e riuso.
   if (!guardNamespace.utils) guardNamespace.utils = {};
   if (
@@ -501,11 +903,6 @@
   ) {
     guardNamespace.utils.computeScrollLockPadding = computeScrollLockPadding;
   }
-  const configFingerprint =
-    typeof computeSettingsFingerprint === "function"
-      ? computeSettingsFingerprint(cfg)
-      : JSON.stringify(cfg);
-
   guardNamespace.activeConfigSignature = configFingerprint;
   guardNamespace.activeConfigVersion = cfg.configVersion;
 
@@ -749,6 +1146,13 @@
     } catch (errTz) {
       // La timezone potrebbe non essere disponibile: ignoriamo l'errore.
     }
+    if (cfg.debugMode && cfg.debugLevel === "verbose") {
+      debug.verbose(
+        "Metadati anonimi generati",
+        base,
+        { scope: "tracking" }
+      );
+    }
     return base;
   };
 
@@ -869,6 +1273,19 @@
     }
 
     const { href, url: urlObj, trackingId } = applied;
+    if (cfg.debugMode) {
+      const detail = {
+        parameter: parameterName,
+        trackingId,
+        destination: href,
+        original: originalHref
+      };
+      const level = cfg.debugLevel === "verbose" ? "verbose" : "basic";
+      debug.event("Parametro di tracking applicato", detail, {
+        scope: "tracking",
+        level
+      });
+    }
     return {
       href,
       originalHref,
@@ -896,6 +1313,20 @@
     }
 
     const endpoint = cfg.trackingPixelEndpoint;
+    if (cfg.debugMode) {
+      const details =
+        cfg.debugLevel === "verbose"
+          ? { endpoint, payload }
+          : {
+              endpoint,
+              trackingId: payload.trackingId,
+              destination: payload.destination
+            };
+      debug.event("Invio tracking pixel", details, {
+        scope: "tracking",
+        level: cfg.debugLevel === "verbose" ? "verbose" : "basic"
+      });
+    }
 
     try {
       if (
@@ -1020,9 +1451,11 @@
       try {
         window.location.href = href;
       } catch (err2) {
-        if (typeof console !== "undefined" && typeof console.error === "function") {
-          console.error(`[SafeLinkGuard] Impossibile aprire l'URL: ${href}`, err2);
-        }
+        debug.error(
+          "Impossibile aprire l'URL",
+          { href, error: serializeError(err2) },
+          { scope: "navigation" }
+        );
       }
     }
   };
@@ -1209,8 +1642,19 @@
             store.set(host, entry);
           }
         });
+        if (cfg.debugMode && store.size) {
+          debug.verbose(
+            "Cache policy ripristinata",
+            { size: store.size },
+            { scope: "cache" }
+          );
+        }
       } catch (e) {
-        console.warn("[SafeLinkGuard] Lettura cache non disponibile:", e);
+        debug.warn(
+          "Lettura cache non disponibile",
+          serializeError(e) || String(e),
+          { scope: "cache" }
+        );
       }
     };
 
@@ -1226,7 +1670,11 @@
         });
         sessionStorage.setItem(storageKey, JSON.stringify(obj));
       } catch (e) {
-        console.warn("[SafeLinkGuard] Scrittura cache non disponibile:", e);
+        debug.warn(
+          "Scrittura cache non disponibile",
+          serializeError(e) || String(e),
+          { scope: "cache" }
+        );
       }
     };
 
@@ -1238,6 +1686,13 @@
         const ttl = Number.isFinite(entry.ttl) ? entry.ttl : config.cacheTtlSec;
         if (entry.ts + ttl < nowSec()) {
           store.delete(host);
+          if (cfg.debugMode) {
+            debug.verbose(
+              "Cache policy scaduta",
+              { host, ttl, expiredAt: entry.ts + ttl },
+              { scope: "cache", level: "verbose" }
+            );
+          }
           return null;
         }
         const normalizedMessage = normalizeMessageDescriptor(entry.message);
@@ -1257,10 +1712,31 @@
           message: descriptor
         });
         persist();
+        if (cfg.debugMode) {
+          debug.event(
+            "Policy memorizzata in cache",
+            {
+              host,
+              action,
+              ttl: Number.isFinite(ttl) ? ttl : config.cacheTtlSec
+            },
+            {
+              scope: "cache",
+              level: cfg.debugLevel === "verbose" ? "verbose" : "basic"
+            }
+          );
+        }
       },
       clear() {
         store.clear();
         persist();
+        if (cfg.debugMode) {
+          debug.event(
+            "Cache policy svuotata",
+            null,
+            { scope: "cache", level: "basic" }
+          );
+        }
       }
     };
   }
@@ -1358,7 +1834,11 @@
       } catch (e) {
         if (!invalidExcludeSelectors.has(sel)) {
           invalidExcludeSelectors.add(sel);
-          console.error(`[SafeLinkGuard] Selettore non valido in data-exclude-selectors: "${sel}"`, e);
+          debug.error(
+            "Selettore non valido in data-exclude-selectors",
+            { selector: sel, error: serializeError(e) },
+            { scope: "bootstrap", tags: ["fallback"] }
+          );
         }
       }
     }
@@ -1463,7 +1943,11 @@
 
   async function checkEndpointHealth() {
     if (!cfg.endpoint) {
-      console.error("[SafeLinkGuard] data-endpoint non impostato.");
+      debug.error(
+        "Endpoint non impostato",
+        { endpoint: cfg.endpoint },
+        { scope: "network", tags: ["configuration"] }
+      );
       endpointHealthy = false;
       return false;
     }
@@ -1475,7 +1959,11 @@
         cfg.timeoutMs
       );
       if (!res.ok) {
-        console.error(`[SafeLinkGuard] Endpoint non raggiungibile. HTTP ${res.status} su ${url}`);
+        debug.error(
+          "Endpoint non raggiungibile",
+          { url, status: res.status },
+          { scope: "network", tags: ["fallback"] }
+        );
         endpointHealthy = false;
         return false;
       }
@@ -1483,9 +1971,17 @@
       return true;
     } catch (e) {
       if (e?.name === "TimeoutError") {
-        console.warn(`[SafeLinkGuard] Timeout health-check su ${url} dopo ${cfg.timeoutMs} ms`);
+        debug.warn(
+          "Timeout durante il controllo di salute",
+          { url, timeoutMs: cfg.timeoutMs },
+          { scope: "network", tags: ["fallback"] }
+        );
       } else {
-        console.error(`[SafeLinkGuard] Errore di rete verso ${url}:`, e);
+        debug.error(
+          "Errore di rete verso l'endpoint",
+          { url, error: serializeError(e) },
+          { scope: "network" }
+        );
       }
       endpointHealthy = false;
       return false;
@@ -1494,23 +1990,26 @@
 
   const normalizeAction = (val) => {
     const a = String(val || "").toLowerCase().trim();
-    return (a === "allow" || a === "warn" || a === "deny") ? a : "warn";
+    return a === "allow" || a === "warn" || a === "deny" ? a : "warn";
   };
 
   async function getPolicy(host) {
-    const cached = policyCache.get(host);
-    if (cached) return cached.action;
-
     if (!endpointHealthy) {
-      console.error("[SafeLinkGuard] Endpoint non disponibile. Fallback 'warn'. Host:", host);
-      const fallback = "warn";
-      policyCache.set(
-        host,
-        fallback,
-        Math.min(300, cfg.cacheTtlSec),
-        { key: "messages.endpointUnavailable" }
+      debug.warn(
+        "Endpoint non disponibile, uso fallback 'warn'",
+        { host },
+        { scope: "policy", tags: ["fallback"] }
       );
-      return fallback;
+      const fallback = "warn";
+      const ttl = Math.min(300, cfg.cacheTtlSec);
+      const descriptor = { key: "messages.endpointUnavailable" };
+      policyCache.set(host, fallback, ttl, descriptor);
+      return {
+        action: fallback,
+        source: "endpoint-fallback",
+        ttl,
+        message: descriptor
+      };
     }
 
     try {
@@ -1531,26 +2030,41 @@
       const ttl = Number.isFinite(json?.ttl) ? json.ttl : cfg.cacheTtlSec;
       const message = extractMessageDescriptorFromResponse(json);
       policyCache.set(host, action, ttl, message);
-      return action;
+      return {
+        action,
+        source: "network",
+        ttl,
+        message,
+        response: cfg.debugLevel === "verbose" ? json : undefined
+      };
     } catch (e) {
       const isTimeout = e?.name === "TimeoutError";
       if (isTimeout) {
-        console.warn(
-          `[SafeLinkGuard] Timeout policy per host "${host}" dopo ${cfg.timeoutMs} ms`
+        debug.warn(
+          "Timeout policy",
+          { host, timeoutMs: cfg.timeoutMs },
+          { scope: "policy", tags: ["fallback"] }
         );
       } else {
-        console.error("[SafeLinkGuard] Errore policy per host:", host, e);
+        debug.error(
+          "Errore durante il recupero della policy",
+          { host, error: serializeError(e) },
+          { scope: "policy" }
+        );
       }
       const fallback = "warn";
-      policyCache.set(
-        host,
-        fallback,
-        Math.min(300, cfg.cacheTtlSec),
-        isTimeout
-          ? { key: "messages.timeout" }
-          : { key: "messages.error" }
-      );
-      return fallback;
+      const ttl = Math.min(300, cfg.cacheTtlSec);
+      const descriptor = isTimeout
+        ? { key: "messages.timeout" }
+        : { key: "messages.error" };
+      policyCache.set(host, fallback, ttl, descriptor);
+      return {
+        action: fallback,
+        source: isTimeout ? "timeout" : "network-error",
+        ttl,
+        message: descriptor,
+        error: serializeError(e) || String(e)
+      };
     }
   }
 
@@ -1559,18 +2073,19 @@
   const inFlight = new Set();
   let running = 0;
 
-  const applyPolicyToHost = (host, action) => {
+  const applyPolicyToHost = (host, action, meta = {}) => {
     const set = anchorsByHost.get(host);
     if (!set) return;
     const cached = policyCache.get(host);
-    const messageDescriptor = cached ? cached.message : null;
+    const messageDescriptor = cached ? cached.message : meta.message || null;
     const warnFallback = cfg.warnMessageDefault || defaultWarnMessage;
     const warnMessage =
       translateMessageDescriptor(messageDescriptor, warnFallback) || warnFallback;
     const denyReason =
       translateMessageDescriptor(messageDescriptor, defaultDenyMessage) ||
       defaultDenyMessage;
-    for (const node of Array.from(set)) {
+    const nodes = Array.from(set);
+    for (const node of nodes) {
       if (!node.isConnected) { set.delete(node); continue; }
       if (action === "deny") {
         disableLink(node, denyReason, host);
@@ -1612,11 +2127,155 @@
         }
       }
     }
+
+    if (!cfg.debugMode) {
+      return;
+    }
+
+    const sourceTag =
+      typeof meta.source === "string" && meta.source.trim()
+        ? meta.source.trim()
+        : cached && meta.source !== "cache"
+        ? "cache"
+        : "runtime";
+    const trackedSet = anchorsByHost.get(host);
+    const level = cfg.debugLevel === "verbose" ? "verbose" : "basic";
+    const summary = {
+      host,
+      action,
+      linksMatched: nodes.length,
+      mode: cfg.mode,
+      source: sourceTag
+    };
+    if (cfg.warnHighlightClass) {
+      summary.warnHighlightClass = cfg.warnHighlightClass;
+    }
+    if (messageDescriptor) {
+      summary.message = messageDescriptor;
+    }
+    const renderedMessage = action === "deny" ? denyReason : warnMessage;
+    if (renderedMessage) {
+      summary.renderedMessage = renderedMessage;
+    }
+    if (meta && Number.isFinite(meta.ttl)) {
+      summary.ttl = meta.ttl;
+    }
+    if (meta && Number.isFinite(meta.cacheAgeSec)) {
+      summary.cacheAgeSec = meta.cacheAgeSec;
+    }
+    if (meta && Number.isFinite(meta.cachedAt)) {
+      summary.cachedAtSec = meta.cachedAt;
+      try {
+        summary.cachedAtIso = new Date(meta.cachedAt * 1000).toISOString();
+      } catch (isoErr) {
+        summary.cachedAtIso = null;
+      }
+    }
+    if (meta && meta.error) {
+      summary.error = meta.error;
+    }
+    if (trackedSet) {
+      summary.totalTrackedNodes = trackedSet.size;
+    } else {
+      summary.totalTrackedNodes = nodes.length;
+    }
+
+    if (level === "verbose") {
+      if (meta && meta.response) {
+        summary.policyResponse = meta.response;
+      }
+      const sampleSource = trackedSet ? Array.from(trackedSet) : nodes;
+      const samples = sampleSource.slice(0, 10).map((node) => {
+        const state = anchorStates.get(node) || null;
+        const textContent = (node.textContent || "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 160);
+        const sample = {
+          tag: node.tagName ? node.tagName.toLowerCase() : null,
+          text: textContent || null,
+          disabled:
+            node.classList?.contains("slg-disabled") ||
+            node.getAttribute?.("aria-disabled") === "true"
+              ? true
+              : undefined,
+          hasWarnHighlight:
+            cfg.warnHighlightClass &&
+            node.classList?.contains(cfg.warnHighlightClass)
+              ? true
+              : undefined
+        };
+        if (node.tagName === "A") {
+          sample.href = node.getAttribute("href") || node.href || null;
+        }
+        if (node.dataset?.safeLinkGuard) {
+          sample.dataset = { safeLinkGuard: node.dataset.safeLinkGuard };
+        }
+        if (state) {
+          sample.state = {
+            host: state.host,
+            url: state.url ? state.url.href : null
+          };
+        }
+        return sample;
+      });
+      summary.sampleAnchors = samples;
+      if (sampleSource.length > samples.length) {
+        summary.sampleAnchorsTruncated = sampleSource.length - samples.length;
+      }
+    }
+
+    const tags = [action];
+    if (sourceTag) {
+      tags.push(sourceTag);
+    }
+
+    debug.event("Policy applicata", summary, {
+      scope: "policy",
+      level,
+      tags
+    });
+
+    if (action === "deny") {
+      debug.warn(
+        "Link bloccati per host sospetto",
+        {
+          host,
+          linksMatched: nodes.length,
+          message: messageDescriptor || { text: denyReason }
+        },
+        { scope: "policy", tags: ["deny", sourceTag || "runtime"] }
+      );
+    } else if (action === "warn") {
+      debug.info(
+        "Host contrassegnato come warning",
+        {
+          host,
+          linksMatched: nodes.length,
+          message: messageDescriptor || { text: warnMessage }
+        },
+        { scope: "policy", tags: ["warn", sourceTag || "runtime"] }
+      );
+    }
   };
 
   const enqueueHost = (host) => {
     const cached = policyCache.get(host);
-    if (cached) { applyPolicyToHost(host, cached.action); return; }
+    if (cached) {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const meta = {
+        source: "cache",
+        ttl: cached.ttl,
+        cachedAt: cached.ts,
+        cacheAgeSec:
+          Number.isFinite(cached.ts) && cached.ts <= nowSec
+            ? nowSec - cached.ts
+            : undefined,
+        message: cached.message
+      };
+      applyPolicyToHost(host, cached.action, meta);
+      return;
+    }
     if (inFlight.has(host)) return;
     inFlight.add(host);
     queue.push(host);
@@ -1629,8 +2288,18 @@
       running++;
       (async () => {
         try {
-          const action = await getPolicy(host);
-          applyPolicyToHost(host, action);
+          const result = await getPolicy(host);
+          const action =
+            result && typeof result === "object" && result.action
+              ? result.action
+              : typeof result === "string"
+              ? result
+              : "warn";
+          const meta =
+            result && typeof result === "object"
+              ? result
+              : { source: "network" };
+          applyPolicyToHost(host, action, meta);
         } finally {
           inFlight.delete(host);
           running--;
@@ -2284,8 +2953,16 @@
 
     const cachedDecision = policyCache.get(host);
     if (!cachedDecision) {
-      const action = await getPolicy(host);
-      applyPolicyToHost(host, action);
+      const result = await getPolicy(host);
+      const action =
+        result && typeof result === "object" && result.action
+          ? result.action
+          : typeof result === "string"
+          ? result
+          : "warn";
+      const meta =
+        result && typeof result === "object" ? result : { source: "network" };
+      applyPolicyToHost(host, action, meta);
       const finalCached = policyCache.get(host);
       if (action === "allow") {
         followExternalUrl(trackingContext?.url || url, {
@@ -2514,7 +3191,11 @@
     try {
       await handleAnchorActivation(event, anchor);
     } catch (errHandleAnchor) {
-      console.error("[SafeLinkGuard] Errore durante la gestione del click delegato", errHandleAnchor);
+      debug.error(
+        "Errore durante la gestione del click delegato",
+        serializeError(errHandleAnchor) || String(errHandleAnchor),
+        { scope: "runtime" }
+      );
     }
   };
 
@@ -2553,7 +3234,11 @@
     policyCache.load();
     await checkEndpointHealth();
     if (!endpointHealthy) {
-      console.error(`[SafeLinkGuard] Verifica fallita per data-endpoint="${cfg.endpoint}". Fallback "warn".`);
+      debug.warn(
+        "Verifica endpoint fallita: attivazione fallback 'warn'",
+        { endpoint: cfg.endpoint },
+        { scope: "network", tags: ["fallback"] }
+      );
     }
     processAll(document);
     document.addEventListener("click", delegatedClickHandler, { capture: true, passive: false });

@@ -1,4 +1,23 @@
 # Changelog
+## [1.10.1] - 2025-11-23
+### Added
+- Riepiloghi automatici delle decisioni di policy (allow/warn/deny) nella console debug con conteggio dei link coinvolti, origine della decisione (cache, endpoint, fallback) ed esempi di anchor in modalità `verbose`.
+
+### Changed
+- Il livello `basic` del debugger mostra ora anche le informazioni essenziali sui domini analizzati, inclusi motivi e messaggi applicati, rendendo immediata l'individuazione dei link sospetti.
+
+### Fixed
+- La modalità debug segnala esplicitamente i domini bloccati o messi in warning, includendo lingua, motivazione e metadati di policy così da facilitare la diagnosi dei link spam segnalati dagli utenti.
+
+## [1.10.0] - 2025-11-22
+### Added
+- Modalità debug controllabile via `debugMode`/`debugLevel` con livelli `basic` e `verbose`, comprensiva di log di configurazione, tracking e fallback.
+- API `SafeExternalLinksGuard.debug.exportAsJson()` e `getEntries()` per esportare i dati diagnostici in JSON o consultarli lato client.
+
+### Changed
+- Tutti i log runtime (policy, cache, i18n, tracking) vengono instradati tramite il nuovo debugger e rimangono silenti quando la modalità debug è disattivata.
+- I warning del fallback legacy dei settings vengono emessi soltanto tramite debug, evitando messaggi in console nei contesti di produzione.
+
 ## [1.9.4] - 2025-11-21
 ### Added
 - Test unitario `i18n_ready_queue_test.js` che verifica l'esecuzione della coda di bootstrap e la consegna della lingua iniziale ai listener registrati prima del caricamento del modulo.
