@@ -1,6 +1,8 @@
 # Safe External Links Guard
 
-**Versione:** 1.11.0
+**Versione:** 1.12.5
+
+> Novità 1.12.5: corretta la sanificazione server-side degli anchor esterni evitando che il bootstrap PHP alteri il markup generato (particolarmente evidente in Sngine), mantenendo al contempo l'applicazione immediata degli attributi `target`/`rel`.
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
@@ -68,11 +70,121 @@ Lo script:
   <!-- data-remove-node è opzionale: se impostato a true sostituisce <a> con <span> -->
   <!-- imposta data-mode="warn" per evidenziare i link e chiedere conferma prima di aprirli -->
   <!-- imposta data-show-copy-button="true" per mostrare il pulsante "Copia link" -->
-  <!-- imposta data-hover-feedback="title" per usare il tooltip nativo del browser -->
-  ```
-  > **Suggerimento:** dalla versione 1.9.4 `links-guard.js` processa una coda di callback (`SafeExternalLinksGuard.__i18nReadyQueue`) per riallineare automaticamente le traduzioni quando il modulo i18n viene caricato in ritardo. Mantieni comunque l'ordine suggerito per ridurre al minimo eventuali flash di testo in inglese sui dispositivi più lenti.
+    <!-- imposta data-hover-feedback="title" per usare il tooltip nativo del browser -->
+    ```
 
-  Adatta `src` e `data-endpoint` ai percorsi effettivi del tuo sito.
+> **Suggerimento:** dalla versione 1.9.4 `links-guard.js` processa una coda di callback (`SafeExternalLinksGuard.__i18nReadyQueue`) per riallineare automaticamente le traduzioni quando il modulo i18n viene caricato in ritardo. Mantieni comunque l'ordine suggerito per ridurre al minimo eventuali flash di testo in inglese sui dispositivi più lenti.
+
+Adatta `src` e `data-endpoint` ai percorsi effettivi del tuo sito.
+
+### Bootstrap inline (<head>)
+
+Per eliminare la finestra temporale in cui i bot (o gli utenti molto veloci) possono interagire con link esterni non ancora protetti, il progetto include un bootstrap minimalista da iniettare direttamente nell'`<head>` della pagina. Il file `resources/bootstrap-inline.min.js` pesa meno di 2 KB e può essere copiato inline:
+
+```html
+<script>
+/* incolla qui il contenuto di resources/bootstrap-inline.min.js */
+</script>
+```
+
+Il bootstrap:
+
+- intercetta i click con `capture: true` e applica subito `preventDefault()` sui link esterni;
+- imposta `target="_blank"` e `rel="noopener noreferrer nofollow"` prima del first paint;
+- onora un'allowlist di domini interni (`SafeExternalLinksGuardBootstrap.config.allowlist`);
+- inoltra automaticamente gli eventi al listener completo di `links-guard.js` non appena quest'ultimo è pronto e rilascia il listener di fallback.
+
+Per personalizzare l'allowlist o il messaggio di conferma basta valorizzare `SafeExternalLinksGuardBootstrap.config` prima del tag `<script>` principale, ad esempio:
+
+```html
+<script>
+window.SafeExternalLinksGuardBootstrap = {
+  config: {
+    allowlist: ['docs.example.com', '*.intranet.local'],
+    externalPolicy: { message: 'Stai per uscire dal sito istituzionale. Continuare?' }
+  }
+};
+</script>
+```
+
+> Se non si desidera l'inline, è possibile caricare `links-guard.bootstrap.js` come file separato: espone le stesse API (`updateConfig`, `forwardTo`, `release`, `applySeoAttributes`) del bootstrap ridotto e offre log di debug opzionali.
+
+### Sanitizzazione server-side degli anchor
+
+Per i contesti in cui è necessario garantire che anche i crawler privi di JavaScript vedano direttamente gli attributi di sicurezza, è disponibile il servizio PHP `App\Services\Markup\ExternalLinkAttributeEnforcer`. Un esempio di utilizzo durante il rendering lato server:
+
+```php
+use App\Services\Markup\ExternalLinkAttributeEnforcer;
+
+$enforcer = new ExternalLinkAttributeEnforcer([
+    'example.com',
+    '*.trusted.partner'
+], ['noopener', 'noreferrer']);
+
+$html = file_get_contents('templates/newsletter.html');
+$secured = $enforcer->enforce($html);
+echo $secured;
+```
+
+Il servizio ignora gli schemi `mailto:`, `tel:`, `javascript:`, `data:` e `blob:`, preserva i link interni (inclusi i wildcard) e aggiunge gli attributi richiesti (`target="_blank"`, `rel="noopener noreferrer nofollow"` di default, oppure i token che preferisci passare come secondo argomento). È pensato per essere eseguito in build oppure al momento del rendering della pagina.
+
+#### Bootstrap PHP (output buffering)
+
+Per applicare gli attributi SEO prima ancora di generare l'HTML definitivo puoi includere `app/bootstrap.php` (o il file di compatibilità `bootstrap.php` nella root del pacchetto) all'inizio del tuo entry point e avviare il buffer dedicato:
+
+```php
+require_once __DIR__ . '/../app/bootstrap.php';
+
+safe_external_links_guard_bootstrap([
+    'allowlist' => ['intranet.example'],
+    'rel_strategy' => 'noopener', // oppure 'noreferrer', 'both' o un array di token
+    'add_nofollow' => false,      // opzionale: disabilita l'aggiunta automatica di nofollow
+]);
+
+// ... genera il markup della pagina ...
+
+// opzionale: safe_external_links_guard_bootstrap_release(); // forza il flush anticipato
+```
+
+Il bootstrap PHP intercetta tutto l'output HTML, aggiorna gli `<a>` esterni con `target="_blank"` e con il valore `rel` scelto (`noopener`, `noreferrer` o entrambi) e trasferisce il markup già sanificato al browser. Dalla versione **1.12.5** il processo avviene con un parser lineare sugli anchor (nessun uso di `DOMDocument`) così da preservare pedissequamente lo spacing, gli attributi personalizzati e le porzioni di markup adiacenti: l'HTML generato da CMS come **Sngine** resta invariato, evitando i difetti di rendering segnalati. Se il tuo hosting punta ancora a `safe_external_links_guard/bootstrap.php` (ad esempio perché i file sono stati copiati in `/assets/app/safe_external_links_guard/`), non devi aggiornare il percorso: il file di compatibilità `bootstrap.php` reindirizza automaticamente al nuovo bootstrap applicativo. In modalità `debug` (`'debug' => true`) eventuali eccezioni vengono loggate tramite `error_log`. Passando `'force' => true` è possibile riapplicare la configurazione durante la stessa richiesta, mentre `safe_external_links_guard_bootstrap_release(false)` consente di annullare le modifiche se necessario (ad esempio nelle pagine di amministrazione).
+
+#### Integrazione con Sngine
+
+Per integrare il bootstrap PHP in **Sngine** (social network script in PHP) senza shell è sufficiente copiare i file tramite FTP/File Manager e aggiungere due piccoli hook:
+
+1. **Caricamento dei file** – Copia l'intera cartella `safe_external_links_guard/` (contenente `app/`, `links-guard.js`, ecc.) nella directory pubblica di Sngine, ad esempio in `content/themes/default/custom/safe_external_links_guard/`. Assicurati che `bootstrap.php` e la sottocartella `app/` siano leggibili dal server.
+2. **Avvio del bootstrap** – Apri `bootloader.php` (nella root di Sngine) e, subito dopo l'inclusione di `includes/config.php`, aggiungi:
+   ```php
+   // Safe External Links Guard – bootstrap PHP per l'output buffering
+   require_once __DIR__ . '/content/themes/default/custom/safe_external_links_guard/bootstrap.php';
+
+   safe_external_links_guard_bootstrap([
+       'allowlist' => [
+           parse_url(SYS_URL, PHP_URL_HOST), // host principale configurato in Sngine
+           'cdn.tuosito.com',                // eventuale CDN o domini interni aggiuntivi
+       ],
+       'rel_strategy' => 'both',             // noopener + noreferrer
+       'add_nofollow' => true,
+       'debug' => false,
+   ]);
+   ```
+   Il buffer resta attivo fino al termine della richiesta e applica `target="_blank"` e `rel` sicuri a ogni link esterno renderizzato da Smarty o da altre parti dell'applicazione.
+3. **Disattivazione selettiva (opzionale)** – Se desideri saltare l'enforcement in aree specifiche (es. pannello admin), richiama `safe_external_links_guard_bootstrap_release(false);` prima di inviare l'output della pagina.
+4. **Inclusione degli asset JS/CSS** – Inserisci gli script nel template head principale, tipicamente `content/themes/default/templates/_head.tpl` (o il file equivalente del tema attivo):
+   ```smarty
+   {literal}
+   <script src="{$system['system_url']}/content/themes/default/custom/safe_external_links_guard/links-guard.i18n.js"></script>
+   <script src="{$system['system_url']}/content/themes/default/custom/safe_external_links_guard/links-guard.settings.js"></script>
+   <script
+     defer
+     src="{$system['system_url']}/content/themes/default/custom/safe_external_links_guard/links-guard.js"
+     data-endpoint="{$system['system_url']}/content/themes/default/custom/safe_external_links_guard/links/policy/policy.php"
+     data-mode="warn"
+     data-remove-node="false"
+   ></script>
+   {/literal}
+   ```
+    Adatta il percorso allo storage scelto e, se utilizzi un tema child, replica la modifica nella relativa `_head.tpl`. In questo modo anche i crawler che leggono l'HTML generato da Sngine troveranno già gli attributi `rel`/`target` corretti, mentre gli utenti beneficeranno della modale JS appena caricata la pagina.
 3. Aggiungi alla pagina (tipicamente subito dopo l'inclusione degli script o nel footer) il template HTML della modale. Copia il contenuto di `links/modal-template.html` e personalizzalo mantenendo gli attributi `data-slg-*` per collegare i campi dinamici:
    ```html
    <template id="slg-modal-template">

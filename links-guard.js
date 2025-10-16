@@ -19,6 +19,10 @@
 
   const guardNamespace = (window.SafeExternalLinksGuard =
     window.SafeExternalLinksGuard || {});
+  const bootstrapNamespace =
+    typeof window.SafeExternalLinksGuardBootstrap !== "undefined"
+      ? window.SafeExternalLinksGuardBootstrap
+      : null;
   /**
    * Runtime controller responsabile della gestione avanzata del parametro
    * di tracciamento `myclid` (o personalizzato). L'istanza viene inizializzata
@@ -1084,6 +1088,55 @@
   if (!Array.isArray(cfg.excludeSelectors)) cfg.excludeSelectors = [];
   if (!VALID_MODES.has(cfg.mode)) cfg.mode = "strict";
   if (cfg.hoverFeedback !== "tooltip") cfg.hoverFeedback = "title";
+
+  if (!cfg.bootstrap || typeof cfg.bootstrap !== "object") {
+    cfg.bootstrap = {
+      enabled: true,
+      allowlist: [],
+      externalPolicy: {
+        action: "warn",
+        message: cfg.warnMessageDefault || defaultWarnMessage
+      },
+      seo: { enforceAttributes: true, enforceNewTab: cfg.newTab !== false },
+      debug: false
+    };
+  }
+
+  if (!cfg.bootstrap.externalPolicy || typeof cfg.bootstrap.externalPolicy !== "object") {
+    cfg.bootstrap.externalPolicy = {
+      action: "warn",
+      message: cfg.warnMessageDefault || defaultWarnMessage
+    };
+  }
+  if (!cfg.bootstrap.externalPolicy.message) {
+    cfg.bootstrap.externalPolicy.message = cfg.warnMessageDefault || defaultWarnMessage;
+  }
+  if (!cfg.bootstrap.seo || typeof cfg.bootstrap.seo !== "object") {
+    cfg.bootstrap.seo = { enforceAttributes: true, enforceNewTab: cfg.newTab !== false };
+  }
+  if (typeof cfg.bootstrap.seo.enforceNewTab === "undefined") {
+    cfg.bootstrap.seo.enforceNewTab = cfg.newTab !== false;
+  }
+
+  if (bootstrapNamespace && typeof bootstrapNamespace.updateConfig === "function") {
+    try {
+      bootstrapNamespace.updateConfig({
+        enabled: cfg.bootstrap.enabled,
+        allowlist: Array.isArray(cfg.bootstrap.allowlist)
+          ? cfg.bootstrap.allowlist.slice()
+          : [],
+        externalPolicy: { ...cfg.bootstrap.externalPolicy },
+        seo: {
+          enforceAttributes: cfg.bootstrap.seo?.enforceAttributes !== false,
+          enforceNewTab: cfg.newTab !== false
+        },
+        relTokens: Array.isArray(cfg.rel) ? cfg.rel.slice() : undefined,
+        debug: Boolean(cfg.bootstrap.debug)
+      });
+    } catch (errBootstrapConfig) {
+      // Non interrompiamo l'esecuzione principale se il bootstrap rifiuta la configurazione.
+    }
+  }
 
   const configFingerprint =
     typeof computeSettingsFingerprint === "function"
@@ -3283,6 +3336,31 @@ function createMyclidTrackingRuntime(deps) {
   const isHttpLike = (href) => /^(https?:)?\/\//i.test(href);
   const isExternal = (url) => url && url.host.toLowerCase() !== ORIGIN_HOST;
 
+  const allowlistPatterns = Array.isArray(cfg.bootstrap?.allowlist)
+    ? cfg.bootstrap.allowlist
+        .map((pattern) => (typeof pattern === "string" ? pattern.trim().toLowerCase() : ""))
+        .filter(Boolean)
+    : [];
+
+  const matchAllowlistPattern = (host, pattern) => {
+    if (!host || !pattern) {
+      return false;
+    }
+    if (pattern.startsWith("*.") && pattern.length > 2) {
+      const suffix = pattern.slice(1);
+      return host === pattern.slice(2) || host.endsWith(suffix);
+    }
+    return host === pattern;
+  };
+
+  const isAllowlistedHost = (host) => {
+    if (!host || !allowlistPatterns.length) {
+      return false;
+    }
+    const normalized = host.toLowerCase();
+    return allowlistPatterns.some((pattern) => matchAllowlistPattern(normalized, pattern));
+  };
+
   const ensureAttrs = (a) => {
     if (cfg.newTab) {
       a.setAttribute("target", "_blank");
@@ -4510,6 +4588,22 @@ function createMyclidTrackingRuntime(deps) {
     if (!isExternal(url)) { a.dataset.safeLinkGuard = "1"; return null; }
 
     const host = url.host.toLowerCase();
+    if (isAllowlistedHost(host)) { a.dataset.safeLinkGuard = "1"; return null; }
+    if (
+      cfg.bootstrap?.seo?.enforceAttributes !== false &&
+      bootstrapNamespace &&
+      typeof bootstrapNamespace.applySeoAttributes === "function"
+    ) {
+      try {
+        bootstrapNamespace.applySeoAttributes(a);
+      } catch (errApplySeo) {
+        debug.warn(
+          "Bootstrap SEO attributes non applicati",
+          serializeError(errApplySeo) || String(errApplySeo),
+          { scope: "bootstrap" }
+        );
+      }
+    }
     const state = { url, host };
     anchorStates.set(a, state);
     mapAdd(host, a);
@@ -4798,6 +4892,9 @@ function createMyclidTrackingRuntime(deps) {
       }
 
       const host = url.host.toLowerCase();
+      if (isAllowlistedHost(host)) {
+        return;
+      }
       const originKey = url.origin.toLowerCase();
       const hrefKey = url.href.toLowerCase();
       const pathKey = `${originKey}${url.pathname}${url.search}`;
@@ -4851,11 +4948,18 @@ function createMyclidTrackingRuntime(deps) {
     return results;
   };
 
-  const delegatedClickHandler = async (event) => {
+  const delegatedClickHandler = async (event, forwardedAnchor = null) => {
     if (!event) {
       return;
     }
-    const anchor = resolveAnchorFromTarget(event.target);
+    const forwarded = forwardedAnchor ||
+      (event.__slgBootstrapForwarded && event.__slgBootstrapForwarded.anchor);
+    if (!forwardedAnchor && event.__slgBootstrapHandled && forwarded) {
+      delete event.__slgBootstrapForwarded;
+      delete event.__slgBootstrapHandled;
+      return;
+    }
+    const anchor = forwarded || resolveAnchorFromTarget(event.target);
     if (!anchor || anchor.tagName !== "A") {
       return;
     }
@@ -4920,8 +5024,47 @@ function createMyclidTrackingRuntime(deps) {
       );
     }
     processAll(document);
+    let bootstrapForwardActive = false;
+    if (bootstrapNamespace && typeof bootstrapNamespace.forwardTo === "function") {
+      try {
+        bootstrapNamespace.forwardTo((evt, anchor) => {
+          delegatedClickHandler(evt, anchor);
+        });
+        bootstrapForwardActive = true;
+      } catch (errForwardBootstrap) {
+        debug.warn(
+          "Bootstrap forwardTo non disponibile",
+          serializeError(errForwardBootstrap) || String(errForwardBootstrap),
+          { scope: "bootstrap" }
+        );
+      }
+    }
     document.addEventListener("click", delegatedClickHandler, { capture: true, passive: false });
     observer.observe(document.documentElement, { childList: true, subtree: true });
+    if (bootstrapNamespace) {
+      if (bootstrapForwardActive && typeof bootstrapNamespace.forwardTo === "function") {
+        try {
+          bootstrapNamespace.forwardTo(null);
+        } catch (errDisableForward) {
+          debug.warn(
+            "Impossibile disattivare il forward del bootstrap",
+            serializeError(errDisableForward) || String(errDisableForward),
+            { scope: "bootstrap" }
+          );
+        }
+      }
+      if (typeof bootstrapNamespace.release === "function") {
+        try {
+          bootstrapNamespace.release();
+        } catch (errReleaseBootstrap) {
+          debug.warn(
+            "Impossibile rimuovere il listener bootstrap",
+            serializeError(errReleaseBootstrap) || String(errReleaseBootstrap),
+            { scope: "bootstrap" }
+          );
+        }
+      }
+    }
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();

@@ -1,4 +1,49 @@
 # Changelog
+# Changelog
+## [1.12.5] - 2025-12-03
+### Fixed
+- Evitata la corruzione dell'HTML generato da CMS come Sngine sostituendo l'uso di `DOMDocument` con un parser lineare degli anchor nel bootstrap PHP (`app/Services/Markup/ExternalLinkAttributeEnforcer.php`), così gli attributi `target`/`rel` vengono applicati senza alterare spaziature o nodi adiacenti.
+
+### Changed
+- Test CLI `tests/unit/php_bootstrap_test.php` ampliato con casi realistici (markup annidato e link relativi) per prevenire regressioni sulla sanificazione server-side.
+
+## [1.12.4] - 2025-12-02
+### Added
+- Guida dedicata all'integrazione di Safe External Links Guard in Sngine direttamente nel `README.md`, con istruzioni per il bootstrap PHP e l'inclusione degli asset.
+
+### Changed
+- `SOFTWARE_REPORT.md` aggiornato alla versione 1.12.4 con la descrizione della nuova documentazione per Sngine.
+
+## [1.12.3] - 2025-12-01
+### Fixed
+- Ripristinato `bootstrap.php` nella root del pacchetto per reindirizzare automaticamente verso `app/bootstrap.php`, evitando errori di include sui deployment che puntavano al percorso storico (`assets/app/safe_external_links_guard/bootstrap.php`).
+
+### Changed
+- Aggiornata la documentazione (`README.md`) con la nota sul file di compatibilità del bootstrap PHP e le istruzioni per gli hosting legacy.
+## [1.12.2] - 2025-11-30
+### Added
+- Bootstrap PHP (`app/bootstrap.php`) che intercetta l'output, imposta `target="_blank"` e applica `rel="noopener"`/`rel="noreferrer"` ai link esterni con configurazione runtime e supporto al flush programmato.
+- Test CLI `tests/unit/php_bootstrap_test.php` che verifica il bootstrap server-side (token `rel`, allowlist, modalità disabilitata).
+
+### Changed
+- `App\Services\Markup\ExternalLinkAttributeEnforcer` accetta ora token `rel` personalizzati per supportare scenari che richiedono solo `noopener` o `noreferrer`.
+- Documentazione (`README.md`) aggiornata con istruzioni per il bootstrap PHP e la configurazione degli attributi `rel` lato server.
+
+## [1.12.1] - 2025-11-29
+### Fixed
+- Il bootstrap inline (`resources/bootstrap-inline.min.js`) rimuove ora il proprio listener di cattura dopo l'inizializzazione di `links-guard.js`, impedendo che blocchi i click sui link esterni una volta che l'handler principale è pronto.
+
+## [1.12.0] - 2025-11-28
+### Added
+- Bootstrap inline (`resources/bootstrap-inline.min.js`) inferiore a 2 KB con intercettazione immediata dei click e hand-off automatico verso `links-guard.js`.
+- Servizio PHP `App\Services\Markup\ExternalLinkAttributeEnforcer` per applicare `target="_blank"` e `rel="noopener noreferrer nofollow"` a build-time o in fase di rendering server-side.
+- Test unitario `bootstrap_guard_test.js` dedicato al bootstrap (SEO enforcement, allowlist e forward degli eventi).
+
+### Changed
+- `links-guard.js` integra il bootstrap tramite `SafeExternalLinksGuardBootstrap.forwardTo/release`, aggiunge l'allowlist di dominio e applica gli attributi SEO anche agli anchor aggiunti dinamicamente.
+- `links-guard.settings.js` introduce la sezione `bootstrap` (enabled, allowlist, externalPolicy, seo) esponendo gli attributi `data-bootstrap-*` e sincronizzando il fingerprint delle impostazioni.
+- Documentazione aggiornata (`README.md`) con istruzioni per il bootstrap inline e la sanitizzazione server-side.
+
 ## [1.11.0] - 2025-11-27
 ### Added
 - Runtime avanzato `createMyclidTrackingRuntime` in `links-guard.js` con matrice di cattura configurabile, sampling, allowlist/blocklist, rispetto Do Not Track, retry e supporto HMAC opzionale, completo di API pubbliche (`init`, `enable`, `disable`, `setMatrix`, `getSettings`, `onChange`).
