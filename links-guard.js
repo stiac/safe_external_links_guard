@@ -26,6 +26,16 @@
 
   const FALLBACK_UI_TEXT = {
     "messages.defaultWarn": FALLBACK_WARN_MESSAGE,
+    "messages.denyDefault": "Domain blocked. Proceed with caution.",
+    "messages.endpointUnavailable": "Policy resolver temporarily unavailable. Proceed with caution.",
+    "messages.timeout": "The request to verify this domain timed out. Please try again.",
+    "messages.error": "An error occurred while verifying this domain. Proceed with caution.",
+    "messages.missingHost": "Host is missing from the request.",
+    "messages.policy.phishing": "Domain reported for phishing.",
+    "messages.policy.ruBlock": "All .ru sub-domains are blocked.",
+    "messages.policy.github": "Verified GitHub repository.",
+    "messages.policy.officialSubdomain": "Official tuo-sito.it sub-domain.",
+    "messages.policy.beta": "Beta environment: double-check before continuing.",
     "modal.title": "Check that this link is safe",
     "modal.closeLabel": "Close",
     "modal.closeTitle": "Close",
@@ -46,6 +56,145 @@
       }
       return match;
     });
+  };
+
+  const isPlainObject = (value) =>
+    value != null && typeof value === "object" && !Array.isArray(value);
+
+  const normalizeMessageDescriptor = (value) => {
+    if (!value) return null;
+    if (typeof value === "string") {
+      return { text: value };
+    }
+    if (!isPlainObject(value)) {
+      return null;
+    }
+    const descriptor = {};
+    const keyCandidate =
+      typeof value.key === "string"
+        ? value.key
+        : typeof value.messageKey === "string"
+        ? value.messageKey
+        : null;
+    if (keyCandidate && keyCandidate.trim()) {
+      descriptor.key = keyCandidate.trim();
+    }
+    const fallbackCandidate =
+      typeof value.fallbackKey === "string"
+        ? value.fallbackKey
+        : typeof value.messageFallbackKey === "string"
+        ? value.messageFallbackKey
+        : typeof value.fallback === "string"
+        ? value.fallback
+        : null;
+    if (fallbackCandidate && fallbackCandidate.trim()) {
+      descriptor.fallbackKey = fallbackCandidate.trim();
+    }
+    const textCandidate =
+      typeof value.text === "string"
+        ? value.text
+        : typeof value.message === "string"
+        ? value.message
+        : typeof value.default === "string"
+        ? value.default
+        : typeof value.fallbackText === "string"
+        ? value.fallbackText
+        : null;
+    if (textCandidate) {
+      descriptor.text = textCandidate;
+    }
+    const replacementsSource =
+      value.replacements ||
+      value.params ||
+      value.variables ||
+      value.messageReplacements;
+    if (isPlainObject(replacementsSource)) {
+      descriptor.replacements = replacementsSource;
+    }
+    return Object.keys(descriptor).length ? descriptor : null;
+  };
+
+  const extractMessageDescriptorFromResponse = (response) => {
+    if (!response) {
+      return null;
+    }
+    if (typeof response === "string") {
+      return { text: response };
+    }
+    if (!isPlainObject(response)) {
+      return null;
+    }
+    const base = normalizeMessageDescriptor(response.message) || {};
+    const descriptor = { ...base };
+    const responseKey =
+      typeof response.messageKey === "string"
+        ? response.messageKey
+        : typeof response.message_key === "string"
+        ? response.message_key
+        : null;
+    if (responseKey && !descriptor.key) {
+      descriptor.key = responseKey;
+    }
+    const responseFallback =
+      typeof response.messageFallbackKey === "string"
+        ? response.messageFallbackKey
+        : typeof response.message_fallback_key === "string"
+        ? response.message_fallback_key
+        : null;
+    if (responseFallback && !descriptor.fallbackKey) {
+      descriptor.fallbackKey = responseFallback;
+    }
+    if (!descriptor.text && typeof response.message === "string") {
+      descriptor.text = response.message;
+    }
+    const responseReplacements =
+      response.messageReplacements || response.message_replacements;
+    if (!descriptor.replacements && isPlainObject(responseReplacements)) {
+      descriptor.replacements = responseReplacements;
+    }
+    return Object.keys(descriptor).length ? descriptor : null;
+  };
+
+  const translateMessageDescriptor = (descriptor, fallback) => {
+    const normalized = normalizeMessageDescriptor(descriptor);
+    const replacements =
+      normalized && isPlainObject(normalized.replacements)
+        ? normalized.replacements
+        : null;
+    const chain = [];
+    if (normalized?.key) {
+      chain.push(normalized.key);
+    }
+    if (
+      normalized?.fallbackKey &&
+      normalized.fallbackKey !== normalized.key
+    ) {
+      chain.push(normalized.fallbackKey);
+    }
+    if (normalized?.text) {
+      chain.push(normalized.text);
+    }
+    if (fallback) {
+      chain.push(fallback);
+    }
+    if (!chain.length) {
+      return fallback || "";
+    }
+    const i18n = guardNamespace.i18n;
+    if (i18n && typeof i18n.t === "function") {
+      return i18n.t(chain, replacements);
+    }
+    for (let i = 0; i < chain.length; i += 1) {
+      const candidate = chain[i];
+      if (typeof candidate === "string" && FALLBACK_UI_TEXT[candidate]) {
+        return applyTemplate(FALLBACK_UI_TEXT[candidate], replacements);
+      }
+    }
+    const last = chain[chain.length - 1];
+    if (typeof last === "string") {
+      return applyTemplate(last, replacements);
+    }
+    return fallback || "";
   };
 
   const translate = (key, replacements) => {
@@ -107,6 +256,7 @@
   };
 
   let defaultWarnMessage = translate("messages.defaultWarn");
+  let defaultDenyMessage = translate("messages.denyDefault");
   const TEXT_NODE = typeof Node !== "undefined" ? Node.TEXT_NODE : 3;
 
   /**
@@ -586,14 +736,21 @@
           store.delete(host);
           return null;
         }
+        const normalizedMessage = normalizeMessageDescriptor(entry.message);
+        if (normalizedMessage !== entry.message) {
+          entry.message = normalizedMessage;
+          store.set(host, entry);
+          persist();
+        }
         return entry;
       },
       set(host, action, ttl, message) {
+        const descriptor = normalizeMessageDescriptor(message);
         store.set(host, {
           action,
           ttl: Number.isFinite(ttl) ? ttl : config.cacheTtlSec,
           ts: nowSec(),
-          message: message || null
+          message: descriptor
         });
         persist();
       },
@@ -692,8 +849,8 @@
     return false;
   };
 
-  const disableLink = (a, reason = "Dominio bloccato", hostForIndex = null) => {
-    const message = reason || "Dominio bloccato";
+  const disableLink = (a, reason = null, hostForIndex = null) => {
+    const message = reason || defaultDenyMessage;
     clearHoverMessage(a, null, true);
     if (cfg.removeNode) {
       const span = document.createElement("span");
@@ -834,7 +991,7 @@
         host,
         fallback,
         Math.min(300, cfg.cacheTtlSec),
-        "Endpoint non disponibile. Procedi con cautela."
+        { key: "messages.endpointUnavailable" }
       );
       return fallback;
     }
@@ -855,7 +1012,7 @@
       const json = await res.json();
       const action = normalizeAction(json?.action);
       const ttl = Number.isFinite(json?.ttl) ? json.ttl : cfg.cacheTtlSec;
-      const message = typeof json?.message === "string" ? json.message : null;
+      const message = extractMessageDescriptorFromResponse(json);
       policyCache.set(host, action, ttl, message);
       return action;
     } catch (e) {
@@ -873,8 +1030,8 @@
         fallback,
         Math.min(300, cfg.cacheTtlSec),
         isTimeout
-          ? "Timeout durante la verifica del dominio. Procedi con cautela."
-          : "Errore durante la verifica del dominio. Procedi con cautela."
+          ? { key: "messages.timeout" }
+          : { key: "messages.error" }
       );
       return fallback;
     }
@@ -889,13 +1046,17 @@
     const set = anchorsByHost.get(host);
     if (!set) return;
     const cached = policyCache.get(host);
-    const message = cached?.message || null;
-    const warnMessage = message || cfg.warnMessageDefault;
+    const messageDescriptor = cached ? cached.message : null;
+    const warnFallback = cfg.warnMessageDefault || defaultWarnMessage;
+    const warnMessage =
+      translateMessageDescriptor(messageDescriptor, warnFallback) || warnFallback;
+    const denyReason =
+      translateMessageDescriptor(messageDescriptor, defaultDenyMessage) ||
+      defaultDenyMessage;
     for (const node of Array.from(set)) {
       if (!node.isConnected) { set.delete(node); continue; }
       if (action === "deny") {
-        const reason = message || "Dominio bloccato";
-        disableLink(node, reason, host);
+        disableLink(node, denyReason, host);
       } else if (action === "allow") {
         if (node.tagName === "A") {
           ensureAttrs(node);
@@ -966,7 +1127,8 @@
   let modalRoot = null;
   let modalElements = null;
   let pendingUrl = null;
-  let pendingMessage = null;
+  let pendingMessageDescriptor = null;
+  let pendingMessage = defaultWarnMessage;
   let lastFocused = null;
   let scrollLockState = null;
   let modalContentRenderer = null;
@@ -1062,21 +1224,30 @@
         modalElements.hostLabelTextNode.nodeValue = `${hostLabelText} `;
       }
     }
-    if (
-      modalElements.message &&
-      (!pendingMessage || pendingMessage === defaultWarnMessage)
-    ) {
-      modalElements.message.textContent = defaultWarnMessage;
+    if (modalElements.message) {
+      if (!pendingMessageDescriptor && (!pendingMessage || pendingMessage === defaultWarnMessage)) {
+        modalElements.message.textContent = defaultWarnMessage;
+      } else if (pendingMessage) {
+        modalElements.message.textContent = pendingMessage;
+      }
     }
   };
 
   const handleLanguageChange = () => {
-    const previousDefault = defaultWarnMessage;
+    const previousWarnDefault = defaultWarnMessage;
     defaultWarnMessage = translate("messages.defaultWarn");
-    if (!cfg.warnMessageDefault || cfg.warnMessageDefault === previousDefault) {
+    defaultDenyMessage = translate("messages.denyDefault");
+    if (!cfg.warnMessageDefault || cfg.warnMessageDefault === previousWarnDefault) {
       cfg.warnMessageDefault = defaultWarnMessage;
     }
-    if (!pendingMessage || pendingMessage === previousDefault) {
+    if (pendingMessageDescriptor) {
+      const fallback = cfg.warnMessageDefault || defaultWarnMessage;
+      pendingMessage =
+        translateMessageDescriptor(pendingMessageDescriptor, fallback) || fallback;
+      if (modalElements?.message) {
+        modalElements.message.textContent = pendingMessage;
+      }
+    } else if (!pendingMessage || pendingMessage === previousWarnDefault) {
       pendingMessage = defaultWarnMessage;
       if (modalElements?.message) {
         modalElements.message.textContent = defaultWarnMessage;
@@ -1303,7 +1474,8 @@
       document.body.classList.remove("slg-no-scroll");
       releaseScrollLockCompensation();
       pendingUrl = null;
-      pendingMessage = null;
+      pendingMessageDescriptor = null;
+      pendingMessage = defaultWarnMessage;
       if (lastFocused && lastFocused.focus) lastFocused.focus();
     };
 
@@ -1395,9 +1567,12 @@
 
   const showModal = (url, message) => {
     ensureModal();
-    applyModalTranslations();
     pendingUrl = url;
-    pendingMessage = message || cfg.warnMessageDefault || defaultWarnMessage;
+    pendingMessageDescriptor = normalizeMessageDescriptor(message);
+    const fallback = cfg.warnMessageDefault || defaultWarnMessage;
+    pendingMessage =
+      translateMessageDescriptor(pendingMessageDescriptor, fallback) || fallback;
+    applyModalTranslations();
     if (modalElements?.host) {
       modalElements.host.textContent = url.host;
     }
@@ -1442,11 +1617,13 @@
 
     // Se già in cache come DENY, blocca SUBITO (e sostituisci <a>→<span> se richiesto)
     const cached = policyCache.get(host);
-    if (cached && cached.action === "deny") {
-      const denyMsg = cached.message || "Dominio bloccato";
-      disableLink(a, denyMsg, host);
-      return;
-    }
+      if (cached && cached.action === "deny") {
+        const denyMsg =
+          translateMessageDescriptor(cached.message, defaultDenyMessage) ||
+          defaultDenyMessage;
+        disableLink(a, denyMsg, host);
+        return;
+      }
 
     // Altrimenti impone attributi e chiede la policy in background
     ensureAttrs(a);

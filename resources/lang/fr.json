@@ -1,6 +1,18 @@
 {
   "messages": {
-    "defaultWarn": "Ce lien n'est pas vérifié et peut partager vos données de navigation avec un site tiers. Avant de continuer, assurez-vous que la destination est fiable."
+    "defaultWarn": "Ce lien n'est pas vérifié et peut partager vos données de navigation avec un site tiers. Avant de continuer, assurez-vous que la destination est fiable.",
+    "denyDefault": "Domaine bloqué. Procédez avec prudence.",
+    "endpointUnavailable": "Le résolveur de politiques est temporairement indisponible. Procédez avec prudence.",
+    "timeout": "La vérification du domaine a expiré. Procédez avec prudence.",
+    "error": "Une erreur est survenue lors de la vérification du domaine. Procédez avec prudence.",
+    "missingHost": "L'hôte est manquant dans la requête.",
+    "policy": {
+      "phishing": "Domaine signalé pour phishing.",
+      "ruBlock": "Tous les sous-domaines .ru sont bloqués.",
+      "github": "Dépôt GitHub vérifié.",
+      "officialSubdomain": "Sous-domaine officiel de tuo-sito.it.",
+      "beta": "Environnement bêta : vérifiez avant de continuer."
+    }
   },
   "modal": {
     "title": "Vérifiez que ce lien est sûr",

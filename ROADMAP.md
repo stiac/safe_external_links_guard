@@ -4,6 +4,7 @@
 - [ ] Aggiungere test end-to-end che verifichino il bootstrap della modale e il caricamento dinamico delle traduzioni (incluso il nuovo preload asincrono).
 - [ ] Introdurre un controllo CI che esegua linting e bundle check sugli script distribuiti.
 - [ ] Documentare scenari di fallback per `loadTranslations()` quando il fetch non è disponibile (es. ambienti legacy).
+- [ ] Coprire con test automatici la serializzazione di `messageKey`/`messageFallbackKey` nel resolver PHP per garantire coerenza con i dizionari multilingua.
 
 ## Obiettivi a Medio Termine
 - [ ] Semplificare la gestione dei template della modale consentendo override tramite configurazione JSON.

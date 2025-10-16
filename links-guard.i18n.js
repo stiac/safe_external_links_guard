@@ -35,7 +35,19 @@
     en: {
       messages: {
         defaultWarn:
-          'This link is not verified and may share your browsing data with a third-party site. Make sure the destination is trustworthy before continuing.'
+          'This link is not verified and may share your browsing data with a third-party site. Make sure the destination is trustworthy before continuing.',
+        denyDefault: 'This domain is blocked. Proceed with caution.',
+        endpointUnavailable: 'Policy resolver temporarily unavailable. Proceed with caution.',
+        timeout: 'The request to verify this domain timed out. Proceed with caution.',
+        error: 'An error occurred while verifying this domain. Proceed with caution.',
+        missingHost: 'Host is missing from the request.',
+        policy: {
+          phishing: 'Domain reported for phishing.',
+          ruBlock: 'All .ru sub-domains are blocked.',
+          github: 'Verified GitHub repository.',
+          officialSubdomain: 'Official tuo-sito.it sub-domain.',
+          beta: 'Beta environment: verify before continuing.'
+        }
       },
       modal: {
         title: 'Check that this link is safe',
@@ -53,7 +65,19 @@
     it: {
       messages: {
         defaultWarn:
-          'Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile.'
+          'Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile.',
+        denyDefault: 'Dominio bloccato. Procedi con cautela.',
+        endpointUnavailable: 'Resolver delle policy temporaneamente non disponibile. Procedi con cautela.',
+        timeout: 'La verifica del dominio è scaduta. Procedi con cautela.',
+        error: 'Si è verificato un errore durante la verifica del dominio. Procedi con cautela.',
+        missingHost: 'Host mancante nella richiesta.',
+        policy: {
+          phishing: 'Dominio segnalato per phishing.',
+          ruBlock: 'Tutti i sottodomini .ru sono bloccati.',
+          github: 'Repository GitHub verificato.',
+          officialSubdomain: 'Sottodominio ufficiale tuo-sito.it.',
+          beta: 'Ambiente beta: verifica prima di procedere.'
+        }
       },
       modal: {
         title: 'Controlla che questo link sia sicuro',
@@ -71,7 +95,19 @@
     es: {
       messages: {
         defaultWarn:
-          'Este enlace no está verificado y puede compartir tus datos de navegación con un sitio de terceros. Antes de continuar, asegúrate de que el destino sea de confianza.'
+          'Este enlace no está verificado y puede compartir tus datos de navegación con un sitio de terceros. Antes de continuar, asegúrate de que el destino sea de confianza.',
+        denyDefault: 'Dominio bloqueado. Procede con precaución.',
+        endpointUnavailable: 'El resolvedor de políticas no está disponible temporalmente. Procede con precaución.',
+        timeout: 'La verificación del dominio superó el tiempo límite. Procede con precaución.',
+        error: 'Se produjo un error al verificar el dominio. Procede con precaución.',
+        missingHost: 'Falta el host en la solicitud.',
+        policy: {
+          phishing: 'Dominio reportado por phishing.',
+          ruBlock: 'Se bloquean todos los subdominios .ru.',
+          github: 'Repositorio de GitHub verificado.',
+          officialSubdomain: 'Subdominio oficial de tuo-sito.it.',
+          beta: 'Entorno beta: verifica antes de continuar.'
+        }
       },
       modal: {
         title: 'Comprueba que este enlace sea seguro',
@@ -89,7 +125,19 @@
     fr: {
       messages: {
         defaultWarn:
-          "Ce lien n'est pas vérifié et peut partager vos données de navigation avec un site tiers. Avant de continuer, assurez-vous que la destination est fiable."
+          "Ce lien n'est pas vérifié et peut partager vos données de navigation avec un site tiers. Avant de continuer, assurez-vous que la destination est fiable.",
+        denyDefault: 'Domaine bloqué. Procédez avec prudence.',
+        endpointUnavailable: 'Le résolveur de politiques est temporairement indisponible. Procédez avec prudence.',
+        timeout: 'La vérification du domaine a expiré. Procédez avec prudence.',
+        error: "Une erreur est survenue lors de la vérification du domaine. Procédez avec prudence.",
+        missingHost: "L'hôte est manquant dans la requête.",
+        policy: {
+          phishing: 'Domaine signalé pour phishing.',
+          ruBlock: 'Tous les sous-domaines .ru sont bloqués.',
+          github: 'Dépôt GitHub vérifié.',
+          officialSubdomain: 'Sous-domaine officiel de tuo-sito.it.',
+          beta: 'Environnement bêta : vérifiez avant de continuer.'
+        }
       },
       modal: {
         title: 'Vérifiez que ce lien est sûr',
@@ -107,7 +155,19 @@
     de: {
       messages: {
         defaultWarn:
-          'Dieser Link ist nicht verifiziert und könnte Ihre Browserdaten mit einer Drittseite teilen. Stellen Sie vor dem Fortfahren sicher, dass das Ziel vertrauenswürdig ist.'
+          'Dieser Link ist nicht verifiziert und könnte Ihre Browserdaten mit einer Drittseite teilen. Stellen Sie vor dem Fortfahren sicher, dass das Ziel vertrauenswürdig ist.',
+        denyDefault: 'Domain blockiert. Bitte vorsichtig fortfahren.',
+        endpointUnavailable: 'Der Policy-Resolver ist vorübergehend nicht verfügbar. Bitte vorsichtig fortfahren.',
+        timeout: 'Die Domainprüfung hat das Zeitlimit überschritten. Bitte vorsichtig fortfahren.',
+        error: 'Beim Überprüfen der Domain ist ein Fehler aufgetreten. Bitte vorsichtig fortfahren.',
+        missingHost: 'Host in der Anfrage fehlt.',
+        policy: {
+          phishing: 'Domain wegen Phishing gemeldet.',
+          ruBlock: 'Alle .ru-Subdomains werden blockiert.',
+          github: 'Verifiziertes GitHub-Repository.',
+          officialSubdomain: 'Offizieller tuo-sito.it-Subdomain.',
+          beta: 'Beta-Umgebung: vor dem Fortfahren prüfen.'
+        }
       },
       modal: {
         title: 'Prüfen Sie, ob dieser Link sicher ist',
@@ -125,7 +185,19 @@
     pt: {
       messages: {
         defaultWarn:
-          'Esta ligação não está verificada e pode partilhar os seus dados de navegação com um site de terceiros. Antes de continuar, confirme que o destino é de confiança.'
+          'Esta ligação não está verificada e pode partilhar os seus dados de navegação com um site de terceiros. Antes de continuar, confirme que o destino é de confiança.',
+        denyDefault: 'Domínio bloqueado. Proceda com cautela.',
+        endpointUnavailable: 'O resolvedor de políticas está temporariamente indisponível. Proceda com cautela.',
+        timeout: 'A verificação do domínio expirou. Proceda com cautela.',
+        error: 'Ocorreu um erro ao verificar o domínio. Proceda com cautela.',
+        missingHost: 'Host ausente na solicitação.',
+        policy: {
+          phishing: 'Domínio sinalizado por phishing.',
+          ruBlock: 'Todos os subdomínios .ru estão bloqueados.',
+          github: 'Repositório GitHub verificado.',
+          officialSubdomain: 'Subdomínio oficial de tuo-sito.it.',
+          beta: 'Ambiente beta: verifique antes de prosseguir.'
+        }
       },
       modal: {
         title: 'Confirme que esta ligação é segura',
@@ -143,7 +215,19 @@
     'pt-br': {
       messages: {
         defaultWarn:
-          'Este link não está verificado e pode compartilhar seus dados de navegação com um site de terceiros. Antes de continuar, confirme que o destino é confiável.'
+          'Este link não está verificado e pode compartilhar seus dados de navegação com um site de terceiros. Antes de continuar, confirme que o destino é confiável.',
+        denyDefault: 'Domínio bloqueado. Prossiga com cautela.',
+        endpointUnavailable: 'O resolvedor de políticas está temporariamente indisponível. Prossiga com cautela.',
+        timeout: 'A verificação do domínio excedeu o tempo limite. Prossiga com cautela.',
+        error: 'Ocorreu um erro ao verificar o domínio. Prossiga com cautela.',
+        missingHost: 'Host ausente na solicitação.',
+        policy: {
+          phishing: 'Domínio sinalizado por phishing.',
+          ruBlock: 'Todos os subdomínios .ru estão bloqueados.',
+          github: 'Repositório do GitHub verificado.',
+          officialSubdomain: 'Subdomínio oficial de tuo-sito.it.',
+          beta: 'Ambiente beta: verifique antes de continuar.'
+        }
       },
       modal: {
         title: 'Verifique se este link é seguro',
@@ -161,7 +245,19 @@
     ru: {
       messages: {
         defaultWarn:
-          'Эта ссылка не проверена и может передавать ваши данные просмотра стороннему сайту. Прежде чем продолжить, убедитесь, что назначение надежно.'
+          'Эта ссылка не проверена и может передавать ваши данные просмотра стороннему сайту. Прежде чем продолжить, убедитесь, что назначение надежно.',
+        denyDefault: 'Домен заблокирован. Действуйте с осторожностью.',
+        endpointUnavailable: 'Решатель политик временно недоступен. Действуйте с осторожностью.',
+        timeout: 'Проверка домена превысила время ожидания. Действуйте с осторожностью.',
+        error: 'Произошла ошибка при проверке домена. Действуйте с осторожностью.',
+        missingHost: 'В запросе отсутствует хост.',
+        policy: {
+          phishing: 'Домен отмечен как фишинговый.',
+          ruBlock: 'Все поддомены .ru заблокированы.',
+          github: 'Проверенный репозиторий GitHub.',
+          officialSubdomain: 'Официальный поддомен tuo-sito.it.',
+          beta: 'Тестовая среда: проверьте перед продолжением.'
+        }
       },
       modal: {
         title: 'Проверьте, что эта ссылка безопасна',

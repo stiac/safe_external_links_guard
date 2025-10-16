@@ -1,6 +1,18 @@
 {
   "messages": {
-    "defaultWarn": "Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile."
+    "defaultWarn": "Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile.",
+    "denyDefault": "Dominio bloccato. Procedi con cautela.",
+    "endpointUnavailable": "Resolver delle policy temporaneamente non disponibile. Procedi con cautela.",
+    "timeout": "La verifica del dominio è scaduta. Procedi con cautela.",
+    "error": "Si è verificato un errore durante la verifica del dominio. Procedi con cautela.",
+    "missingHost": "Host mancante nella richiesta.",
+    "policy": {
+      "phishing": "Dominio segnalato per phishing.",
+      "ruBlock": "Tutti i sottodomini .ru sono bloccati.",
+      "github": "Repository GitHub verificato.",
+      "officialSubdomain": "Sottodominio ufficiale tuo-sito.it.",
+      "beta": "Ambiente beta: verifica prima di procedere."
+    }
   },
   "modal": {
     "title": "Controlla che questo link sia sicuro",

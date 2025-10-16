@@ -76,6 +76,30 @@ const run = async () => {
     'Supported language should resolve translation keys from the matching bundle'
   );
 
+  i18n.setLanguage('en');
+  translator = i18n.getTranslator();
+  assert.strictEqual(
+    translator.t('messages.denyDefault'),
+    'This domain is blocked. Proceed with caution.',
+    'New deny default message should be available in English'
+  );
+
+  i18n.setLanguage('it');
+  translator = i18n.getTranslator();
+  assert.strictEqual(
+    translator.t('messages.policy.beta'),
+    'Ambiente beta: verifica prima di procedere.',
+    'Italian bundle should expose policy-specific warning messages'
+  );
+
+  i18n.setLanguage('en');
+  translator = i18n.getTranslator();
+  assert.strictEqual(
+    translator.t(['messages.policy.unknown', 'Fallback text']),
+    'Fallback text',
+    'Translator should fallback to raw text when keys are missing'
+  );
+
   i18n.setLanguage('zh-CN');
   translator = i18n.getTranslator();
   assert.strictEqual(
