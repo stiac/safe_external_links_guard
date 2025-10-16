@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.8.4] - 2025-11-16
+### Fixed
+- Il parametro di tracciamento viene ora applicato direttamente all'attributo `href` dei link esterni quando il tracciamento è attivo, così anche aperture con modificatori da tastiera, pulsante centrale o copia dell'indirizzo usano l'URL arricchito.
+
 ## [1.8.3] - 2025-11-15
 ### Added
 - Sorgenti di rilevazione aggiuntive in `links-guard.i18n.js` (storage persistenti, attributi HTML, meta `content-language`,

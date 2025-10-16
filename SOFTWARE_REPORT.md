@@ -2,16 +2,16 @@
 
 ## Informazioni Generali
 - **Progetto:** Safe External Links Guard
-- **Versione:** 1.8.3
-- **Data:** 2025-11-15
+- **Versione:** 1.8.4
+- **Data:** 2025-11-16
 - **Autore aggiornamento:** AI Development Assistant
 
 ## Stato Moduli
 | Modulo | Stato | Note |
 | --- | --- | --- |
-| Gestione modale (links-guard.js) | Aggiornato | Aggiunto tracciamento opzionale dei click con parametro personalizzato e pixel JSON con fallback sendBeacon/immagine.
+| Gestione modale (links-guard.js) | Aggiornato | Aggiunto tracciamento opzionale dei click con parametro personalizzato e pixel JSON con fallback sendBeacon/immagine. Sincronizzato inoltre l'attributo `href` dei link tracciati per coprire aperture modificate e copie dell'indirizzo.
 | Localizzazione (links-guard.i18n.js) | Aggiornato | Ampliate le fonti di rilevazione (storage, attributi HTML, locale Intl) e migliorata la normalizzazione dei codici con gestione dei quality value.
-| Documentazione | Aggiornata | README, CHANGELOG, VERSION, ROADMAP e report allineati alla release 1.8.3 con esempi di detection multilivello.
+| Documentazione | Aggiornata | README, CHANGELOG, VERSION, ROADMAP e report allineati alla release 1.8.4 con esempi di detection multilivello.
 | Configurazione (links-guard.settings.js) | Aggiornato | Nuovi flag `trackingEnabled`, `trackingParameter`, `trackingPixelEndpoint`, `trackingIncludeMetadata` con override `data-*`.
 
 ## Attività Recenti
@@ -21,6 +21,8 @@
 | 2025-11-13 | AI Development Assistant | Correzione della riscrittura degli URL di tracciamento con preservazione di query string e hash, nuovi test automatici e allineamento documentale alla release 1.8.1. | 1.0 |
 | 2025-11-14 | AI Development Assistant | Fix della detection linguistica per le varianti italiane, rifinitura del fallback regionale, aggiornamento test e documentazione di esempio. | 0.5 |
 | 2025-11-15 | AI Development Assistant | Hardening del rilevamento lingua con lettura da storage, attributi HTML e locale Intl, nuovi test di regressione e documentazione aggiornata. | 0.7 |
+| 2025-11-16 | AI Development Assistant | Sincronizzazione del parametro di tracciamento con l'attributo `href` per supportare aperture modificate, aggiornamento documentazione e versione 1.8.4. | 0.4 |
+
 
 ## Rischi e Note Tecniche
 - Validare in staging il flusso di consenso prima di abilitare `trackingEnabled`, verificando che il parametro personalizzato non interferisca con redirect esistenti.
