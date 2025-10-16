@@ -1787,9 +1787,28 @@
     applyModalTranslations();
   };
 
-  if (guardNamespace.i18n && typeof guardNamespace.i18n.onLanguageChange === "function") {
-    guardNamespace.i18n.onLanguageChange(handleLanguageChange);
+  const subscribeToLanguageChanges = () => {
+    if (!guardNamespace.i18n || typeof guardNamespace.i18n.onLanguageChange !== "function") {
+      return null;
+    }
+    return guardNamespace.i18n.onLanguageChange(handleLanguageChange);
+  };
+
+  let unsubscribeLanguageChange = subscribeToLanguageChanges();
+
+  if (!unsubscribeLanguageChange) {
+    const readyQueueKey = "__i18nReadyQueue";
+    const queue = guardNamespace[readyQueueKey] || [];
+    queue.push((i18nApi) => {
+      if (!i18nApi || typeof i18nApi.onLanguageChange !== "function") {
+        return;
+      }
+      unsubscribeLanguageChange = i18nApi.onLanguageChange(handleLanguageChange);
+      handleLanguageChange();
+    });
+    guardNamespace[readyQueueKey] = queue;
   }
+
   handleLanguageChange();
 
   /**

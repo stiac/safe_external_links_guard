@@ -1,4 +1,12 @@
 # Changelog
+## [1.9.4] - 2025-11-21
+### Added
+- Test unitario `i18n_ready_queue_test.js` che verifica l'esecuzione della coda di bootstrap e la consegna della lingua iniziale ai listener registrati prima del caricamento del modulo.
+
+### Fixed
+- Agganciata automaticamente la localizzazione quando `links-guard.js` viene caricato prima del modulo i18n, sfruttando la nuova coda `SafeExternalLinksGuard.__i18nReadyQueue` per notificare immediatamente i listener registrati e prevenire flash di testi in inglese.
+- Gestione robusta degli script caricati in ordine asincrono con log sicuro degli errori della coda, evitando che eccezioni silenziose disattivino le traduzioni.
+
 ## [1.9.3] - 2025-11-20
 ### Added
 - Heuristica `host` in `links-guard.i18n.js` con mappe dedicate ai ccTLD e ai sottodomini multilingua per dedurre la lingua quando il browser oscura le proprie preferenze.
