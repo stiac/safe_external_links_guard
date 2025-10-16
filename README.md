@@ -1,6 +1,6 @@
 # Safe External Links Guard
 
-**Versione:** 1.7.0
+**Versione:** 1.7.1
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
