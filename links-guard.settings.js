@@ -12,17 +12,17 @@
     timeoutMs: 900, // Tempo massimo (ms) della fetch. Modificabile con `data-timeout` o override JS.
     cacheTtlSec: 3600, // TTL della cache client (s). Configurabile con `data-cache-ttl` e sostituibile dal campo `ttl` dell'API.
     mode: "strict", // Modalità operative supportate (`strict` / `warn` / `soft`). Selezionabile con `data-mode` o override JS.
-    removeNode: false, // Gestione link `deny`: `true` trasforma <a> in <span>. Controllabile tramite `data-remove-node`.
-    showCopyButton: true, // Pulsante "Copia link" nella modale. Nascondilo con `data-show-copy-button="false"`.
-    hoverFeedback: "title", // Varianti feedback hover: `title` (tooltip nativo) o `tooltip` (UI custom). Cambiabile con `data-hover-feedback`.
+    removeNode: true, // Gestione link `deny`: `true` trasforma <a> in <span>. Controllabile tramite `data-remove-node`.
+    showCopyButton: false, // Pulsante "Copia link" nella modale. Nascondilo con `data-show-copy-button="false"`.
+    hoverFeedback: "tooltip", // Varianti feedback hover: `title` (tooltip nativo) o `tooltip` (UI custom). Cambiabile con `data-hover-feedback`.
     rel: ["noopener", "noreferrer", "nofollow"], // Attributi di sicurezza aggiunti. Override solo via `SafeExternalLinksGuard.buildSettings` manuale.
     newTab: true, // Imposta `target="_blank"` sui link esterni. Configurabile con `data-new-tab` o override JS.
     zIndex: 999999, // Livello di stacking per modali/tooltip. Regolabile tramite override JS per integrazioni complesse.
     maxConcurrent: 4, // Limite di richieste simultanee verso l'endpoint. Aggiornabile via override JS.
     warnHighlightClass: "slg-warn-highlight", // Classe CSS dei link warn in modalità `soft`/`warn`. Impostabile con `data-warn-highlight-class`.
     warnMessageDefault:
-      "Questo link non è verificato. Procedi solo se ti fidi del sito.", // Messaggio fallback, modificabile con `data-warn-message`.
-    excludeSelectors: [], // Selettori da ignorare nella scansione. Accetta CSV tramite `data-exclude-selectors` o array via override.
+      "Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile.", // Messaggio fallback, modificabile con `data-warn-message`.
+    excludeSelectors: [] // Selettori da ignorare nella scansione. Accetta CSV tramite `data-exclude-selectors` o array via override.
     configVersion: "1.5.11" // Versione di configurazione usata per invalidare cache e asset in fase di deploy.
   };
 
