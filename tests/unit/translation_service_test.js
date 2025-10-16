@@ -29,8 +29,15 @@ const run = async () => {
   const detectedFallback = i18n.detectLanguage({ navigatorLanguages: ['pt-PT'] });
   assert.strictEqual(
     detectedFallback,
-    'pt',
-    'detectLanguage should fallback to the base language when a regional variant is missing'
+    'pt-PT',
+    'detectLanguage should preserve the canonical regional code even when it falls back to the base bundle'
+  );
+
+  const detectedItalian = i18n.detectLanguage({ navigatorLanguages: ['it-IT', 'en-US'] });
+  assert.strictEqual(
+    detectedItalian,
+    'it-IT',
+    'detectLanguage should expose the canonical Italian code when locale is it-IT'
   );
 
   i18n.setLanguage('it');

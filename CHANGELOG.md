@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.2] - 2025-11-14
+### Changed
+- Migliorata la logica di rilevazione lingua in `links-guard.i18n.js` introducendo una risoluzione centralizzata dei candidati che preserva i codici regionali canonici.
+
+### Fixed
+- Mappati correttamente i codici `it` e `it-IT` sul dizionario italiano assicurando che il browser mostri sempre i testi localizzati anziché il fallback inglese.
+- Aggiornata la documentazione con esempi di utilizzo della detection multilingua e note sui nuovi alias per le varianti italiane.
+
 ## [1.8.1] - 2025-11-13
 ### Changed
 - Aggiornato il nome del parametro di tracciamento di default a `myclid` in `links-guard.settings.js` e nella documentazione per allinearsi alle aspettative di integrazione.
