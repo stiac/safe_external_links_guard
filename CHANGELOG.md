@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.8.0] - 2025-11-12
+### Added
+- Sistema opzionale di tracciamento dei click in `links-guard.js` con generazione di UUID, aggiunta del parametro configurabile alla query string e invio di un pixel JSON con metadati anonimi (lingua, timezone, dispositivo, referrer e timestamp) rispettando il consenso privacy.
+- Supporto alle nuove impostazioni di tracciamento (`trackingEnabled`, `trackingParameter`, `trackingPixelEndpoint`, `trackingIncludeMetadata`) nel builder di configurazione (`links-guard.settings.js`), con relativi attributi `data-*` e test automatici (`tests/unit/settings_builder_test.js`, `tests/unit/tracking_payload_test.js`).
+
+### Changed
+- `links-guard.js` espone utility riusabili per il calcolo del payload di tracking e rileva il tipo di dispositivo per favorire l'integrazione con analitiche esterne, preservando il comportamento legacy quando il pixel è disabilitato.
+- Documentazione aggiornata (`README.md`, `SOFTWARE_REPORT.md`, `ROADMAP.md`, `VERSION`) per descrivere il nuovo parametro di tracciamento personalizzabile e le regole operative per ambienti GDPR-ready.
+
 ## [1.7.4] - 2025-11-11
 ### Added
 - Chiavi di traduzione aggiuntive per i messaggi di policy (`messages.denyDefault`, `messages.policy.*`, errori di rete) in

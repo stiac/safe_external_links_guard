@@ -28,6 +28,10 @@ class FakeScript {
   assert.strictEqual(cfg.mode, 'strict', 'mode should fallback to strict when not provided');
   assert.strictEqual(cfg.configVersion, SafeExternalLinksGuard.defaults.configVersion, 'configVersion should fallback to defaults');
   assert.strictEqual(cfg.showCopyButton, false, 'showCopyButton should respect default false when attribute is missing');
+  assert.strictEqual(cfg.trackingEnabled, false, 'trackingEnabled should be disabled by default');
+  assert.strictEqual(cfg.trackingParameter, 'slgclid', 'trackingParameter should fallback to default name');
+  assert.strictEqual(cfg.trackingPixelEndpoint, '', 'trackingPixelEndpoint should fallback to empty string');
+  assert.strictEqual(cfg.trackingIncludeMetadata, true, 'trackingIncludeMetadata should default to true to collect anonymous data');
 })();
 
 (() => {
@@ -37,7 +41,11 @@ class FakeScript {
     'data-mode': 'soft',
     'data-remove-node': 'true',
     'data-exclude-selectors': '.ignore, .skip',
-    'data-new-tab': 'false'
+    'data-new-tab': 'false',
+    'data-tracking-enabled': 'true',
+    'data-tracking-parameter': 'myclid',
+    'data-tracking-pixel-endpoint': '/collect',
+    'data-tracking-include-metadata': 'false'
   });
   const cfg = SafeExternalLinksGuard.buildSettings(script);
   assert.strictEqual(cfg.timeoutMs, 1500, 'data-timeout should be parsed as integer');
@@ -46,6 +54,10 @@ class FakeScript {
   assert.strictEqual(cfg.removeNode, true, 'data-remove-node="true" should enable node removal');
   assert.deepStrictEqual(cfg.excludeSelectors, ['.ignore', '.skip'], 'data-exclude-selectors should produce cleaned array');
   assert.strictEqual(cfg.newTab, false, 'data-new-tab="false" should disable new tab opening');
+  assert.strictEqual(cfg.trackingEnabled, true, 'data-tracking-enabled="true" should activate tracking');
+  assert.strictEqual(cfg.trackingParameter, 'myclid', 'data-tracking-parameter should override the default name');
+  assert.strictEqual(cfg.trackingPixelEndpoint, '/collect', 'data-tracking-pixel-endpoint should override the default endpoint');
+  assert.strictEqual(cfg.trackingIncludeMetadata, false, 'data-tracking-include-metadata="false" should disable metadata collection');
 })();
 
 (() => {
@@ -71,6 +83,23 @@ class FakeScript {
   const cfg = SafeExternalLinksGuard.buildSettings(script, { mode: 'strict', cacheTtlSec: 600 });
   assert.strictEqual(cfg.mode, 'strict', 'manual override should win over script attribute');
   assert.strictEqual(cfg.cacheTtlSec, 600, 'manual override should apply numeric values');
+})();
+
+(() => {
+  const script = new FakeScript({
+    'data-tracking-enabled': 'true',
+    'data-tracking-parameter': 'clid',
+    'data-tracking-pixel-endpoint': 'https://example.com/pixel'
+  });
+  const cfg = SafeExternalLinksGuard.buildSettings(script, {
+    trackingEnabled: false,
+    trackingParameter: 'override',
+    trackingIncludeMetadata: true
+  });
+  assert.strictEqual(cfg.trackingEnabled, false, 'manual override should disable tracking even if data attribute enables it');
+  assert.strictEqual(cfg.trackingParameter, 'override', 'manual override should change parameter name');
+  assert.strictEqual(cfg.trackingPixelEndpoint, 'https://example.com/pixel', 'manual override keeps explicit endpoint');
+  assert.strictEqual(cfg.trackingIncludeMetadata, true, 'manual override restores metadata collection');
 })();
 
 (() => {
