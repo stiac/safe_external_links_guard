@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.5.15] - 2025-11-05
+### Added
+- Template HTML dedicato (`links/modal-template.html`) per la modale, caricabile come `<template>` o tramite namespace JavaScript per personalizzare il layout senza modificare `links-guard.js`.
+- Test automatico `node tests/unit/modal_template_test.js` per verificare la selezione del template e il fallback interno.
+
+### Changed
+- `links-guard.js` ora costruisce la modale clonando un template esterno, mantenendo la compatibilità con la configurazione esistente e rispettando il pulsante "Copia" opzionale.
+- Documentazione aggiornata con le istruzioni per includere e personalizzare il template della modale.
+
 ## [1.5.14] - 2025-11-04
 ### Changed
 - Aggiornato il messaggio di avviso predefinito per i domini non presenti nelle liste con una descrizione più esplicita sui dati di navigazione condivisi con terze parti e centralizzato il testo in costanti riutilizzabili in PHP e JavaScript.
