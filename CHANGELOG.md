@@ -1,4 +1,11 @@
 # Changelog
+## [1.10.4] - 2025-11-26
+### Added
+- Test unitario `debug_policy_summary_test.js` che verifica la presenza di campioni completi (host, URL, motivo e sorgente) nei log verbose quando i link vengono rimossi dal DOM.
+
+### Fixed
+- I log di debug in modalità verbose includono nuovamente analisi e metadati di policy per i link rimossi, preservando host, URL e messaggio anche quando `<a>` viene sostituito da `<span>`.
+
 ## [1.10.3] - 2025-11-25
 ### Added
 - Fallback localizzati integrati in `links-guard.js` per garantire la traduzione della modale anche quando `links-guard.i18n.js` non può essere caricato dal browser.

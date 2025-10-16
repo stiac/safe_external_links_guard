@@ -2133,20 +2133,35 @@
     if (!set) { set = new Set(); anchorsByHost.set(host, set); }
     set.add(node);
   };
-  const mapReplaceNode = (host, oldNode, newNode) => {
-    const set = anchorsByHost.get(host);
-    if (!set) return;
-    set.delete(oldNode);
+  const mapReplaceNode = (host, oldNode, newNode, overrideState) => {
+    let set = anchorsByHost.get(host);
 
-    const previousState = anchorStates.get(oldNode);
-    if (previousState) {
-      anchorStates.delete(oldNode);
-      if (newNode && newNode.tagName === "A") {
-        anchorStates.set(newNode, { ...previousState });
-      }
+    const previousState = overrideState
+      ? { ...overrideState }
+      : anchorStates.get(oldNode)
+      ? { ...anchorStates.get(oldNode) }
+      : null;
+
+    if (!set && previousState?.host) {
+      set = anchorsByHost.get(previousState.host) || null;
     }
 
-    if (newNode) set.add(newNode);
+    if (set) {
+      set.delete(oldNode);
+    }
+
+    if (anchorStates.has(oldNode)) {
+      anchorStates.delete(oldNode);
+    }
+
+    if (newNode) {
+      if (set) {
+        set.add(newNode);
+      }
+      if (previousState) {
+        anchorStates.set(newNode, previousState);
+      }
+    }
   };
 
   const invalidExcludeSelectors = new Set();
@@ -2170,9 +2185,77 @@
     return false;
   };
 
-  const disableLink = (a, reason = null, hostForIndex = null) => {
+  const disableLink = (a, reason = null, hostForIndex = null, policyMeta = null) => {
     const message = reason || defaultDenyMessage;
-    anchorStates.delete(a);
+    const previousState = anchorStates.get(a) || null;
+    const originalHref = (() => {
+      try {
+        if (typeof a.getAttribute === "function") {
+          const attr = a.getAttribute("href");
+          if (attr) {
+            return attr;
+          }
+        }
+      } catch (err) {
+        // Alcuni ambienti potrebbero lanciare eccezioni sugli accessor: ignoriamo e passiamo oltre.
+      }
+      if (a && typeof a.href === "string" && a.href) {
+        return a.href;
+      }
+      if (previousState?.url?.href) {
+        return previousState.url.href;
+      }
+      return null;
+    })();
+    const resolveUrlFromHref = (href) => {
+      if (!href) {
+        return previousState?.url || null;
+      }
+      const parsed = toURL(href);
+      return parsed || previousState?.url || null;
+    };
+    const normalizedHost = hostForIndex || previousState?.host || null;
+    const nextState = (() => {
+      if (!previousState && !normalizedHost && !originalHref) {
+        return null;
+      }
+      const state = previousState ? { ...previousState } : {};
+      if (normalizedHost && !state.host) {
+        state.host = normalizedHost;
+      }
+      const resolvedUrl = resolveUrlFromHref(originalHref);
+      if (resolvedUrl) {
+        state.url = resolvedUrl;
+      }
+      state.originalHref = originalHref || state.originalHref || null;
+      state.disabledAt = Date.now();
+      state.removed = Boolean(cfg.removeNode);
+      state.policy = {
+        ...(previousState?.policy || {}),
+        action: "deny",
+        reason: message,
+        source:
+          policyMeta && typeof policyMeta.source === "string"
+            ? policyMeta.source
+            : previousState?.policy?.source || null
+      };
+      if (policyMeta && Number.isFinite(policyMeta.ttl)) {
+        state.policy.ttl = policyMeta.ttl;
+      } else if (state.policy.ttl && !Number.isFinite(state.policy.ttl)) {
+        delete state.policy.ttl;
+      }
+      if (policyMeta && Number.isFinite(policyMeta.cacheAgeSec)) {
+        state.policy.cacheAgeSec = policyMeta.cacheAgeSec;
+      }
+      if (policyMeta && Number.isFinite(policyMeta.cachedAt)) {
+        state.policy.cachedAt = policyMeta.cachedAt;
+      }
+      if (policyMeta && policyMeta.message) {
+        state.policy.messageDescriptor = sanitizeDetails(policyMeta.message);
+      }
+      return state;
+    })();
+
     clearHoverMessage(a, null, true);
     if (cfg.removeNode) {
       const span = document.createElement("span");
@@ -2181,21 +2264,39 @@
       span.className = cls ? `${cls} slg-disabled` : "slg-disabled";
       span.setAttribute("aria-disabled", "true");
       span.dataset.safeLinkGuard = "1";
+      if (nextState) {
+        nextState.replacementTag = "span";
+      }
       setHoverMessage(span, message);
       const parent = a.parentNode;
+      const hostKey = normalizedHost;
       if (parent) {
         parent.replaceChild(span, a);
-        if (hostForIndex) mapReplaceNode(hostForIndex, a, span);
       }
+      mapReplaceNode(hostKey, a, span, nextState || undefined);
       return span;
     }
+
     a.removeAttribute("href");
     a.setAttribute("role", "link");
     a.setAttribute("aria-disabled", "true");
     a.classList.add("slg-disabled");
     setHoverMessage(a, message);
-    a.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); }, { capture: true });
+    a.addEventListener(
+      "click",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      },
+      { capture: true }
+    );
     a.dataset.safeLinkGuard = "1";
+    if (nextState) {
+      nextState.replacementTag = a.tagName ? a.tagName.toLowerCase() : "a";
+      anchorStates.set(a, nextState);
+    } else if (anchorStates.has(a)) {
+      anchorStates.delete(a);
+    }
     return a;
   };
 
@@ -2413,7 +2514,7 @@
     for (const node of nodes) {
       if (!node.isConnected) { set.delete(node); continue; }
       if (action === "deny") {
-        disableLink(node, denyReason, host);
+        disableLink(node, denyReason, host, meta);
       } else if (action === "allow") {
         if (node.tagName === "A") {
           ensureAttrs(node);
@@ -2555,10 +2656,55 @@
           sample.dataset = { safeLinkGuard: node.dataset.safeLinkGuard };
         }
         if (state) {
-          sample.state = {
-            host: state.host,
-            url: state.url ? state.url.href : null
-          };
+          const stateSummary = {};
+          if (state.host) {
+            stateSummary.host = state.host;
+          }
+          if (state.url && state.url.href) {
+            stateSummary.url = state.url.href;
+          }
+          if (state.originalHref) {
+            stateSummary.originalHref = state.originalHref;
+          }
+          if (state.removed) {
+            stateSummary.removed = true;
+          }
+          if (state.disabledAt) {
+            stateSummary.disabledAt = state.disabledAt;
+          }
+          if (state.replacementTag) {
+            stateSummary.replacementTag = state.replacementTag;
+          }
+          if (state.policy) {
+            const policyInfo = {};
+            if (state.policy.action) {
+              policyInfo.action = state.policy.action;
+            }
+            if (state.policy.reason) {
+              policyInfo.reason = state.policy.reason;
+            }
+            if (state.policy.source) {
+              policyInfo.source = state.policy.source;
+            }
+            if (Number.isFinite(state.policy.ttl)) {
+              policyInfo.ttl = state.policy.ttl;
+            }
+            if (Number.isFinite(state.policy.cacheAgeSec)) {
+              policyInfo.cacheAgeSec = state.policy.cacheAgeSec;
+            }
+            if (Number.isFinite(state.policy.cachedAt)) {
+              policyInfo.cachedAt = state.policy.cachedAt;
+            }
+            if (state.policy.messageDescriptor) {
+              policyInfo.messageDescriptor = state.policy.messageDescriptor;
+            }
+            if (Object.keys(policyInfo).length) {
+              stateSummary.policy = policyInfo;
+            }
+          }
+          if (Object.keys(stateSummary).length) {
+            sample.state = stateSummary;
+          }
         }
         return sample;
       });
@@ -2576,7 +2722,8 @@
     debug.event("Policy applicata", summary, {
       scope: "policy",
       level,
-      tags
+      tags,
+      depth: -2
     });
 
     if (action === "deny") {
@@ -3189,7 +3336,16 @@
       const denyMsg =
         translateMessageDescriptor(cached.message, defaultDenyMessage) ||
         defaultDenyMessage;
-      disableLink(a, denyMsg, host);
+      const nowSec = Math.floor(Date.now() / 1000);
+      const meta = {
+        source: "cache",
+        ttl: cached.ttl,
+        cachedAt: cached.ts,
+        cacheAgeSec:
+          Number.isFinite(cached.ts) && cached.ts <= nowSec ? nowSec - cached.ts : undefined,
+        message: cached.message
+      };
+      disableLink(a, denyMsg, host, meta);
       return state;
     }
 
@@ -3482,7 +3638,13 @@
 
       if (policy.action === "deny") {
         results.denied += 1;
-        disableLink(node, policy.message, host);
+        const denyMessage =
+          translateMessageDescriptor(policy.message, defaultDenyMessage) ||
+          defaultDenyMessage;
+        disableLink(node, denyMessage, host, {
+          source: "amp",
+          message: policy.message || null
+        });
         return;
       }
 
