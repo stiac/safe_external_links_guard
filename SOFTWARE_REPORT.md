@@ -2,8 +2,8 @@
 
 ## Informazioni Generali
 - **Progetto:** Safe External Links Guard
-- **Versione:** 1.12.4
-- **Data:** 2025-12-02
+- **Versione:** 1.12.5
+- **Data:** 2025-12-03
 - **Autore aggiornamento:** AI Development Assistant
 
 ## Stato Moduli
@@ -13,10 +13,10 @@
 | Localizzazione (links-guard.i18n.js) | Aggiornato | Coda `__i18nReadyQueue` e fallback localizzati nel core per garantire la traduzione della modale anche quando il modulo i18n non viene caricato dal browser. |
 | Tracciamento clic (links-guard.js) | Aggiornato | Runtime `myclid` modulare con matrice di cattura, sampling, rispetto DNT, retry e firma HMAC opzionale, più API pubblica `SafeExternalLinksGuard.tracking`. |
 | Configurazione (links-guard.settings.js) | Aggiornato | Nuovi parser per sampling, allowlist/blocklist, preset matrice, timeout/retry e campi HMAC, completi di attributi `data-*` dedicati. |
-| Documentazione | Aggiornata | README, CHANGELOG e guide aggiornate alla release 1.12.4 con istruzioni dettagliate per l'integrazione in Sngine e nota sul bootstrap PHP compatibile con il percorso legacy `bootstrap.php`. |
-| Bootstrap inline (resources/bootstrap-inline.min.js) | Aggiornato | Guardia click inline <2 KB caricata in `<head>` che ora rimuove il listener di fallback dopo l'inizializzazione dello script principale, prevenendo blocchi permanenti dei link. |
-| Sanitizzazione markup (app/Services/Markup/ExternalLinkAttributeEnforcer.php) | Aggiornato | Servizio PHP con token `rel` personalizzabili per applicare `noopener`/`noreferrer` (più `nofollow` opzionale) durante il rendering server-side. |
-| Bootstrap PHP (app/bootstrap.php) | Aggiornato | Buffer di output che garantisce `target="_blank"` e `rel` sicuro prima che gli script JavaScript vengano caricati; compatibilità ripristinata tramite loader root `bootstrap.php`. |
+| Documentazione | Aggiornata | README, CHANGELOG e guide aggiornate alla release 1.12.5 con note sul parser PHP non distruttivo per gli anchor esterni e indicazioni specifiche per Sngine. |
+| Bootstrap inline (resources/bootstrap-inline.min.js) | Aggiornato | Guardia click inline <2 KB caricata in `<head>` che dialoga con lo script principale; nessuna modifica in questa release. |
+| Sanitizzazione markup (app/Services/Markup/ExternalLinkAttributeEnforcer.php) | Aggiornato | Parser lineare che applica `target="_blank"` e token `rel` senza utilizzare `DOMDocument`, preservando layout e attributi personalizzati del markup generato lato server. |
+| Bootstrap PHP (app/bootstrap.php) | Aggiornato | Buffer di output che sfrutta il nuovo parser lineare per evitare side-effect sul markup, mantenendo la compatibilità con il loader root `bootstrap.php`. |
 
 ## Attività Recenti
 | Data | Autore | Descrizione | Tempo (h) |
@@ -38,6 +38,7 @@
 | 2025-11-30 | AI Development Assistant | Introduzione del bootstrap PHP per l'enforcement immediato degli attributi `rel`, aggiornamento del servizio di sanitizzazione e nuovi test CLI. | 0.4 |
 | 2025-12-01 | AI Development Assistant | Ripristino del file `bootstrap.php` nella root del pacchetto per supportare gli ambienti che includono ancora il percorso legacy, allineando documentazione e test. | 0.2 |
 | 2025-12-02 | AI Development Assistant | Documentazione dell'integrazione di Safe External Links Guard in Sngine (bootstrap PHP + asset front-end) e aggiornamento del report alla versione 1.12.4. | 0.2 |
+| 2025-12-03 | AI Development Assistant | Fix del parser PHP degli anchor per evitare la corruzione dell'HTML generato dai CMS, aggiornamento test/doc e rilascio 1.12.5. | 0.4 |
 
 
 ## Rischi e Note Tecniche

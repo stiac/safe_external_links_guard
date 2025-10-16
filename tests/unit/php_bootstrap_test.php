@@ -70,3 +70,23 @@ run_test('modalità disabilitata non avvia il buffer', function () {
         throw new RuntimeException('quando disabilitato il markup deve restare invariato');
     }
 });
+
+run_test('mantiene markup complesso senza spezzare l\'HTML', function () {
+    $html = '<div><a class="btn" data-track="1" href="https://example.com" target="_self">Vai</a><span>Ok</span></div>';
+    $output = capture_bootstrap_output([], $html);
+
+    $expected = '<div><a class="btn" data-track="1" href="https://example.com" target="_blank" rel="noopener noreferrer nofollow">Vai</a><span>Ok</span></div>';
+
+    if ($output !== $expected) {
+        throw new RuntimeException('il markup atteso non coincide con l\'output');
+    }
+});
+
+run_test('ignora i link relativi lasciando invariato il markup', function () {
+    $html = '<nav><a href="/percorso">Interno</a></nav>';
+    $output = capture_bootstrap_output([], $html);
+
+    if ($output !== $html) {
+        throw new RuntimeException('i link relativi non devono essere modificati');
+    }
+});

@@ -1,8 +1,8 @@
 # Safe External Links Guard
 
-**Versione:** 1.12.4
+**Versione:** 1.12.5
 
-> Novità 1.12.4: aggiunta la guida passo-passo per integrare Safe External Links Guard (bootstrap PHP + asset JS) in Sngine mantenendo la compatibilità con il loader legacy `safe_external_links_guard/bootstrap.php`.
+> Novità 1.12.5: corretta la sanificazione server-side degli anchor esterni evitando che il bootstrap PHP alteri il markup generato (particolarmente evidente in Sngine), mantenendo al contempo l'applicazione immediata degli attributi `target`/`rel`.
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
@@ -146,7 +146,7 @@ safe_external_links_guard_bootstrap([
 // opzionale: safe_external_links_guard_bootstrap_release(); // forza il flush anticipato
 ```
 
-Il bootstrap PHP intercetta tutto l'output HTML, aggiorna gli `<a>` esterni con `target="_blank"` e con il valore `rel` scelto (`noopener`, `noreferrer` o entrambi) e trasferisce il markup già sanificato al browser. Se il tuo hosting punta ancora a `safe_external_links_guard/bootstrap.php` (ad esempio perché i file sono stati copiati in `/assets/app/safe_external_links_guard/`), non devi aggiornare il percorso: il file di compatibilità `bootstrap.php` reindirizza automaticamente al nuovo bootstrap applicativo. In modalità `debug` (`'debug' => true`) eventuali eccezioni vengono loggate tramite `error_log`. Passando `'force' => true` è possibile riapplicare la configurazione durante la stessa richiesta, mentre `safe_external_links_guard_bootstrap_release(false)` consente di annullare le modifiche se necessario (ad esempio nelle pagine di amministrazione).
+Il bootstrap PHP intercetta tutto l'output HTML, aggiorna gli `<a>` esterni con `target="_blank"` e con il valore `rel` scelto (`noopener`, `noreferrer` o entrambi) e trasferisce il markup già sanificato al browser. Dalla versione **1.12.5** il processo avviene con un parser lineare sugli anchor (nessun uso di `DOMDocument`) così da preservare pedissequamente lo spacing, gli attributi personalizzati e le porzioni di markup adiacenti: l'HTML generato da CMS come **Sngine** resta invariato, evitando i difetti di rendering segnalati. Se il tuo hosting punta ancora a `safe_external_links_guard/bootstrap.php` (ad esempio perché i file sono stati copiati in `/assets/app/safe_external_links_guard/`), non devi aggiornare il percorso: il file di compatibilità `bootstrap.php` reindirizza automaticamente al nuovo bootstrap applicativo. In modalità `debug` (`'debug' => true`) eventuali eccezioni vengono loggate tramite `error_log`. Passando `'force' => true` è possibile riapplicare la configurazione durante la stessa richiesta, mentre `safe_external_links_guard_bootstrap_release(false)` consente di annullare le modifiche se necessario (ad esempio nelle pagine di amministrazione).
 
 #### Integrazione con Sngine
 

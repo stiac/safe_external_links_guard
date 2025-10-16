@@ -1,5 +1,12 @@
 # Changelog
 # Changelog
+## [1.12.5] - 2025-12-03
+### Fixed
+- Evitata la corruzione dell'HTML generato da CMS come Sngine sostituendo l'uso di `DOMDocument` con un parser lineare degli anchor nel bootstrap PHP (`app/Services/Markup/ExternalLinkAttributeEnforcer.php`), così gli attributi `target`/`rel` vengono applicati senza alterare spaziature o nodi adiacenti.
+
+### Changed
+- Test CLI `tests/unit/php_bootstrap_test.php` ampliato con casi realistici (markup annidato e link relativi) per prevenire regressioni sulla sanificazione server-side.
+
 ## [1.12.4] - 2025-12-02
 ### Added
 - Guida dedicata all'integrazione di Safe External Links Guard in Sngine direttamente nel `README.md`, con istruzioni per il bootstrap PHP e l'inclusione degli asset.
