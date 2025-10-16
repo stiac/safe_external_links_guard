@@ -1,4 +1,12 @@
 # Changelog
+## [1.10.2] - 2025-11-24
+### Changed
+- I riepiloghi di policy includono ora sempre la lingua rilevata (preferita, alternative, sorgenti) così da contestualizzare i domini bloccati direttamente dal log.
+- Il tracciamento anonimo riutilizza l'istantanea della lingua calcolata all'avvio, garantendo coerenza tra log console, export JSON e metadati inviati.
+
+### Fixed
+- La modalità debug mostra esplicitamente la lingua del visitatore anche al livello `basic`, evitando scenari in cui gli operatori non riuscivano a verificare la detection durante l'analisi dei link spam.
+
 ## [1.10.1] - 2025-11-23
 ### Added
 - Riepiloghi automatici delle decisioni di policy (allow/warn/deny) nella console debug con conteggio dei link coinvolti, origine della decisione (cache, endpoint, fallback) ed esempi di anchor in modalità `verbose`.

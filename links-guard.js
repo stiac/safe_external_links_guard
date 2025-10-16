@@ -878,6 +878,11 @@
     }
   });
 
+  // Memorizza l'istantanea della lingua per riutilizzarla in altri punti del
+  // modulo (tracking, report policy, esportazione JSON, ecc.). In questo modo
+  // i log e gli export condividono sempre gli stessi dati di detection.
+  const runtimeLanguageSnapshot = collectRuntimeLanguageSnapshot();
+
   if (cfg.debugMode) {
     debug.info(
       "Configurazione attiva",
@@ -891,7 +896,7 @@
     );
     debug.info(
       "Lingua preferita rilevata",
-      collectRuntimeLanguageSnapshot(),
+      runtimeLanguageSnapshot,
       { scope: "i18n" }
     );
   }
@@ -1105,6 +1110,18 @@
       } catch (err) {
         // In caso di errore inatteso, la detection manuale seguirà i fallback nativi.
       }
+    }
+
+    if (!languageResolved && runtimeLanguageSnapshot.preferred) {
+      base.language = runtimeLanguageSnapshot.preferred;
+      languageResolved = true;
+    }
+    if (
+      (!base.languages || !base.languages.length) &&
+      Array.isArray(runtimeLanguageSnapshot.alternatives) &&
+      runtimeLanguageSnapshot.alternatives.length
+    ) {
+      base.languages = runtimeLanguageSnapshot.alternatives;
     }
 
     if (typeof navigator !== "undefined" && navigator) {
@@ -2147,6 +2164,24 @@
       mode: cfg.mode,
       source: sourceTag
     };
+    if (runtimeLanguageSnapshot.preferred) {
+      summary.language = runtimeLanguageSnapshot.preferred;
+    }
+    if (
+      Array.isArray(runtimeLanguageSnapshot.alternatives) &&
+      runtimeLanguageSnapshot.alternatives.length
+    ) {
+      summary.languages = runtimeLanguageSnapshot.alternatives;
+    }
+    if (runtimeLanguageSnapshot.documentLang) {
+      summary.documentLanguage = runtimeLanguageSnapshot.documentLang;
+    }
+    if (
+      Array.isArray(runtimeLanguageSnapshot.sources) &&
+      runtimeLanguageSnapshot.sources.length
+    ) {
+      summary.languageSources = runtimeLanguageSnapshot.sources;
+    }
     if (cfg.warnHighlightClass) {
       summary.warnHighlightClass = cfg.warnHighlightClass;
     }
