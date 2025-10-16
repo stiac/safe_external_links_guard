@@ -1,4 +1,12 @@
 # Changelog
+## [1.10.3] - 2025-11-25
+### Added
+- Fallback localizzati integrati in `links-guard.js` per garantire la traduzione della modale anche quando `links-guard.i18n.js` non può essere caricato dal browser.
+- Test automatico `fallback_translations_test.js` che verifica le stringhe italiane, russe e il degrado all'inglese quando la lingua non è supportata.
+
+### Fixed
+- Messaggi mostrati in inglese sui browser che bloccavano il modulo i18n nonostante la lingua fosse rilevata correttamente, sfruttando il contesto runtime per selezionare il dizionario di fallback appropriato.
+
 ## [1.10.2] - 2025-11-24
 ### Changed
 - I riepiloghi di policy includono ora sempre la lingua rilevata (preferita, alternative, sorgenti) così da contestualizzare i domini bloccati direttamente dal log.

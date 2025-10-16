@@ -1,6 +1,7 @@
 # Roadmap - Safe External Links Guard
 
 ## Obiettivi a Breve Termine
+- [x] Implementare fallback localizzati lato client per i browser che bloccano il modulo i18n (rilascio 1.10.3).
 - [ ] Aggiungere test end-to-end che verifichino il bootstrap della modale e il caricamento dinamico delle traduzioni (incluso il nuovo preload asincrono).
 - [ ] Introdurre un controllo CI che esegua linting e bundle check sugli script distribuiti.
 - [ ] Documentare scenari di fallback per `loadTranslations()` quando il fetch non è disponibile (es. ambienti legacy).

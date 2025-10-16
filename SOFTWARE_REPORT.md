@@ -2,15 +2,15 @@
 
 ## Informazioni Generali
 - **Progetto:** Safe External Links Guard
-- **Versione:** 1.9.4
-- **Data:** 2025-11-21
+- **Versione:** 1.10.3
+- **Data:** 2025-11-25
 - **Autore aggiornamento:** AI Development Assistant
 
 ## Stato Moduli
 | Modulo | Stato | Note |
 | --- | --- | --- |
 | Gestione modale (links-guard.js) | Aggiornato | Rilevazione automatica Reader/AMP con mantenimento del tooltip di sicurezza sui link `allow`, così l'avviso resta visibile anche quando la modale non è disponibile. |
-| Localizzazione (links-guard.i18n.js) | Aggiornato | Gestione della coda `__i18nReadyQueue` per sincronizzare le traduzioni anche quando gli script sono caricati fuori ordine, con log degli errori di bootstrap. |
+| Localizzazione (links-guard.i18n.js) | Aggiornato | Coda `__i18nReadyQueue` e fallback localizzati nel core per garantire la traduzione della modale anche quando il modulo i18n non viene caricato dal browser. |
 | Documentazione | Aggiornata | README, CHANGELOG, VERSION e report aggiornati alla release 1.9.3 con esempi dell'inferenza lingua tramite dominio. |
 | Configurazione (links-guard.settings.js) | Aggiornato | Introdotto il flag `keepWarnMessageOnAllow` con auto-attivazione in contesti limitati e supporto negli snippet AMP/server-side. |
 
@@ -26,6 +26,7 @@
 | 2025-11-19 | AI Development Assistant | Refactoring della detection lingua con hint da dataset, metatag, path e `navigator.userAgentData`, nuovo contesto linguistico per il tracking e aggiornamento documentazione. | 0.9 |
 | 2025-11-20 | AI Development Assistant | Estensione della detection con inferenza dal dominio (`host`), nuovi test unitari e aggiornamenti documentali alla release 1.9.3. | 0.6 |
 | 2025-11-21 | AI Development Assistant | Implementazione della coda di bootstrap i18n per garantire la traduzione corretta anche con caricamenti asincroni degli script e relativo aggiornamento documentale/test. | 0.5 |
+| 2025-11-25 | AI Development Assistant | Fallback multilingua lato client per browser che bloccano il modulo i18n, nuovo test di regressione e documentazione aggiornata alla release 1.10.3. | 0.6 |
 
 
 ## Rischi e Note Tecniche
