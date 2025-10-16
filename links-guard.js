@@ -687,15 +687,47 @@
       return base;
     }
 
+    let languageResolved = false;
+    if (
+      guardNamespace.i18n &&
+      typeof guardNamespace.i18n.collectLanguageContext === "function"
+    ) {
+      try {
+        const context = guardNamespace.i18n.collectLanguageContext();
+        if (context && context.language) {
+          base.language = context.language;
+          languageResolved = true;
+        }
+        if (
+          context &&
+          Array.isArray(context.languages) &&
+          context.languages.length
+        ) {
+          base.languages = context.languages;
+        }
+      } catch (err) {
+        // In caso di errore inatteso, la detection manuale seguirà i fallback nativi.
+      }
+    }
+
     if (typeof navigator !== "undefined" && navigator) {
-      const languages = Array.isArray(navigator.languages)
-        ? navigator.languages.filter(Boolean)
-        : [];
-      if (languages.length) {
-        base.language = languages[0];
-        base.languages = languages;
-      } else if (navigator.language) {
-        base.language = navigator.language;
+      if (!languageResolved) {
+        const languages = Array.isArray(navigator.languages)
+          ? navigator.languages.filter(Boolean)
+          : [];
+        if (languages.length) {
+          base.language = languages[0];
+          base.languages = languages;
+        } else if (navigator.language) {
+          base.language = navigator.language;
+        }
+      } else if (!base.languages || !base.languages.length) {
+        const languages = Array.isArray(navigator.languages)
+          ? navigator.languages.filter(Boolean)
+          : [];
+        if (languages.length) {
+          base.languages = languages;
+        }
       }
       if (navigator.userAgent) {
         base.deviceType = detectDeviceType(navigator.userAgent);

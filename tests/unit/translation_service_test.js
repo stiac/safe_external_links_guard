@@ -54,6 +54,47 @@ const run = async () => {
     'detectLanguage should honour persisted language preferences'
   );
 
+  const detectedFromDataset = i18n.detectLanguage({
+    navigatorLanguages: [],
+    document: {
+      documentElement: {
+        dataset: { lang: 'de-DE' },
+        getAttribute: () => ''
+      },
+      body: null,
+      querySelector: () => null,
+      querySelectorAll: () => []
+    }
+  });
+  assert.strictEqual(
+    detectedFromDataset,
+    'de-DE',
+    'detectLanguage should read data-lang or dataset hints when standard attributes are missing'
+  );
+
+  const detectedFromMeta = i18n.detectLanguage({
+    navigatorLanguages: [],
+    document: {
+      documentElement: {
+        getAttribute: () => '',
+        dataset: {}
+      },
+      body: null,
+      querySelector: () => null,
+      querySelectorAll: (selector) => {
+        if (selector === 'meta[property="og:locale"]') {
+          return [{ content: 'fr_FR' }];
+        }
+        return [];
+      }
+    }
+  });
+  assert.strictEqual(
+    detectedFromMeta,
+    'fr-FR',
+    'detectLanguage should parse og:locale meta tags when explicit language hints are present'
+  );
+
   const detectedFromIntl = i18n.detectLanguage({ navigatorLanguages: [], intlLocale: 'fr-CA' });
   assert.strictEqual(
     detectedFromIntl,
@@ -61,11 +102,53 @@ const run = async () => {
     'detectLanguage should preserve the canonical regional code resolved through Intl locale information'
   );
 
+  const detectedFromUaData = i18n.detectLanguage({
+    navigatorLanguages: [],
+    navigator: {
+      userAgentData: { languages: ['de-DE', 'en-US'], locale: 'de-DE' }
+    }
+  });
+  assert.strictEqual(
+    detectedFromUaData,
+    'de-DE',
+    'detectLanguage should leverage navigator.userAgentData when available'
+  );
+
+  const detectedFromPath = i18n.detectLanguage({
+    navigatorLanguages: [],
+    location: { pathname: '/es-mx/app' }
+  });
+  assert.strictEqual(
+    detectedFromPath,
+    'es-MX',
+    'detectLanguage should inspect URL path segments when browser APIs are not available'
+  );
+
   const detectedFromQualityList = i18n.detectLanguage({ navigatorLanguages: ['es-ES;q=0.8', 'en-US'] });
   assert.strictEqual(
     detectedFromQualityList,
     'es-ES',
     'detectLanguage should parse navigator languages with quality values and preserve the canonical code'
+  );
+
+  const contextFromNavigator = i18n.collectLanguageContext({
+    navigatorLanguages: ['it-IT', 'en-US'],
+    defaultLanguage: 'en'
+  });
+  assert.strictEqual(
+    contextFromNavigator.language,
+    'it-IT',
+    'collectLanguageContext should expose the resolved primary language'
+  );
+  assert.deepStrictEqual(
+    contextFromNavigator.languages.slice(0, 2),
+    ['it-IT', 'en-US'],
+    'collectLanguageContext should list available languages preserving priority order'
+  );
+  assert.strictEqual(
+    contextFromNavigator.sources[0].source,
+    'navigator',
+    'collectLanguageContext should retain the origin of the first language hint'
   );
 
   i18n.setLanguage('it');

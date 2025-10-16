@@ -1,4 +1,14 @@
 # Changelog
+## [1.9.2] - 2025-11-19
+### Added
+- Funzione `collectLanguageContext()` in `links-guard.i18n.js` per ottenere lingua principale, elenco di fallback e provenienza dei suggerimenti, riutilizzata anche dal tracciamento anonimo.
+
+### Changed
+- Rilevazione lingua potenziata con hint da dataset (`data-lang`, `data-slg-lang`), metatag semantici (`og:locale`, `dc.language`), segmenti della URL e `navigator.userAgentData`, garantendo il corretto funzionamento anche in modalità anonima o con fingerprinting ridotto.
+- Documentazione aggiornata (`README.md`) con il nuovo flusso di detection multilivello e l'esempio d'uso di `collectLanguageContext()`.
+
+### Fixed
+- Metadati di tracking sincronizzati con la lingua effettivamente rilevata anche quando `navigator.languages` è vuoto, evitando fallback indesiderati all'inglese.
 
 ## [1.9.1] - 2025-11-18
 ### Added

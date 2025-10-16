@@ -1,6 +1,6 @@
 # Safe External Links Guard
 
-**Versione:** 1.9.1
+**Versione:** 1.9.2
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
@@ -150,15 +150,18 @@ Il file `links-guard.settings.js` espone il namespace globale `SafeExternalLinks
 - alcune utility di parsing riutilizzabili.
 
 ### Sistema di traduzione (`links-guard.i18n.js`)
-Il file `links-guard.i18n.js` inizializza il servizio di localizzazione con le traduzioni contenute in `resources/lang/*.json` (Inglese, Italiano, Spagnolo, Francese, Tedesco, Portoghese, Brasiliano e Russo) e rileva automaticamente la lingua da mostrare interrogando, in ordine, più fonti ridondanti:
+Il file `links-guard.i18n.js` inizializza il servizio di localizzazione con le traduzioni contenute in `resources/lang/*.json` (Inglese, Italiano, Spagnolo, Francese, Tedesco, Portoghese, Brasiliano e Russo) e rileva automaticamente la lingua da mostrare interrogando, in ordine, fonti ridondanti che coprono anche i browser con impostazioni privacy aggressive:
 
 1. un eventuale override esplicito (`SafeExternalLinksGuard.i18n.detectLanguage({ lang: 'codice' })` o `setLanguage()`);
 2. il parametro `lang` (personalizzabile) nella query string;
 3. le preferenze salvate nei vari storage del browser (`localStorage`, `sessionStorage`, cookie) con le chiavi `SafeExternalLinksGuard.*`;
-4. l'attributo `lang`/`xml:lang` del documento HTML o il meta `http-equiv="content-language"`;
-5. `navigator.languages` e le proprietà legacy (`language`, `browserLanguage`, `userLanguage`, `systemLanguage`), con deduplica e gestione dei quality value (`;q=`);
-6. il locale inferito dall'engine `Intl` (utile su browser in modalità anonima o con fingerprinting avanzato disattivato);
-7. il fallback configurato (`defaultLanguage`, inglese di default).
+4. gli hint presenti sullo script o sul markup (`data-slg-lang`, `data-lang`, `data-locale`, dataset di `<html>`/`<body>`);
+5. l'attributo `lang`/`xml:lang` del documento HTML o il meta `http-equiv="content-language"`;
+6. i metatag semantici (`og:locale`, `og:locale:alternate`, `meta[name="language"]`, `dc.language`, ecc.);
+7. i segmenti della URL (es. `/it/`, `/es-mx/`) per le installazioni multilingua lato server;
+8. `navigator.languages`, le proprietà legacy (`language`, `browserLanguage`, `userLanguage`, `systemLanguage`) e `navigator.userAgentData.languages/locale`, con deduplica e gestione dei quality value (`;q=`);
+9. il locale inferito dall'engine `Intl` (utile su browser in modalità anonima o con fingerprinting avanzato disattivato);
+10. il fallback configurato (`defaultLanguage`, inglese di default).
 
 Le varianti regionali vengono normalizzate mantenendo il formato canonico quando la specifica lingua è disponibile oppure quando esiste un alias verso la lingua base (es. `it-IT`, `pt-PT`, `fr-CA`). Quando il bundle dedicato non è presente viene utilizzato il dizionario della lingua madre, ma il codice restituito continua a riflettere la preferenza originale dell'utente.
 
@@ -187,6 +190,12 @@ const storedPreference = SafeExternalLinksGuard.i18n.detectLanguage({
   persistedLang: 'es-ES'
 });
 // storedPreference === 'es-ES'
+
+const detectedFromRoute = SafeExternalLinksGuard.i18n.detectLanguage({
+  navigatorLanguages: [],
+  location: { pathname: '/de/account' }
+});
+// detectedFromRoute === 'de'
 ```
 
 > **Nota:** i codici `it` e `it-IT` vengono ora mappati direttamente sul dizionario italiano, mantenendo la forma con suffisso regionale quando presente.
@@ -209,6 +218,15 @@ const italian = SafeExternalLinksGuard.i18n.detectLanguage({
   navigatorLanguages: ['it-IT', 'en']
 });
 // italian === 'it-IT'
+```
+
+Per raccogliere tutte le informazioni disponibili — inclusa la provenienza del dato — puoi usare l'API avanzata `collectLanguageContext()`, utile per inviare metadati coerenti verso il server o per il tracciamento opzionale:
+
+```javascript
+const context = SafeExternalLinksGuard.i18n.collectLanguageContext();
+// context.language  -> codice principale risolto (es. 'it-IT')
+// context.languages -> array ordinato delle lingue disponibili (es. ['it-IT', 'en-US', 'en'])
+// context.sources   -> metadati sull'origine di ogni lingua (es. [{ language: 'it-IT', source: 'navigator' }])
 ```
 
 Il metodo `SafeExternalLinksGuard.i18n.t(key)` restituisce il testo nella lingua attiva e, se una chiave non è tradotta, ricade automaticamente sulla versione inglese. È possibile passare un array di chiavi (`t(['ui.cta', 'modal.openButton'])`) per gestire fallback a catena senza controlli manuali. Per aggiungere nuove lingue è sufficiente creare un file JSON con la stessa struttura (sezioni `messages`, `modal`, `tooltip`) e registrarlo via `SafeExternalLinksGuard.i18n.registerLanguage('codice', dizionario)`. Il servizio espone inoltre `onLanguageChange` per reagire ai cambi di lingua in tempo reale e le utility `loadTranslations()`/`whenReady()` per precaricare i bundle prima del rendering della UI.
