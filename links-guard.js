@@ -974,6 +974,126 @@
   let pendingMessage = null;
   let lastFocused = null;
   let scrollLockState = null;
+  let modalContentRenderer = null;
+
+  // Costruisce un renderer i18n dichiarativo per sincronizzare i testi e gli
+  // attributi della modale con il catalogo multilingua. In questo modo la
+  // gestione dei contenuti resta centralizzata e reattiva ai cambi lingua.
+  const ensureModalRenderer = () => {
+    if (!modalElements) return null;
+    const i18n = guardNamespace.i18n;
+    if (!i18n || typeof i18n.createContentRenderer !== "function") {
+      return null;
+    }
+    if (modalContentRenderer) {
+      return modalContentRenderer;
+    }
+    const descriptors = [];
+    if (modalElements.title) {
+      descriptors.push({ node: modalElements.title, key: "modal.title" });
+    }
+    if (modalElements.close) {
+      descriptors.push({
+        node: modalElements.close,
+        attributes: {
+          "aria-label": "modal.closeLabel",
+          title: "modal.closeTitle"
+        }
+      });
+    }
+    if (modalElements.open) {
+      descriptors.push({ node: modalElements.open, key: "modal.openButton" });
+    }
+    if (modalElements.copy) {
+      descriptors.push({ node: modalElements.copy, key: "modal.copyButton" });
+    }
+    if (modalElements.cancel) {
+      descriptors.push({ node: modalElements.cancel, key: "modal.cancelButton" });
+    }
+    if (modalElements.hostLabel) {
+      descriptors.push({ node: modalElements.hostLabel, key: "modal.hostLabel" });
+    } else if (modalElements.hostLabelTextNode) {
+      descriptors.push({
+        node: modalElements.hostLabelTextNode,
+        key: "modal.hostLabel",
+        property: "nodeValue",
+        transform: (value) => `${value} `
+      });
+    }
+    if (!descriptors.length) {
+      return null;
+    }
+    modalContentRenderer = i18n.createContentRenderer({
+      descriptors,
+      autoBind: false,
+      renderInitial: false
+    });
+    return modalContentRenderer;
+  };
+
+  const applyModalTranslations = () => {
+    if (!modalElements) return;
+    const renderer = ensureModalRenderer();
+    if (renderer) {
+      renderer.render();
+    } else {
+      const titleText = translate("modal.title");
+      if (modalElements.title) {
+        modalElements.title.textContent = titleText;
+      }
+      if (modalElements.close) {
+        modalElements.close.setAttribute(
+          "aria-label",
+          translate("modal.closeLabel")
+        );
+        modalElements.close.setAttribute(
+          "title",
+          translate("modal.closeTitle")
+        );
+      }
+      if (modalElements.open) {
+        modalElements.open.textContent = translate("modal.openButton");
+      }
+      if (modalElements.copy) {
+        modalElements.copy.textContent = translate("modal.copyButton");
+      }
+      if (modalElements.cancel) {
+        modalElements.cancel.textContent = translate("modal.cancelButton");
+      }
+      const hostLabelText = translate("modal.hostLabel");
+      if (modalElements.hostLabel) {
+        modalElements.hostLabel.textContent = hostLabelText;
+      } else if (modalElements.hostLabelTextNode) {
+        modalElements.hostLabelTextNode.nodeValue = `${hostLabelText} `;
+      }
+    }
+    if (
+      modalElements.message &&
+      (!pendingMessage || pendingMessage === defaultWarnMessage)
+    ) {
+      modalElements.message.textContent = defaultWarnMessage;
+    }
+  };
+
+  const handleLanguageChange = () => {
+    const previousDefault = defaultWarnMessage;
+    defaultWarnMessage = translate("messages.defaultWarn");
+    if (!cfg.warnMessageDefault || cfg.warnMessageDefault === previousDefault) {
+      cfg.warnMessageDefault = defaultWarnMessage;
+    }
+    if (!pendingMessage || pendingMessage === previousDefault) {
+      pendingMessage = defaultWarnMessage;
+      if (modalElements?.message) {
+        modalElements.message.textContent = defaultWarnMessage;
+      }
+    }
+    applyModalTranslations();
+  };
+
+  if (guardNamespace.i18n && typeof guardNamespace.i18n.onLanguageChange === "function") {
+    guardNamespace.i18n.onLanguageChange(handleLanguageChange);
+  }
+  handleLanguageChange();
 
   const applyModalTranslations = () => {
     if (!modalElements) return;
@@ -1294,6 +1414,11 @@
           ta.select(); document.execCommand("copy"); ta.remove();
         }
       });
+    }
+
+    if (modalContentRenderer) {
+      modalContentRenderer.disconnect();
+      modalContentRenderer = null;
     }
 
     modalElements = {

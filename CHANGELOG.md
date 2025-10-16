@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.7.0] - 2025-11-07
+### Added
+- API `createContentRenderer` nel modulo `links-guard.i18n.js` per gestire contenuti multilingua in modo professionale tramite
+  descriptor, binding automatici `data-slg-i18n` e aggiornamenti reattivi su cambio lingua.
+- Test unitari aggiuntivi in `tests/unit/translation_service_test.js` che coprono binding testuale, attributi mappati, fallback
+  dedicati, condizioni di rendering e deregistrazione dei descriptor.
+
+### Changed
+- La modale gestita da `links-guard.js` utilizza ora il renderer di contenuti i18n per sincronizzare pulsanti, etichette e
+  attributi ARIA, semplificando l'estensione dell'interfaccia a nuovi componenti localizzati.
+
+### Fixed
+- Risolto il `ReferenceError` generato da `handleLanguageChange` durante il bootstrap spostando la sottoscrizione all'evento di
+  cambio lingua dopo la definizione della funzione.
+
 ## [1.6.0] - 2025-11-06
 ### Added
 - Modulo `links-guard.i18n.js` con rilevazione automatica della lingua, fallback inglese e API per gestire traduzioni personalizzate.

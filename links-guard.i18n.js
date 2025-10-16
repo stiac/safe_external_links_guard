@@ -407,6 +407,308 @@
 
   const getAvailableLanguages = () => Object.keys(ensureCatalog());
 
+  const evaluateTranslation = (translator, key, replacements, fallbackKey) => {
+    if (!key || typeof key !== 'string') {
+      return '';
+    }
+    const primary = translator.t(key, replacements);
+    if (primary !== key || !fallbackKey || fallbackKey === key) {
+      return primary;
+    }
+    return translator.t(fallbackKey, replacements);
+  };
+
+  const resolveReplacements = (source, descriptor, translator, context = {}) => {
+    if (source == null) {
+      source = descriptor.replacements;
+    }
+    if (typeof source === 'function') {
+      return source({ descriptor, translator, ...context });
+    }
+    return source;
+  };
+
+  const parseAttributeMapping = (value) => {
+    if (!value || typeof value !== 'string') {
+      return null;
+    }
+    const attrs = {};
+    value.split(/[,;]+/).forEach((pair) => {
+      const trimmed = pair.trim();
+      if (!trimmed) return;
+      const parts = trimmed.split(':');
+      if (parts.length < 2) return;
+      const name = parts[0].trim();
+      const key = parts.slice(1).join(':').trim();
+      if (name && key) {
+        attrs[name] = { key };
+      }
+    });
+    return Object.keys(attrs).length ? attrs : null;
+  };
+
+  const normaliseAttributes = (input) => {
+    if (!input || typeof input !== 'object') {
+      return null;
+    }
+    const attrs = {};
+    Object.keys(input).forEach((name) => {
+      const value = input[name];
+      if (typeof value === 'string') {
+        attrs[name] = { key: value };
+      } else if (value && typeof value === 'object' && typeof value.key === 'string') {
+        attrs[name] = {
+          key: value.key,
+          fallbackKey: typeof value.fallbackKey === 'string' ? value.fallbackKey : null,
+          replacements: value.replacements || null,
+          transform: typeof value.transform === 'function' ? value.transform : null
+        };
+      }
+    });
+    return Object.keys(attrs).length ? attrs : null;
+  };
+
+  const normaliseDescriptor = (input) => {
+    if (!input) {
+      return null;
+    }
+    const node = input.node || (typeof input.getNode === 'function' ? input.getNode() : null);
+    if (!node) {
+      return null;
+    }
+    return {
+      node,
+      key: typeof input.key === 'string' ? input.key : null,
+      fallbackKey: typeof input.fallbackKey === 'string' ? input.fallbackKey : null,
+      html: Boolean(input.html),
+      property: typeof input.property === 'string' ? input.property : null,
+      replacements: input.replacements || null,
+      transform: typeof input.transform === 'function' ? input.transform : null,
+      shouldRender: typeof input.shouldRender === 'function' ? input.shouldRender : null,
+      attributes: normaliseAttributes(
+        input.attributes || (typeof input.attribute === 'object' ? input.attribute : null)
+      )
+    };
+  };
+
+  const applyTextDescriptor = (descriptor, translator) => {
+    if (!descriptor.key) {
+      return;
+    }
+    const replacements = resolveReplacements(null, descriptor, translator, { target: 'text' });
+    let value = evaluateTranslation(
+      translator,
+      descriptor.key,
+      replacements,
+      descriptor.fallbackKey
+    );
+    if (descriptor.transform) {
+      value = descriptor.transform(value, {
+        node: descriptor.node,
+        descriptor,
+        translator,
+        target: 'text'
+      });
+    }
+    const node = descriptor.node;
+    if (descriptor.property && descriptor.property in node) {
+      node[descriptor.property] = value;
+    } else if (descriptor.html && typeof node.innerHTML === 'string') {
+      node.innerHTML = value;
+    } else if (typeof node.textContent === 'string') {
+      node.textContent = value;
+    } else if (typeof node.nodeValue === 'string') {
+      node.nodeValue = value;
+    } else if ('value' in node) {
+      node.value = value;
+    }
+  };
+
+  const applyAttributeDescriptors = (descriptor, translator) => {
+    if (!descriptor.attributes) {
+      return;
+    }
+    const node = descriptor.node;
+    Object.keys(descriptor.attributes).forEach((name) => {
+      const attrDescriptor = descriptor.attributes[name];
+      if (!attrDescriptor || typeof attrDescriptor.key !== 'string') {
+        return;
+      }
+      const replacements = resolveReplacements(
+        attrDescriptor.replacements,
+        descriptor,
+        translator,
+        { target: 'attribute', attribute: name }
+      );
+      let value = evaluateTranslation(
+        translator,
+        attrDescriptor.key,
+        replacements,
+        attrDescriptor.fallbackKey || descriptor.fallbackKey
+      );
+      const transform = attrDescriptor.transform || descriptor.transform;
+      if (transform) {
+        value = transform(value, {
+          node,
+          descriptor,
+          translator,
+          target: 'attribute',
+          attribute: name
+        });
+      }
+      if (typeof node.setAttribute === 'function') {
+        node.setAttribute(name, value);
+      } else if (node.attributes && typeof node.attributes === 'object') {
+        node.attributes[name] = value;
+      } else {
+        node[name] = value;
+      }
+    });
+  };
+
+  const renderDescriptor = (descriptor, translator) => {
+    if (!descriptor || !descriptor.node) {
+      return;
+    }
+    if (descriptor.shouldRender && !descriptor.shouldRender(descriptor, translator)) {
+      return;
+    }
+    applyTextDescriptor(descriptor, translator);
+    applyAttributeDescriptors(descriptor, translator);
+  };
+
+  // Renderer dichiarativo per collegare nodi del DOM (o oggetti compatibili)
+  // ai cataloghi di traduzione. Gestisce binding iniziali, aggiornamenti
+  // reattivi ai cambi lingua e supporta descriptor personalizzati.
+  const createContentRenderer = (options = {}) => {
+    const descriptors = [];
+    const boundNodes = new WeakSet();
+    const root = options.root || (typeof document !== 'undefined' ? document : null);
+    const watch = options.watch !== false;
+    const autoBind = options.autoBind !== false;
+    const renderInitial = options.renderInitial !== false;
+
+    const addDescriptor = (input) => {
+      const normalized = normaliseDescriptor(input);
+      if (!normalized) {
+        return null;
+      }
+      descriptors.push(normalized);
+      return () => {
+        const index = descriptors.indexOf(normalized);
+        if (index >= 0) {
+          descriptors.splice(index, 1);
+        }
+      };
+    };
+
+    const bindFromNode = (node) => {
+      if (!node || boundNodes.has(node)) {
+        return;
+      }
+      const getAttr = (name) => {
+        if (typeof node.getAttribute === 'function') {
+          return node.getAttribute(name);
+        }
+        return null;
+      };
+      const hasAttr = (name) => {
+        if (typeof node.hasAttribute === 'function') {
+          return node.hasAttribute(name);
+        }
+        return false;
+      };
+      const descriptor = { node };
+      const key = getAttr('data-slg-i18n');
+      if (key) {
+        descriptor.key = key;
+      }
+      const fallbackKey = getAttr('data-slg-i18n-fallback');
+      if (fallbackKey) {
+        descriptor.fallbackKey = fallbackKey;
+      }
+      if (hasAttr('data-slg-i18n-html')) {
+        descriptor.html = true;
+      }
+      const attrMappings = parseAttributeMapping(getAttr('data-slg-i18n-attr'));
+      if (attrMappings) {
+        descriptor.attributes = attrMappings;
+      }
+      if (!descriptor.key && !descriptor.attributes) {
+        return;
+      }
+      boundNodes.add(node);
+      addDescriptor(descriptor);
+    };
+
+    const SELECTOR = '[data-slg-i18n], [data-slg-i18n-attr]';
+
+    const autoBindNodes = () => {
+      if (!autoBind || !root || typeof root.querySelectorAll !== 'function') {
+        return;
+      }
+      if (typeof root.matches === 'function' && root.matches(SELECTOR)) {
+        bindFromNode(root);
+      }
+      const nodes = root.querySelectorAll(SELECTOR);
+      nodes.forEach(bindFromNode);
+    };
+
+    if (Array.isArray(options.descriptors)) {
+      options.descriptors.forEach((descriptor) => {
+        addDescriptor(descriptor);
+      });
+    }
+
+    autoBindNodes();
+
+    const render = () => {
+      const translator = getTranslator();
+      descriptors.forEach((descriptor) => {
+        renderDescriptor(descriptor, translator);
+      });
+    };
+
+    let unsubscribe = null;
+    if (watch) {
+      unsubscribe = onLanguageChange(() => {
+        render();
+      });
+    }
+
+    if (renderInitial) {
+      render();
+    }
+
+    return {
+      render,
+      refresh() {
+        autoBindNodes();
+        render();
+      },
+      register(descriptor) {
+        const remove = addDescriptor(descriptor);
+        if (!remove) {
+          return () => {};
+        }
+        render();
+        return () => {
+          remove();
+        };
+      },
+      disconnect() {
+        if (unsubscribe) {
+          unsubscribe();
+          unsubscribe = null;
+        }
+        descriptors.splice(0, descriptors.length);
+      },
+      get size() {
+        return descriptors.length;
+      }
+    };
+  };
+
   const api = {
     DEFAULT_LANGUAGE,
     detectLanguage,
@@ -421,6 +723,7 @@
     onLanguageChange,
     registerLanguage,
     setLanguage,
+    createContentRenderer,
     t(key, replacements) {
       return getTranslator().t(key, replacements);
     }
