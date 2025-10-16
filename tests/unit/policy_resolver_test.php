@@ -37,7 +37,7 @@ $cases = [
     [
         'host' => 'unknown.example',
         'expectedAction' => 'warn',
-        'expectedMessage' => 'Dominio non presente nelle liste, richiesta conferma utente.',
+        'expectedMessage' => 'Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile.',
         'minTtl' => SLG_DEFAULT_WARN_TTL,
     ],
 ];
