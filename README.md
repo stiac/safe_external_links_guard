@@ -148,6 +148,28 @@ const storedPreference = SafeExternalLinksGuard.i18n.detectLanguage({
 // storedPreference === 'es-ES'
 ```
 
+> **Nota:** i codici `it` e `it-IT` vengono ora mappati direttamente sul dizionario italiano, mantenendo la forma con suffisso regionale quando presente.
+
+Esempio di uso robusto della detection con codici brevi e regionali:
+
+```javascript
+const detected = SafeExternalLinksGuard.i18n.detectLanguage({
+  navigatorLanguages: ['pt-BR', 'en-US'],
+  defaultLanguage: 'en'
+});
+// detected === 'pt-BR'
+
+const fallback = SafeExternalLinksGuard.i18n.detectLanguage({
+  navigatorLanguages: ['pt', 'en-US']
+});
+// fallback === 'pt'
+
+const italian = SafeExternalLinksGuard.i18n.detectLanguage({
+  navigatorLanguages: ['it-IT', 'en']
+});
+// italian === 'it-IT'
+```
+
 Il metodo `SafeExternalLinksGuard.i18n.t(key)` restituisce il testo nella lingua attiva e, se una chiave non è tradotta, ricade automaticamente sulla versione inglese. È possibile passare un array di chiavi (`t(['ui.cta', 'modal.openButton'])`) per gestire fallback a catena senza controlli manuali. Per aggiungere nuove lingue è sufficiente creare un file JSON con la stessa struttura (sezioni `messages`, `modal`, `tooltip`) e registrarlo via `SafeExternalLinksGuard.i18n.registerLanguage('codice', dizionario)`. Il servizio espone inoltre `onLanguageChange` per reagire ai cambi di lingua in tempo reale e le utility `loadTranslations()`/`whenReady()` per precaricare i bundle prima del rendering della UI.
 
 #### Esempio di preload e integrazione rapida
