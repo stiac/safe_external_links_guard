@@ -2,17 +2,17 @@
 
 ## Informazioni Generali
 - **Progetto:** Safe External Links Guard
-- **Versione:** 1.8.4
-- **Data:** 2025-11-16
+- **Versione:** 1.9.1
+- **Data:** 2025-11-18
 - **Autore aggiornamento:** AI Development Assistant
 
 ## Stato Moduli
 | Modulo | Stato | Note |
 | --- | --- | --- |
-| Gestione modale (links-guard.js) | Aggiornato | Aggiunto tracciamento opzionale dei click con parametro personalizzato e pixel JSON con fallback sendBeacon/immagine. Sincronizzato inoltre l'attributo `href` dei link tracciati per coprire aperture modificate e copie dell'indirizzo.
+| Gestione modale (links-guard.js) | Aggiornato | Rilevazione automatica Reader/AMP con mantenimento del tooltip di sicurezza sui link `allow`, così l'avviso resta visibile anche quando la modale non è disponibile.
 | Localizzazione (links-guard.i18n.js) | Aggiornato | Ampliate le fonti di rilevazione (storage, attributi HTML, locale Intl) e migliorata la normalizzazione dei codici con gestione dei quality value.
-| Documentazione | Aggiornata | README, CHANGELOG, VERSION, ROADMAP e report allineati alla release 1.8.4 con esempi di detection multilivello.
-| Configurazione (links-guard.settings.js) | Aggiornato | Nuovi flag `trackingEnabled`, `trackingParameter`, `trackingPixelEndpoint`, `trackingIncludeMetadata` con override `data-*`.
+| Documentazione | Aggiornata | README, CHANGELOG, VERSION, ROADMAP e report allineati alla release 1.9.1 con istruzioni sui tooltip persistenti in Reader/AMP e sul nuovo attributo `data-keep-warn-on-allow`.
+| Configurazione (links-guard.settings.js) | Aggiornato | Introdotto il flag `keepWarnMessageOnAllow` con auto-attivazione in contesti limitati e supporto negli snippet AMP/server-side.
 
 ## Attività Recenti
 | Data | Autore | Descrizione | Tempo (h) |
@@ -21,12 +21,14 @@
 | 2025-11-13 | AI Development Assistant | Correzione della riscrittura degli URL di tracciamento con preservazione di query string e hash, nuovi test automatici e allineamento documentale alla release 1.8.1. | 1.0 |
 | 2025-11-14 | AI Development Assistant | Fix della detection linguistica per le varianti italiane, rifinitura del fallback regionale, aggiornamento test e documentazione di esempio. | 0.5 |
 | 2025-11-15 | AI Development Assistant | Hardening del rilevamento lingua con lettura da storage, attributi HTML e locale Intl, nuovi test di regressione e documentazione aggiornata. | 0.7 |
-| 2025-11-16 | AI Development Assistant | Sincronizzazione del parametro di tracciamento con l'attributo `href` per supportare aperture modificate, aggiornamento documentazione e versione 1.8.4. | 0.4 |
+| 2025-11-17 | AI Development Assistant | Listener delegato per modalità lettura, utility `SafeExternalLinksGuard.amp`, documentazione AMP e nuovo test `amp_utils_test`. | 1.2 |
+| 2025-11-18 | AI Development Assistant | Persistenza dei messaggi di sicurezza sui link `allow` in Reader/AMP, nuova opzione `keepWarnMessageOnAllow`, aggiornamento test/documentazione e report. | 0.8 |
 
 
 ## Rischi e Note Tecniche
 - Validare in staging il flusso di consenso prima di abilitare `trackingEnabled`, verificando che il parametro personalizzato non interferisca con redirect esistenti.
 - Assicurarsi che l'endpoint del pixel gestisca correttamente richieste POST `keepalive` e il fallback tramite query string codificata.
+- Verificare i limiti di `<amp-script>` (dimensione bundle, mutazioni consentite) sugli ambienti AMP e predisporre fallback server-side per i domini in deny.
 
 ## Dipendenze e Impatti
 - Nessuna nuova dipendenza introdotta.

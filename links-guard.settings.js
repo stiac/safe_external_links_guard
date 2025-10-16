@@ -42,7 +42,8 @@
     trackingEnabled: false, // Abilita il tracciamento dei click con parametro personalizzato. Override con `data-tracking-enabled`.
     trackingParameter: "myclid", // Nome del parametro di tracciamento (es. myclid). Override con `data-tracking-parameter`.
     trackingPixelEndpoint: "", // Endpoint del pixel di raccolta dati. Impostabile con `data-tracking-pixel-endpoint`.
-    trackingIncludeMetadata: true // Invia metadati anonimi (lingua, device, timezone). Disattivabile con `data-tracking-include-metadata`.
+    trackingIncludeMetadata: true, // Invia metadati anonimi (lingua, device, timezone). Disattivabile con `data-tracking-include-metadata`.
+    keepWarnMessageOnAllow: false // Mantiene il messaggio di avviso anche per i link consentiti (utile in contesti limitati).
   };
 
   const VALID_MODES = new Set(["strict", "warn", "soft"]); // Modalità supportate: `strict` (solo modale), `warn` (modale + evidenza), `soft` (solo evidenza).
@@ -102,6 +103,7 @@
     return {
       ...DEFAULTS,
       warnMessageDefault,
+      keepWarnMessageOnAllow: DEFAULTS.keepWarnMessageOnAllow,
       rel: [...DEFAULTS.rel],
       excludeSelectors: [...DEFAULTS.excludeSelectors]
     };
@@ -165,6 +167,12 @@
         getAttribute(scriptEl, "data-exclude-selectors")
       );
     }
+    if (hasDataAttribute(scriptEl, "data-keep-warn-on-allow")) {
+      cfg.keepWarnMessageOnAllow = parseBoolean(
+        getAttribute(scriptEl, "data-keep-warn-on-allow"),
+        cfg.keepWarnMessageOnAllow
+      );
+    }
     if (hasDataAttribute(scriptEl, "data-config-version")) {
       const version = getAttribute(scriptEl, "data-config-version");
       cfg.configVersion = version || cfg.configVersion;
@@ -216,7 +224,8 @@
       "trackingEnabled",
       "trackingParameter",
       "trackingPixelEndpoint",
-      "trackingIncludeMetadata"
+      "trackingIncludeMetadata",
+      "keepWarnMessageOnAllow"
     ];
     simpleKeys.forEach((key) => {
       if (Object.prototype.hasOwnProperty.call(overrides, key)) {
@@ -262,6 +271,7 @@
     } else {
       cfg.configVersion = DEFAULTS.configVersion;
     }
+    cfg.keepWarnMessageOnAllow = Boolean(cfg.keepWarnMessageOnAllow);
     cfg.trackingEnabled = Boolean(cfg.trackingEnabled);
     if (!cfg.trackingPixelEndpoint) {
       cfg.trackingEnabled = false;
@@ -306,7 +316,8 @@
       trackingEnabled: Boolean(config.trackingEnabled),
       trackingParameter: String(config.trackingParameter || ""),
       trackingPixelEndpoint: String(config.trackingPixelEndpoint || ""),
-      trackingIncludeMetadata: Boolean(config.trackingIncludeMetadata)
+      trackingIncludeMetadata: Boolean(config.trackingIncludeMetadata),
+      keepWarnMessageOnAllow: Boolean(config.keepWarnMessageOnAllow)
     };
     return JSON.stringify(safeConfig);
   }; // Genera una firma stabile delle impostazioni correnti per invalidare cache e asset.

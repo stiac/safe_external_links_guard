@@ -298,7 +298,12 @@
       warnHighlightClass: "slg-warn-highlight",
       warnMessageDefault: defaultWarnMessage,
       excludeSelectors: [],
-      configVersion: "1.5.14"
+      configVersion: "1.5.14",
+      trackingEnabled: false,
+      trackingParameter: "myclid",
+      trackingPixelEndpoint: "",
+      trackingIncludeMetadata: true,
+      keepWarnMessageOnAllow: false
     };
 
     const getAttribute = (node, attr) => {
@@ -367,7 +372,12 @@
         warnHighlightClass: String(config.warnHighlightClass || ""),
         warnMessageDefault: String(config.warnMessageDefault || ""),
         excludeSelectors: normalizeArray(config.excludeSelectors),
-        configVersion: String(config.configVersion || "")
+        configVersion: String(config.configVersion || ""),
+        trackingEnabled: Boolean(config.trackingEnabled),
+        trackingParameter: String(config.trackingParameter || ""),
+        trackingPixelEndpoint: String(config.trackingPixelEndpoint || ""),
+        trackingIncludeMetadata: Boolean(config.trackingIncludeMetadata),
+        keepWarnMessageOnAllow: Boolean(config.keepWarnMessageOnAllow)
       };
       return JSON.stringify(safeConfig);
     };
@@ -418,7 +428,25 @@
         ),
         configVersion:
           getAttribute(scriptEl, "data-config-version") ||
-          fallbackDefaults.configVersion
+          fallbackDefaults.configVersion,
+        trackingEnabled: parseBoolean(
+          getAttribute(scriptEl, "data-tracking-enabled"),
+          fallbackDefaults.trackingEnabled
+        ),
+        trackingParameter:
+          getAttribute(scriptEl, "data-tracking-parameter") ||
+          fallbackDefaults.trackingParameter,
+        trackingPixelEndpoint:
+          getAttribute(scriptEl, "data-tracking-pixel-endpoint") ||
+          fallbackDefaults.trackingPixelEndpoint,
+        trackingIncludeMetadata: parseBoolean(
+          getAttribute(scriptEl, "data-tracking-include-metadata"),
+          fallbackDefaults.trackingIncludeMetadata
+        ),
+        keepWarnMessageOnAllow: parseBoolean(
+          getAttribute(scriptEl, "data-keep-warn-on-allow"),
+          fallbackDefaults.keepWarnMessageOnAllow
+        )
       };
 
       if (!VALID_MODES.has(cfg.mode)) cfg.mode = "strict";
@@ -426,6 +454,8 @@
       if (!cfg.warnMessageDefault) {
         cfg.warnMessageDefault = fallbackDefaults.warnMessageDefault;
       }
+      cfg.keepWarnMessageOnAllow = Boolean(cfg.keepWarnMessageOnAllow);
+      cfg.trackingEnabled = Boolean(cfg.trackingEnabled);
       return cfg;
     };
 
@@ -478,6 +508,99 @@
 
   guardNamespace.activeConfigSignature = configFingerprint;
   guardNamespace.activeConfigVersion = cfg.configVersion;
+
+  // Rileva ambienti con restrizioni (Reader mode, AMP) per attivare fallback UI automatici.
+  const detectLimitedExecutionContext = () => {
+    const docEl = document && document.documentElement;
+    const body = document && document.body;
+
+    const checkClassList = (element, classNames) => {
+      if (!element || !element.classList) {
+        return false;
+      }
+      for (let i = 0; i < classNames.length; i += 1) {
+        if (element.classList.contains(classNames[i])) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const checkAttributes = (element, attributes) => {
+      if (!element || typeof element.getAttribute !== "function") {
+        return false;
+      }
+      for (let i = 0; i < attributes.length; i += 1) {
+        const value = element.getAttribute(attributes[i]);
+        if (value && value !== "false" && value !== "0") {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const readerClasses = [
+      "reader-mode",
+      "reader",
+      "is-reader-mode",
+      "reader-view",
+      "reading-mode",
+      "moz-reader-view",
+      "apple-reader",
+      "apple-reader-mode",
+      "safari-reader"
+    ];
+    const readerAttributes = [
+      "data-reader-mode",
+      "data-reader",
+      "data-reading-mode"
+    ];
+    let isReaderMode =
+      checkClassList(docEl, readerClasses) ||
+      checkClassList(body, readerClasses) ||
+      checkAttributes(docEl, readerAttributes) ||
+      checkAttributes(body, readerAttributes);
+
+    if (!isReaderMode) {
+      const bodyId = body && typeof body.id === "string" ? body.id : "";
+      if (bodyId) {
+        const normalized = bodyId.toLowerCase();
+        if (
+          normalized.includes("reader") ||
+          normalized.startsWith("readability")
+        ) {
+          isReaderMode = true;
+        }
+      }
+    }
+
+    const ampClasses = ["amp-mode", "amp-document", "amp-html"];
+    const isAmpByAttr =
+      (docEl &&
+        (docEl.hasAttribute("amp") ||
+          docEl.hasAttribute("⚡") ||
+          docEl.hasAttribute("amp-version"))) ||
+      checkClassList(docEl, ampClasses);
+    const ampRuntime =
+      typeof window !== "undefined" &&
+      (window.AMP || window.__AMP_MODE || window.AMP_MODE);
+    const isAmpDocument = Boolean(isAmpByAttr || ampRuntime);
+
+    return {
+      isReaderMode,
+      isAmpDocument
+    };
+  };
+
+  const limitedContextInfo = detectLimitedExecutionContext();
+  if (
+    !cfg.keepWarnMessageOnAllow &&
+    (limitedContextInfo.isReaderMode || limitedContextInfo.isAmpDocument)
+  ) {
+    cfg.keepWarnMessageOnAllow = true;
+  }
+
+  const keepWarnMessageOnAllow = Boolean(cfg.keepWarnMessageOnAllow);
 
   const hoverFeedback = createHoverFeedback(cfg);
   const useTooltip = hoverFeedback.useTooltip;
@@ -1167,6 +1290,9 @@
 
   // Indice host → Set<nodo>
   const anchorsByHost = new Map();
+  // Stato per ancoraggio → metadati (URL normalizzato, host) usato per i listener delegati
+  const anchorStates = new WeakMap();
+
   const mapAdd = (host, node) => {
     let set = anchorsByHost.get(host);
     if (!set) { set = new Set(); anchorsByHost.set(host, set); }
@@ -1176,6 +1302,15 @@
     const set = anchorsByHost.get(host);
     if (!set) return;
     set.delete(oldNode);
+
+    const previousState = anchorStates.get(oldNode);
+    if (previousState) {
+      anchorStates.delete(oldNode);
+      if (newNode && newNode.tagName === "A") {
+        anchorStates.set(newNode, { ...previousState });
+      }
+    }
+
     if (newNode) set.add(newNode);
   };
 
@@ -1198,6 +1333,7 @@
 
   const disableLink = (a, reason = null, hostForIndex = null) => {
     const message = reason || defaultDenyMessage;
+    anchorStates.delete(a);
     clearHoverMessage(a, null, true);
     if (cfg.removeNode) {
       const span = document.createElement("span");
@@ -1407,16 +1543,30 @@
       } else if (action === "allow") {
         if (node.tagName === "A") {
           ensureAttrs(node);
-          clearHoverMessage(node, warnMessage, useTooltip);
+          if (keepWarnMessageOnAllow) {
+            // I link consentiti mantengono un tooltip informativo per i contesti Reader/AMP.
+            setHoverMessage(node, warnFallback);
+          } else {
+            clearHoverMessage(node, warnMessage, useTooltip);
+          }
           // reset listener: clone per sicurezza
           const clone = node.cloneNode(true);
           clone.classList?.remove(cfg.warnHighlightClass);
-          clearHoverMessage(clone, warnMessage, useTooltip);
+          if (keepWarnMessageOnAllow) {
+            setHoverMessage(clone, warnFallback);
+          } else {
+            clearHoverMessage(clone, warnMessage, useTooltip);
+          }
           node.replaceWith(clone);
           mapReplaceNode(host, node, clone);
         } else {
           node.classList?.remove(cfg.warnHighlightClass);
-          clearHoverMessage(node, warnMessage, useTooltip);
+          if (keepWarnMessageOnAllow) {
+            // Anche per elementi non ancora sostituiti (es. <span>) manteniamo il messaggio di sicurezza.
+            setHoverMessage(node, warnFallback);
+          } else {
+            clearHoverMessage(node, warnMessage, useTooltip);
+          }
         }
       } else {
         if (node.tagName === "A") ensureAttrs(node); // warn
@@ -1948,98 +2098,46 @@
   };
   // ===== Scansione =====
   const processAnchor = (a) => {
-    if (!a || a.dataset.safeLinkGuard === "1") return;
-    if (isModalElement(a)) { a.dataset.safeLinkGuard = "modal"; return; }
+    if (!a) return null;
+    if (a.dataset.safeLinkGuard === "modal") { a.dataset.safeLinkGuard = "modal"; return null; }
+    if (a.dataset.safeLinkGuard === "1") {
+      const cachedState = anchorStates.get(a);
+      return cachedState || null;
+    }
 
     const href = a.getAttribute("href") || "";
-    if (!href || href.startsWith("#")) { a.dataset.safeLinkGuard = "1"; return; }
-    if (/^(mailto:|tel:|javascript:|blob:|data:)/i.test(href)) { a.dataset.safeLinkGuard = "1"; return; }
+    if (!href || href.startsWith("#")) { a.dataset.safeLinkGuard = "1"; return null; }
+    if (/^(mailto:|tel:|javascript:|blob:|data:)/i.test(href)) { a.dataset.safeLinkGuard = "1"; return null; }
 
-    let url = toURL(href);
-    if (!url || !isHttpLike(url.href)) { a.dataset.safeLinkGuard = "1"; return; }
-    if (!isExternal(url)) { a.dataset.safeLinkGuard = "1"; return; }
+    const url = toURL(href);
+    if (!url || !isHttpLike(url.href)) { a.dataset.safeLinkGuard = "1"; return null; }
+    if (!isExternal(url)) { a.dataset.safeLinkGuard = "1"; return null; }
 
     const host = url.host.toLowerCase();
+    const state = { url, host };
+    anchorStates.set(a, state);
     mapAdd(host, a);
 
     // Se già in cache come DENY, blocca SUBITO (e sostituisci <a>→<span> se richiesto)
     const cached = policyCache.get(host);
-      if (cached && cached.action === "deny") {
-        const denyMsg =
-          translateMessageDescriptor(cached.message, defaultDenyMessage) ||
-          defaultDenyMessage;
-        disableLink(a, denyMsg, host);
-        return;
-      }
+    if (cached && cached.action === "deny") {
+      const denyMsg =
+        translateMessageDescriptor(cached.message, defaultDenyMessage) ||
+        defaultDenyMessage;
+      disableLink(a, denyMsg, host);
+      return state;
+    }
 
     // Altrimenti impone attributi e chiede la policy in background
     ensureAttrs(a);
+    if (keepWarnMessageOnAllow) {
+      // Mantiene un messaggio di avviso accessibile anche quando la policy finale è `allow`.
+      const warnFallback = cfg.warnMessageDefault || defaultWarnMessage;
+      setHoverMessage(a, warnFallback);
+    }
     enqueueHost(host);
 
-    // Click: se policy non nota, chiedi e applica prima di navigare
-    // Intercettiamo sempre il click standard per evitare aperture duplicate
-    // causate da handler inline o da altri listener registrati a valle.
-    a.addEventListener("click", async (e) => {
-      let trackingContext = null;
-      if (cfg.trackingEnabled && cfg.trackingPixelEndpoint) {
-        trackingContext = prepareTrackedNavigation(url);
-        if (trackingContext?.href) {
-          try {
-            a.href = trackingContext.href;
-          } catch (errSetHref) {
-            try {
-              a.setAttribute("href", trackingContext.href);
-            } catch (errSetAttr) {
-              // Se non è possibile aggiornare l'attributo continuiamo comunque.
-            }
-          }
-          if (trackingContext.url) {
-            url = trackingContext.url;
-          }
-        }
-      }
-
-      const isModified =
-        e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1;
-      if (isModified) return;
-
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      e.stopPropagation();
-
-      const cached2 = policyCache.get(host);
-      if (!cached2) {
-        const action = await getPolicy(host);
-        applyPolicyToHost(host, action);
-        if (action === "allow") {
-          followExternalUrl(trackingContext?.url || url, {
-            element: a,
-            trackingContext
-          });
-        } else if (action === "warn") {
-          if (cfg.mode !== "soft") {
-            showModal(url, policyCache.get(host)?.message);
-          }
-        }
-        // deny: già applicato a tutti i link dell’host
-        return;
-      }
-
-      if (cached2.action === "deny") {
-        return;
-      }
-      if (cached2.action === "warn") {
-        if (cfg.mode !== "soft") {
-          showModal(url, cached2.message);
-        }
-        return;
-      }
-
-      followExternalUrl(trackingContext?.url || url, {
-        element: a,
-        trackingContext
-      });
-    }, { capture: true });
+    return state;
   };
 
   const processAll = (root = document) => {
@@ -2054,6 +2152,317 @@
       }
       processAnchor(node);
     });
+  };
+
+  const resolveAnchorFromTarget = (target) => {
+    if (!target) return null;
+    if (target.tagName === "A") return target;
+    if (typeof target.closest === "function") {
+      try {
+        const closestAnchor = target.closest("a[href]");
+        if (closestAnchor) {
+          return closestAnchor;
+        }
+      } catch (errClosest) {
+        // Alcuni ambienti possono limitare l'uso di closest: fallback manuale.
+      }
+    }
+    let node = target.parentNode;
+    while (node) {
+      if (node.tagName === "A") return node;
+      node = node.parentNode;
+    }
+    return null;
+  };
+
+  const ensureAnchorState = (anchor) => {
+    if (!anchor) return null;
+    let state = anchorStates.get(anchor);
+    if (state) {
+      return state;
+    }
+    return processAnchor(anchor);
+  };
+
+  const handleAnchorActivation = async (event, anchor) => {
+    if (!anchor || event.defaultPrevented) {
+      return;
+    }
+    if (anchor.dataset.safeLinkGuard === "modal") {
+      return;
+    }
+
+    const state = ensureAnchorState(anchor);
+    if (!state) {
+      return;
+    }
+
+    let { url, host } = state;
+    let trackingContext = null;
+
+    if (cfg.trackingEnabled && cfg.trackingPixelEndpoint) {
+      trackingContext = prepareTrackedNavigation(url);
+      if (trackingContext?.href) {
+        try {
+          anchor.href = trackingContext.href;
+        } catch (errSetHref) {
+          try {
+            anchor.setAttribute("href", trackingContext.href);
+          } catch (errSetAttr) {
+            // Ambienti limitati (es. Reader/AMP) potrebbero bloccare l'operazione: ignoriamo l'errore.
+          }
+        }
+        if (trackingContext.url) {
+          url = trackingContext.url;
+          state.url = trackingContext.url;
+        }
+      }
+    }
+
+    const isModified =
+      event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button === 1;
+    if (isModified) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    event.stopPropagation();
+
+    const cachedDecision = policyCache.get(host);
+    if (!cachedDecision) {
+      const action = await getPolicy(host);
+      applyPolicyToHost(host, action);
+      const finalCached = policyCache.get(host);
+      if (action === "allow") {
+        followExternalUrl(trackingContext?.url || url, {
+          element: anchor,
+          trackingContext
+        });
+      } else if (action === "warn") {
+        if (cfg.mode !== "soft") {
+          showModal(trackingContext?.url || url, finalCached?.message);
+        }
+      }
+      return;
+    }
+
+    if (cachedDecision.action === "deny") {
+      return;
+    }
+    if (cachedDecision.action === "warn") {
+      if (cfg.mode !== "soft") {
+        showModal(trackingContext?.url || url, cachedDecision.message);
+      }
+      return;
+    }
+
+    followExternalUrl(trackingContext?.url || url, {
+      element: anchor,
+      trackingContext
+    });
+  };
+
+  const collectExternalLinksForAmp = (root, options = {}) => {
+    const fallbackDocument =
+      typeof document !== "undefined" ? document : null;
+    const scope =
+      root && typeof root.querySelectorAll === "function"
+        ? root
+        : fallbackDocument;
+    if (!scope || typeof scope.querySelectorAll !== "function") {
+      return [];
+    }
+
+    const anchors = Array.from(scope.querySelectorAll("a[href]"));
+    const results = [];
+    anchors.forEach((node, index) => {
+      const href =
+        typeof node.getAttribute === "function"
+          ? node.getAttribute("href")
+          : node.href;
+      if (!href || href.startsWith("#")) {
+        return;
+      }
+      if (/^(mailto:|tel:|javascript:|blob:|data:)/i.test(href)) {
+        return;
+      }
+      const url = toURL(href);
+      if (!url || !isHttpLike(url.href) || !isExternal(url)) {
+        return;
+      }
+
+      results.push({
+        index,
+        href: url.href,
+        host: url.host.toLowerCase(),
+        origin: url.origin,
+        text: options.includeText ? (node.textContent || "").trim() : undefined,
+        id: typeof node.getAttribute === "function" ? node.getAttribute("id") : undefined
+      });
+    });
+
+    return results;
+  };
+
+  const normalizeAmpPolicies = (policies) => {
+    const map = new Map();
+    if (!policies) {
+      return map;
+    }
+
+    const pushEntry = (key, value) => {
+      if (!key) {
+        return;
+      }
+      const normalizedKey = String(key).toLowerCase();
+      if (!normalizedKey) {
+        return;
+      }
+      if (!value || typeof value !== "object") {
+        return;
+      }
+      const action = normalizeAction(value.action);
+      if (!action) {
+        return;
+      }
+      map.set(normalizedKey, {
+        action,
+        message: normalizeMessageDescriptor(value.message) || null
+      });
+    };
+
+    if (policies instanceof Map) {
+      policies.forEach((value, key) => {
+        pushEntry(key, value);
+      });
+      return map;
+    }
+
+    if (Array.isArray(policies)) {
+      policies.forEach((entry) => {
+        if (!entry || typeof entry !== "object") {
+          return;
+        }
+        pushEntry(entry.href || entry.host || entry.origin, entry);
+      });
+      return map;
+    }
+
+    if (typeof policies === "object") {
+      Object.keys(policies).forEach((key) => {
+        pushEntry(key, policies[key]);
+      });
+    }
+
+    return map;
+  };
+
+  const applyAmpPolicies = (root, policies, options = {}) => {
+    const fallbackDocument =
+      typeof document !== "undefined" ? document : null;
+    const scope =
+      root && typeof root.querySelectorAll === "function"
+        ? root
+        : fallbackDocument;
+    if (!scope || typeof scope.querySelectorAll !== "function") {
+      return { processed: 0, denied: 0, warned: 0 };
+    }
+
+    const normalizedPolicies = normalizeAmpPolicies(policies);
+    const warnClass = options.warnClass || cfg.warnHighlightClass || "slg-warn-highlight";
+    const warnFallback = cfg.warnMessageDefault || defaultWarnMessage;
+    const results = { processed: 0, denied: 0, warned: 0 };
+
+    const anchors = Array.from(scope.querySelectorAll("a[href]"));
+    anchors.forEach((node) => {
+      const href =
+        typeof node.getAttribute === "function"
+          ? node.getAttribute("href")
+          : node.href;
+      if (!href || href.startsWith("#")) {
+        return;
+      }
+      if (/^(mailto:|tel:|javascript:|blob:|data:)/i.test(href)) {
+        return;
+      }
+      const url = toURL(href);
+      if (!url || !isHttpLike(url.href) || !isExternal(url)) {
+        return;
+      }
+
+      const host = url.host.toLowerCase();
+      const originKey = url.origin.toLowerCase();
+      const hrefKey = url.href.toLowerCase();
+      const pathKey = `${originKey}${url.pathname}${url.search}`;
+
+      const policy =
+        normalizedPolicies.get(hrefKey) ||
+        normalizedPolicies.get(pathKey) ||
+        normalizedPolicies.get(originKey) ||
+        normalizedPolicies.get(host);
+      if (!policy) {
+        return;
+      }
+
+      results.processed += 1;
+
+      if (policy.action === "deny") {
+        results.denied += 1;
+        disableLink(node, policy.message, host);
+        return;
+      }
+
+      if (policy.action === "warn") {
+        results.warned += 1;
+        ensureAttrs(node);
+        if (node.classList && warnClass) {
+          node.classList.add(warnClass);
+        }
+        const messageText =
+          translateMessageDescriptor(policy.message, warnFallback) || warnFallback;
+        setHoverMessage(node, messageText);
+        return;
+      }
+
+      if (policy.action === "allow") {
+        ensureAttrs(node);
+        if (cfg.keepWarnMessageOnAllow) {
+          // In ambienti limitati manteniamo un avviso visibile anche per i link consentiti.
+          setHoverMessage(node, warnFallback);
+        } else {
+          clearHoverMessage(node, null, true);
+        }
+        if (node.classList && warnClass) {
+          node.classList.remove(warnClass);
+        }
+      }
+    });
+
+    return results;
+  };
+
+  const delegatedClickHandler = async (event) => {
+    if (!event) {
+      return;
+    }
+    const anchor = resolveAnchorFromTarget(event.target);
+    if (!anchor || anchor.tagName !== "A") {
+      return;
+    }
+    if (shouldExclude(anchor)) {
+      anchor.dataset.safeLinkGuard = "1";
+      return;
+    }
+    if (isModalElement(anchor)) {
+      anchor.dataset.safeLinkGuard = "modal";
+      return;
+    }
+    try {
+      await handleAnchorActivation(event, anchor);
+    } catch (errHandleAnchor) {
+      console.error("[SafeLinkGuard] Errore durante la gestione del click delegato", errHandleAnchor);
+    }
   };
 
   const observer = new MutationObserver((mutations) => {
@@ -2075,6 +2484,16 @@
     }
   });
 
+  if (!guardNamespace.amp) {
+    guardNamespace.amp = {};
+  }
+  if (typeof guardNamespace.amp.collectExternalLinks !== "function") {
+    guardNamespace.amp.collectExternalLinks = collectExternalLinksForAmp;
+  }
+  if (typeof guardNamespace.amp.applyPolicies !== "function") {
+    guardNamespace.amp.applyPolicies = applyAmpPolicies;
+  }
+
   // ===== Init =====
   const init = async () => {
     injectStyles();
@@ -2084,6 +2503,7 @@
       console.error(`[SafeLinkGuard] Verifica fallita per data-endpoint="${cfg.endpoint}". Fallback "warn".`);
     }
     processAll(document);
+    document.addEventListener("click", delegatedClickHandler, { capture: true, passive: false });
     observer.observe(document.documentElement, { childList: true, subtree: true });
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });

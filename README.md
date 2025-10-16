@@ -1,6 +1,6 @@
 # Safe External Links Guard
 
-**Versione:** 1.8.4
+**Versione:** 1.9.1
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
@@ -15,6 +15,7 @@ Lo script:
 - rende configurabile la visualizzazione dei messaggi su hover tramite tooltip personalizzato oppure attributo `title` standard;
 - espone un file di impostazioni dedicato (`links-guard.settings.js`) per gestire i valori di default e facilitare la manutenzione;
 - osserva il DOM con `MutationObserver` per gestire i link aggiunti dinamicamente, rispettando selettori esclusi configurati.
+- intercetta i click sui link esterni con un listener delegato a livello documento, mantenendo la protezione attiva anche in modalità lettura o quando il browser ricostruisce il DOM.
 - può aggiungere automaticamente un parametro di tracciamento a ogni link esterno consentito e inviare un evento analytics personalizzato con metadati anonimi nel rispetto delle preferenze privacy.
 
 ## Struttura del repository
@@ -101,6 +102,46 @@ Lo script:
 Lo script legge gli attributi `data-*` dal tag `<script>` per adattare il comportamento senza necessità di ricompilazione. Quando un attributo `data-*` non è presente vengono utilizzati i valori definiti in `links-guard.settings.js`, mentre gli override manuali possono sempre intervenire tramite JavaScript.
 Se `links-guard.settings.js` non è caricato, `links-guard.js` utilizza comunque un fallback legacy, ma verrà mostrato un avviso in console per ricordare di includere il file di impostazioni centralizzato.
 L'attributo `defer` garantisce che gli script vengano eseguiti nell'ordine dichiarato senza bloccare il parsing HTML; evita `async` sul file principale a meno che il file di settings non sia stato precaricato.
+
+### Modalità lettura e pagine AMP
+
+- **Reader mode (Safari/Firefox/Edge):** a partire dalla versione 1.9.0 la protezione sfrutta un listener delegato in `capture` su `document`. In questo modo i link clonati dai motori di lettura mantengono sempre gli attributi di sicurezza e il blocco viene applicato anche quando l'HTML viene ricostruito dopo il rendering. Il listener lavora insieme al `MutationObserver` già presente, perciò eventuali link inseriti dinamicamente o trasformati dal browser vengono riesaminati e, se necessario, sottoposti alle policy del resolver. Con la 1.9.1 il flag `keepWarnMessageOnAllow` viene forzato automaticamente, così anche i link contrassegnati come `allow` mostrano comunque il messaggio di sicurezza.
+- **AMP e ambienti con JavaScript limitato:** lo script espone l'helper `SafeExternalLinksGuard.amp` con due metodi pensati per l'esecuzione all'interno di `<amp-script>` oppure per un pre-processing server-side:
+  - `SafeExternalLinksGuard.amp.collectExternalLinks(root)` restituisce un array con host, URL canonici e ID utili per inviare al server la richiesta di validazione.
+  - `SafeExternalLinksGuard.amp.applyPolicies(root, policies, { warnClass })` applica il risultato delle policy (allow/warn/deny) direttamente sul DOM consentito da AMP, aggiungendo classi di evidenziazione o disabilitando i link bloccati senza eseguire fetch client-side.
+
+In pagine AMP il comportamento è identico: se l'ambiente non consente l'apertura della modale, `keepWarnMessageOnAllow` viene attivato automaticamente e l'helper aggiunge il tooltip di avviso anche quando la policy restituisce `allow`.
+
+Esempio minimale di integrazione AMP lato client con `<amp-script>`:
+
+```html
+<amp-script layout="container" script="slg-amp" sandbox="allow-forms">
+  <article data-slg-scope>
+    <!-- Contenuto dell'articolo -->
+  </article>
+</amp-script>
+
+<script id="slg-amp" type="text/plain" target="amp-script">
+  (async () => {
+    const scope = document.querySelector('[data-slg-scope]');
+    const links = SafeExternalLinksGuard.amp.collectExternalLinks(scope);
+    const response = await fetch('/amp/policy-resolver.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ links })
+    });
+    if (!response.ok) {
+      return;
+    }
+    const policies = await response.json();
+    SafeExternalLinksGuard.amp.applyPolicies(scope, policies, {
+      warnClass: 'amp-warn'
+    });
+  })();
+</script>
+```
+
+Lo stesso helper può essere eseguito su un worker Node.js o su uno script PHP lato server per calcolare in anticipo le azioni da allegare alla pagina AMP (ad esempio serializzando nel markup attributi `data-policy="deny"`). In assenza di JavaScript, il server può usare l'array restituito da `collectExternalLinks()` per trasformare definitivamente i link non autorizzati in elementi non interattivi prima della consegna al client.
 
 ### File di impostazioni dedicato (`links-guard.settings.js`)
 Il file `links-guard.settings.js` espone il namespace globale `SafeExternalLinksGuard` con:
@@ -263,6 +304,7 @@ In questo modo le modifiche alle impostazioni restano concentrate in un file ded
 | `data-warn-message` | Messaggio predefinito | Testo mostrato nella modale e nei messaggi su hover dei link in warning. |
 | `data-warn-highlight-class` | `slg-warn-highlight` | Classe CSS applicata ai link `warn` in modalità `soft` o `warn`. |
 | `data-exclude-selectors` | *(vuoto)* | Lista CSV di selettori CSS da escludere dalla scansione (`.footer a, #nav a.ignore`). |
+| `data-keep-warn-on-allow` | `false` (auto `true` in Reader/AMP) | Mantiene il tooltip di avviso anche per i link consentiti: utile in modalità lettura, pagine AMP o quando si vuole mostrare sempre un messaggio di sicurezza. |
 | `data-config-version` | Valore di `configVersion` in `links-guard.settings.js` | Versione (stringa) che forza l'invalidazione della cache e l'aggiornamento degli asset quando cambia. |
 
 #### Come interpretare i TTL restituiti dal resolver

@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.9.1] - 2025-11-18
+### Added
+- Opzione `keepWarnMessageOnAllow` nel builder delle impostazioni (e relativo attributo `data-keep-warn-on-allow`) per mantenere i messaggi di sicurezza anche quando la policy restituisce `allow`, completa di test aggiornati in `tests/unit/amp_utils_test.js`.
+
+### Changed
+- Rilevazione automatica della modalità lettura e delle pagine AMP che forza il mantenimento del tooltip di avviso sui link consentiti e allinea gli helper AMP allo stesso comportamento.
+
+### Fixed
+- I link esterni consentiti in Reader mode o AMP mostrano ora l'avviso di sicurezza predefinito, evitando che gli utenti perdano il messaggio quando la modale non è disponibile.
+
+## [1.9.0] - 2025-11-17
+### Added
+- Namespace `SafeExternalLinksGuard.amp` con le utility `collectExternalLinks()` e `applyPolicies()` per integrare le policy su pagine AMP o in contesti con JavaScript limitato, complete di test automatici (`tests/unit/amp_utils_test.js`).
+
+### Changed
+- Gestione dei link esterni delegata a livello di `document` per supportare la modalità lettura dei browser, garantendo che gli anchor clonati mantengano gli attributi di sicurezza e la verifica delle policy.
+- Documentazione aggiornata con scenari di fallback per Reader mode e AMP, inclusi snippet `<amp-script>` e linee guida per la validazione server-side.
+
+### Fixed
+- I link malevoli in modalità lettura o AMP non sfuggono più alla protezione: il listener delegato riesamina ogni click e applica le policy cached anche quando il DOM viene rigenerato o limitato.
+
 ## [1.8.4] - 2025-11-16
 ### Fixed
 - Il parametro di tracciamento viene ora applicato direttamente all'attributo `href` dei link esterni quando il tracciamento è attivo, così anche aperture con modificatori da tastiera, pulsante centrale o copia dell'indirizzo usano l'URL arricchito.
