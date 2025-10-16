@@ -2,8 +2,8 @@
 
 ## Informazioni Generali
 - **Progetto:** Safe External Links Guard
-- **Versione:** 1.11.0
-- **Data:** 2025-11-27
+- **Versione:** 1.12.0
+- **Data:** 2025-11-28
 - **Autore aggiornamento:** AI Development Assistant
 
 ## Stato Moduli
@@ -13,7 +13,9 @@
 | Localizzazione (links-guard.i18n.js) | Aggiornato | Coda `__i18nReadyQueue` e fallback localizzati nel core per garantire la traduzione della modale anche quando il modulo i18n non viene caricato dal browser. |
 | Tracciamento clic (links-guard.js) | Aggiornato | Runtime `myclid` modulare con matrice di cattura, sampling, rispetto DNT, retry e firma HMAC opzionale, più API pubblica `SafeExternalLinksGuard.tracking`. |
 | Configurazione (links-guard.settings.js) | Aggiornato | Nuovi parser per sampling, allowlist/blocklist, preset matrice, timeout/retry e campi HMAC, completi di attributi `data-*` dedicati. |
-| Documentazione | Aggiornata | README, CHANGELOG, VERSION e report aggiornati alla release 1.11.0 con esempi di matrice di cattura e API runtime. |
+| Documentazione | Aggiornata | README, CHANGELOG e guide aggiornate alla release 1.12.0 con istruzioni per il bootstrap inline e sanificazione server-side. |
+| Bootstrap inline (resources/bootstrap-inline.min.js) | Nuovo | Guardia click inline <2 KB caricata in `<head>` per bloccare gli anchor esterni prima del first paint con forwarding sicuro verso lo script principale. |
+| Sanitizzazione markup (app/Services/Markup/ExternalLinkAttributeEnforcer.php) | Nuovo | Servizio PHP che imposta attributi SEO (`target`, `rel`) su link esterni durante il rendering server-side. |
 
 ## Attività Recenti
 | Data | Autore | Descrizione | Tempo (h) |
@@ -30,6 +32,7 @@
 | 2025-11-25 | AI Development Assistant | Fallback multilingua lato client per browser che bloccano il modulo i18n, nuovo test di regressione e documentazione aggiornata alla release 1.10.3. | 0.6 |
 | 2025-11-26 | AI Development Assistant | Ripristino dei metadati di policy nei log verbose dei link rimossi, arricchimento della diagnostica con host/URL/messaggi e nuovo test `debug_policy_summary_test`. | 0.5 |
 | 2025-11-27 | AI Development Assistant | Refactoring del tracciamento `myclid` con runtime modulare, matrice di cattura configurabile, syncing legacy e aggiornamento documentazione/test per la release 1.11.0. | 1.6 |
+| 2025-11-28 | AI Development Assistant | Introduzione del bootstrap inline, nuova allowlist host, servizio PHP di enforcement attributi SEO, aggiornamento configurazioni e test unitari. | 2.1 |
 
 
 ## Rischi e Note Tecniche
@@ -38,6 +41,7 @@
 - Verificare i limiti di `<amp-script>` (dimensione bundle, mutazioni consentite) sugli ambienti AMP e predisporre fallback server-side per i domini in deny.
 - Testare i preset e gli override della matrice di cattura su domini reali per evitare che campi esclusi vengano inviati involontariamente e per confermare il rispetto di allowlist/blocklist.
 - Gestire i segreti HMAC al di fuori del markup pubblico (override JS o variabili lato server) e ruotarli periodicamente per limitare l'esposizione.
+- Verificare l'utilizzo di `parse_url` nel servizio di sanitizzazione per gli URL relativi, mantenendo coerenza con l'host applicativo configurato.
 
 ## Dipendenze e Impatti
 - Nessuna nuova dipendenza introdotta.
