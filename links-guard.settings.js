@@ -6,8 +6,21 @@
 (function (global) {
   "use strict";
 
-  const DEFAULT_WARN_MESSAGE =
-    "Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile."; // Messaggio usato come fallback quando l'endpoint restituisce `warn` senza testo custom.
+  const namespace = (global.SafeExternalLinksGuard =
+    global.SafeExternalLinksGuard || {});
+
+  const FALLBACK_WARN_MESSAGE =
+    "This link is not verified and may share your browsing data with a third-party site. Make sure the destination is trustworthy before continuing."; // Messaggio usato come fallback quando l'endpoint restituisce `warn` senza testo custom.
+
+  const resolveDefaultWarnMessage = () => {
+    if (namespace.i18n && typeof namespace.i18n.t === "function") {
+      const translated = namespace.i18n.t("messages.defaultWarn");
+      if (translated) {
+        return translated;
+      }
+    }
+    return FALLBACK_WARN_MESSAGE;
+  };
 
   // ===== Valori di default condivisi =====
   const DEFAULTS = {
@@ -23,9 +36,9 @@
     zIndex: 999999, // Livello di stacking per modali/tooltip. Regolabile tramite override JS per integrazioni complesse.
     maxConcurrent: 4, // Limite di richieste simultanee verso l'endpoint. Aggiornabile via override JS.
     warnHighlightClass: "slg-warn-highlight", // Classe CSS dei link warn in modalità `soft`/`warn`. Impostabile con `data-warn-highlight-class`.
-    warnMessageDefault: DEFAULT_WARN_MESSAGE, // Messaggio fallback, modificabile con `data-warn-message`.
+    warnMessageDefault: FALLBACK_WARN_MESSAGE, // Messaggio fallback, modificabile con `data-warn-message`.
     excludeSelectors: [], // Selettori da ignorare nella scansione. Accetta CSV tramite `data-exclude-selectors` o array via override.
-    configVersion: "1.5.14" // Versione di configurazione usata per invalidare cache e asset in fase di deploy.
+    configVersion: "1.6.0" // Versione di configurazione usata per invalidare cache e asset in fase di deploy.
   };
 
   const VALID_MODES = new Set(["strict", "warn", "soft"]); // Modalità supportate: `strict` (solo modale), `warn` (modale + evidenza), `soft` (solo evidenza).
@@ -79,11 +92,16 @@
     return scriptEl.hasAttribute(attribute);
   }; // Verifica se il tag <script> espone l'attributo richiesto.
 
-  const cloneDefaults = () => ({
-    ...DEFAULTS,
-    rel: [...DEFAULTS.rel],
-    excludeSelectors: [...DEFAULTS.excludeSelectors]
-  }); // Produce una copia isolata dei valori di default.
+  const cloneDefaults = () => {
+    const warnMessageDefault = resolveDefaultWarnMessage();
+    DEFAULTS.warnMessageDefault = warnMessageDefault;
+    return {
+      ...DEFAULTS,
+      warnMessageDefault,
+      rel: [...DEFAULTS.rel],
+      excludeSelectors: [...DEFAULTS.excludeSelectors]
+    };
+  }; // Produce una copia isolata dei valori di default aggiornando il messaggio di avviso alla lingua corrente.
 
   const applyScriptAttributes = (cfg, scriptEl) => {
     if (!scriptEl) return cfg;
@@ -254,9 +272,6 @@
     return normalizeConfig(cfg);
   }; // Orchestratore: fonde default, attributi `data-*` e override.
 
-  const namespace = (global.SafeExternalLinksGuard =
-    global.SafeExternalLinksGuard || {});
-
   namespace.defaults = Object.freeze({
     ...cloneDefaults(),
     rel: [...DEFAULTS.rel]
@@ -270,4 +285,13 @@
     parseHoverFeedback,
     computeSettingsFingerprint
   };
+
+  if (namespace.i18n && typeof namespace.i18n.onLanguageChange === "function") {
+    namespace.i18n.onLanguageChange(() => {
+      namespace.defaults = Object.freeze({
+        ...cloneDefaults(),
+        rel: [...DEFAULTS.rel]
+      });
+    });
+  }
 })(typeof window !== "undefined" ? window : this);

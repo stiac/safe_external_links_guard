@@ -1,11 +1,11 @@
 # Safe External Links Guard
 
-**Versione:** 1.5.15
+**Versione:** 1.6.0
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
 
-Con la versione 1.5.0 la logica interna è stata riorganizzata in moduli indipendenti (tooltip, cache, coda delle richieste) per semplificare la manutenzione e migliorare la leggibilità del codice. La release 1.5.6 assicura che i click sui link consentiti vengano gestiti una sola volta, prevenendo aperture duplicate anche quando sono presenti handler `onclick` personalizzati, e mantiene il supporto diretto all'attributo `data-new-tab` nel file di configurazione. La release 1.5.7 migliora la gestione dei timeout di rete, restituendo messaggi più chiari e degradando a warning in modo controllato quando la policy non risponde in tempo utile. La release 1.5.8 evita i doppi redirect quando si apre un link dalla modale in una nuova scheda, mantenendo l'utente nella pagina originale, mentre la release 1.5.9 protegge la modale dagli automatismi della scansione dei link e ne affina l'accessibilità generale. La release 1.5.10 introduce una transizione di fade-in/fade-out per la modale, rispettosa delle preferenze di movimento ridotto dell'utente e allineata a un'esperienza più professionale, la release 1.5.11 risolve i problemi di cache in fase di deploy generando automaticamente una nuova firma di configurazione e aggiungendo l'attributo `data-config-version` per forzare aggiornamenti mirati, mentre la release 1.5.12 mantiene stabile il layout durante l'apertura della modale compensando la sparizione della scrollbar. La release 1.5.14 aggiorna inoltre il messaggio di avviso predefinito per i domini non presenti nelle liste per chiarire i rischi di condivisione dei dati di navigazione verso terze parti e supportare scelte più consapevoli, mentre la release 1.5.15 introduce un template HTML dedicato per la modale che rende più semplice modificarne la struttura senza intervenire direttamente sul codice JavaScript.
+Con la versione 1.5.0 la logica interna è stata riorganizzata in moduli indipendenti (tooltip, cache, coda delle richieste) per semplificare la manutenzione e migliorare la leggibilità del codice. La release 1.5.6 assicura che i click sui link consentiti vengano gestiti una sola volta, prevenendo aperture duplicate anche quando sono presenti handler `onclick` personalizzati, e mantiene il supporto diretto all'attributo `data-new-tab` nel file di configurazione. La release 1.5.7 migliora la gestione dei timeout di rete, restituendo messaggi più chiari e degradando a warning in modo controllato quando la policy non risponde in tempo utile. La release 1.5.8 evita i doppi redirect quando si apre un link dalla modale in una nuova scheda, mantenendo l'utente nella pagina originale, mentre la release 1.5.9 protegge la modale dagli automatismi della scansione dei link e ne affina l'accessibilità generale. La release 1.5.10 introduce una transizione di fade-in/fade-out per la modale, rispettosa delle preferenze di movimento ridotto dell'utente e allineata a un'esperienza più professionale, la release 1.5.11 risolve i problemi di cache in fase di deploy generando automaticamente una nuova firma di configurazione e aggiungendo l'attributo `data-config-version` per forzare aggiornamenti mirati, mentre la release 1.5.12 mantiene stabile il layout durante l'apertura della modale compensando la sparizione della scrollbar. La release 1.5.14 aggiorna inoltre il messaggio di avviso predefinito per i domini non presenti nelle liste per chiarire i rischi di condivisione dei dati di navigazione verso terze parti e supportare scelte più consapevoli, la release 1.5.15 introduce un template HTML dedicato per la modale che rende più semplice modificarne la struttura senza intervenire direttamente sul codice JavaScript, mentre la release 1.6.0 abilita un sistema i18n modulare con rilevazione automatica della lingua, file JSON centralizzati e fallback immediato in inglese per ogni stringa non tradotta.
 
 Lo script:
 - impone attributi di sicurezza (`rel`, `target`) sui link esterni;
@@ -35,9 +35,11 @@ Lo script:
 - Hosting condiviso o distribuzione tramite upload FTP/file manager (nessun requisito di shell).
 
 ## Installazione e utilizzo
-1. Carica sia `links-guard.settings.js` sia `links-guard.js` sul tuo hosting all'interno della directory pubblica, ad esempio in `/assets/app/safe_external_links_guard/`.
-2. Inserisci gli script nelle pagine da proteggere utilizzando il seguente snippet (l'ordine è importante per caricare prima i settings):
+1. Carica `links-guard.i18n.js`, `links-guard.settings.js` e `links-guard.js` sul tuo hosting all'interno della directory pubblica, ad esempio in `/assets/app/safe_external_links_guard/`.
+2. Inserisci gli script nelle pagine da proteggere utilizzando il seguente snippet (l'ordine è importante: prima le traduzioni, poi i settings e infine lo script principale):
    ```html
+   <!-- /assets/app/safe_external_links_guard/links-guard.i18n.js -->
+   <script src="/assets/app/safe_external_links_guard/links-guard.i18n.js"></script>
    <!-- /assets/app/safe_external_links_guard/links-guard.settings.js -->
    <script src="/assets/app/safe_external_links_guard/links-guard.settings.js"></script>
    <!-- /assets/app/safe_external_links_guard/links-guard.js (minificabile) -->
@@ -67,19 +69,22 @@ Lo script:
      <div data-slg-root class="slg-overlay slg--hidden">
        <div class="slg-wrap">
          <div class="slg-dialog" data-slg-element="dialog">
-           <div class="slg-header">
-             <h2 class="slg-title" data-slg-element="title">Controlla che questo link sia sicuro</h2>
-             <button type="button" class="slg-close" data-slg-element="close" aria-label="Chiudi" title="Chiudi">✕</button>
-           </div>
-           <div class="slg-body">
-             <p data-slg-element="message">Testo di avviso personalizzato</p>
-             <p>Host: <span class="slg-host" data-slg-element="host"></span></p>
-             <div class="slg-actions">
-               <a class="slg-btn primary" data-slg-element="open">Apri link</a>
-               <button class="slg-btn secondary" data-slg-element="copy" type="button">Copia link</button>
-               <button class="slg-btn secondary" data-slg-element="cancel" type="button">Annulla</button>
-             </div>
-           </div>
+          <div class="slg-header">
+            <h2 class="slg-title" data-slg-element="title">Check that this link is safe</h2>
+            <button type="button" class="slg-close" data-slg-element="close" aria-label="Close" title="Close">✕</button>
+          </div>
+          <div class="slg-body">
+            <p data-slg-element="message">Custom warning text</p>
+            <p>
+              <span class="slg-host-label" data-slg-element="host-label">Host:</span>
+              <span class="slg-host" data-slg-element="host"></span>
+            </p>
+            <div class="slg-actions">
+              <a class="slg-btn primary" data-slg-element="open">Open link</a>
+              <button class="slg-btn secondary" data-slg-element="copy" type="button">Copy link</button>
+              <button class="slg-btn secondary" data-slg-element="cancel" type="button">Cancel</button>
+            </div>
+          </div>
          </div>
        </div>
      </div>
@@ -97,6 +102,16 @@ Il file `links-guard.settings.js` espone il namespace globale `SafeExternalLinks
 - i valori di default (`defaults`) per tutte le impostazioni supportate;
 - la funzione `buildSettings(scriptEl, overrides)` che genera la configurazione finale partendo dagli attributi `data-*` presenti sul tag `<script>` e applicando i default solo quando i parametri non sono specificati;
 - alcune utility di parsing riutilizzabili.
+
+### Sistema di traduzione (`links-guard.i18n.js`)
+Il file `links-guard.i18n.js` inizializza il servizio di localizzazione con le traduzioni contenute in `resources/lang/*.json` (Inglese, Italiano, Spagnolo, Francese, Tedesco, Portoghese, Brasiliano e Russo) e rileva automaticamente la lingua da mostrare leggendo, in ordine:
+
+1. il parametro `lang` nella query string;
+2. un eventuale override impostato tramite `SafeExternalLinksGuard.i18n.setLanguage('codice')`;
+3. la lista `navigator.languages` esposta dal browser;
+4. il fallback predefinito in inglese (`en`).
+
+Il metodo `SafeExternalLinksGuard.i18n.t(key)` restituisce il testo nella lingua attiva e, se una chiave non è tradotta, ricade automaticamente sulla versione inglese. Per aggiungere nuove lingue è sufficiente creare un file JSON con la stessa struttura (sezioni `messages`, `modal`, `tooltip`) e registrarlo via `SafeExternalLinksGuard.i18n.registerLanguage('codice', dizionario)`. Il servizio espone inoltre `onLanguageChange` per reagire ai cambi di lingua in tempo reale.
 
 Per adattare i default al tuo progetto puoi:
 - modificare direttamente `links-guard.settings.js`, mantenendo in chiaro i valori attesi;

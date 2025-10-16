@@ -1,0 +1,17 @@
+{
+  "messages": {
+    "defaultWarn": "This link is not verified and may share your browsing data with a third-party site. Make sure the destination is trustworthy before continuing."
+  },
+  "modal": {
+    "title": "Check that this link is safe",
+    "closeLabel": "Close",
+    "closeTitle": "Close",
+    "hostLabel": "Host:",
+    "openButton": "Open link",
+    "copyButton": "Copy link",
+    "cancelButton": "Cancel"
+  },
+  "tooltip": {
+    "warn": "External link not verified"
+  }
+}

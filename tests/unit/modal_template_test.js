@@ -5,9 +5,9 @@ const assert = require("assert");
 const sourcePath = path.join(__dirname, "..", "..", "links-guard.js");
 const source = fs.readFileSync(sourcePath, "utf8");
 
-const defaultTemplateMatch = source.match(/const DEFAULT_MODAL_TEMPLATE = `([\s\S]*?)`;/);
-if (!defaultTemplateMatch) {
-  throw new Error("DEFAULT_MODAL_TEMPLATE non trovato in links-guard.js");
+const templateFactoryMatch = source.match(/const getDefaultModalTemplate = \(\) => {([\s\S]*?)};/);
+if (!templateFactoryMatch) {
+  throw new Error("Funzione getDefaultModalTemplate non trovata in links-guard.js");
 }
 const ensureStart = source.indexOf("const ensureModalTemplateElement = () => {");
 if (ensureStart === -1) {
@@ -36,11 +36,35 @@ if (!templateIdMatch) {
   throw new Error("Costante MODAL_TEMPLATE_ID non trovata");
 }
 
-const DEFAULT_MODAL_TEMPLATE = defaultTemplateMatch[1];
+const getDefaultModalTemplateFactory = new Function(
+  "translate",
+  "escapeHtml",
+  `${templateFactoryMatch[0]}; return getDefaultModalTemplate;`
+);
+
+const translations = {
+  "messages.defaultWarn": "Warning text",
+  "modal.title": "Check link",
+  "modal.closeLabel": "Close",
+  "modal.closeTitle": "Close",
+  "modal.hostLabel": "Host:",
+  "modal.openButton": "Open link",
+  "modal.copyButton": "Copy link",
+  "modal.cancelButton": "Cancel"
+};
+
+const fakeTranslate = (key) => translations[key] || key;
+const fakeEscapeHtml = (value) => value;
+
+const getDefaultModalTemplate = getDefaultModalTemplateFactory(
+  fakeTranslate,
+  fakeEscapeHtml
+);
+
 const ensureModalTemplateElement = new Function(
   "document",
   "guardNamespace",
-  "DEFAULT_MODAL_TEMPLATE",
+  "getDefaultModalTemplate",
   "MODAL_TEMPLATE_ID",
   `${ensureSource}; return ensureModalTemplateElement;`
 );
@@ -76,7 +100,7 @@ const createDocument = (options = {}) => {
   const ensure = ensureModalTemplateElement(
     document,
     guardNamespace,
-    DEFAULT_MODAL_TEMPLATE,
+    getDefaultModalTemplate,
     templateIdMatch[1]
   );
   const template = ensure();
@@ -86,6 +110,10 @@ const createDocument = (options = {}) => {
   assert.ok(
     template.innerHTML.includes('data-slg-element="open"'),
     "Il template di fallback deve contenere il collegamento open"
+  );
+  assert.ok(
+    template.innerHTML.includes('data-slg-element="host-label"'),
+    "Il template di fallback deve prevedere l'etichetta host-label"
   );
 }
 
@@ -97,7 +125,7 @@ const createDocument = (options = {}) => {
   const ensure = ensureModalTemplateElement(
     document,
     guardNamespace,
-    DEFAULT_MODAL_TEMPLATE,
+    getDefaultModalTemplate,
     templateIdMatch[1]
   );
   const template = ensure();
@@ -116,7 +144,7 @@ const createDocument = (options = {}) => {
   const ensure = ensureModalTemplateElement(
     document,
     guardNamespace,
-    DEFAULT_MODAL_TEMPLATE,
+    getDefaultModalTemplate,
     templateIdMatch[1]
   );
   const template = ensure();

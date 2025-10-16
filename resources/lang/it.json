@@ -1,0 +1,17 @@
+{
+  "messages": {
+    "defaultWarn": "Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile."
+  },
+  "modal": {
+    "title": "Controlla che questo link sia sicuro",
+    "closeLabel": "Chiudi",
+    "closeTitle": "Chiudi",
+    "hostLabel": "Host:",
+    "openButton": "Apri link",
+    "copyButton": "Copia link",
+    "cancelButton": "Annulla"
+  },
+  "tooltip": {
+    "warn": "Link esterno non verificato"
+  }
+}

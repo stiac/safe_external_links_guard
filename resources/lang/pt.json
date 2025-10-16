@@ -1,0 +1,17 @@
+{
+  "messages": {
+    "defaultWarn": "Esta ligação não está verificada e pode partilhar os seus dados de navegação com um site de terceiros. Antes de continuar, confirme que o destino é de confiança."
+  },
+  "modal": {
+    "title": "Confirme que esta ligação é segura",
+    "closeLabel": "Fechar",
+    "closeTitle": "Fechar",
+    "hostLabel": "Host:",
+    "openButton": "Abrir ligação",
+    "copyButton": "Copiar ligação",
+    "cancelButton": "Cancelar"
+  },
+  "tooltip": {
+    "warn": "Ligação externa não verificada"
+  }
+}
