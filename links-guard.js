@@ -597,6 +597,9 @@
     return base;
   };
 
+  // Espressione usata per escludere protocolli che non devono essere modificati.
+  const TRACKING_IGNORED_PROTOCOLS = /^(mailto:|tel:|javascript:)/i;
+
   const generateTrackingId = () => {
     if (typeof crypto !== "undefined" && crypto) {
       if (typeof crypto.randomUUID === "function") {
@@ -639,6 +642,49 @@
     );
   };
 
+  /**
+   * Garantisce la presenza del parametro di tracciamento sull'URL fornito.
+   * Restituisce i dettagli necessari senza modificare link non supportati.
+   * @param {string} href URL originale da analizzare.
+   * @param {string} parameterName Nome del parametro da applicare.
+   * @param {() => string} generator Funzione che produce il valore quando assente.
+   * @returns {{ href: string, url: URL, trackingId: string }|null}
+   */
+  const ensureTrackingParameter = (href, parameterName, generator) => {
+    if (!href || !parameterName) {
+      return null;
+    }
+
+    const trimmedName = String(parameterName).trim();
+    if (!trimmedName) {
+      return null;
+    }
+
+    if (TRACKING_IGNORED_PROTOCOLS.test(href)) {
+      return null;
+    }
+
+    const urlObj = toURL(href);
+    if (!urlObj) {
+      return null;
+    }
+
+    let trackingId = urlObj.searchParams.get(trimmedName);
+    if (!trackingId) {
+      trackingId = typeof generator === "function" ? generator() : "";
+      if (!trackingId) {
+        return null;
+      }
+      urlObj.searchParams.set(trimmedName, trackingId);
+    }
+
+    return {
+      href: urlObj.href,
+      url: urlObj,
+      trackingId
+    };
+  };
+
   const prepareTrackedNavigation = (urlLike) => {
     if (!cfg.trackingEnabled) {
       return null;
@@ -652,15 +698,24 @@
     if (!originalHref) {
       return null;
     }
-    const urlObj = toURL(originalHref);
-    if (!urlObj) {
+    const parameterName = (cfg.trackingParameter || "myclid").trim();
+    if (!parameterName) {
       return null;
     }
-    const trackingId = generateTrackingId();
-    const parameterName = cfg.trackingParameter || "slgclid";
-    urlObj.searchParams.set(parameterName, trackingId);
+
+    const applied = ensureTrackingParameter(
+      originalHref,
+      parameterName,
+      generateTrackingId
+    );
+
+    if (!applied) {
+      return null;
+    }
+
+    const { href, url: urlObj, trackingId } = applied;
     return {
-      href: urlObj.href,
+      href,
       originalHref,
       trackingId,
       url: urlObj,
@@ -737,6 +792,9 @@
   }
   if (typeof guardNamespace.utils.detectDeviceType !== "function") {
     guardNamespace.utils.detectDeviceType = detectDeviceType;
+  }
+  if (typeof guardNamespace.utils.ensureTrackingParameter !== "function") {
+    guardNamespace.utils.ensureTrackingParameter = ensureTrackingParameter;
   }
 
   const followExternalUrl = (urlLike) => {

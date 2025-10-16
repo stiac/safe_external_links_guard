@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.1] - 2025-11-13
+### Changed
+- Aggiornato il nome del parametro di tracciamento di default a `myclid` in `links-guard.settings.js` e nella documentazione per allinearsi alle aspettative di integrazione.
+
+### Fixed
+- Riscrittura degli URL corretta in `links-guard.js` sfruttando `URL` e `URLSearchParams` per preservare query string, frammenti e encoding, evitando duplicazioni del parametro e lasciando invariati i link `mailto:`, `tel:` e `javascript:`.
+
 ## [1.8.0] - 2025-11-12
 ### Added
 - Sistema opzionale di tracciamento dei click in `links-guard.js` con generazione di UUID, aggiunta del parametro configurabile alla query string e invio di un pixel JSON con metadati anonimi (lingua, timezone, dispositivo, referrer e timestamp) rispettando il consenso privacy.

@@ -29,7 +29,7 @@ class FakeScript {
   assert.strictEqual(cfg.configVersion, SafeExternalLinksGuard.defaults.configVersion, 'configVersion should fallback to defaults');
   assert.strictEqual(cfg.showCopyButton, false, 'showCopyButton should respect default false when attribute is missing');
   assert.strictEqual(cfg.trackingEnabled, false, 'trackingEnabled should be disabled by default');
-  assert.strictEqual(cfg.trackingParameter, 'slgclid', 'trackingParameter should fallback to default name');
+  assert.strictEqual(cfg.trackingParameter, 'myclid', 'trackingParameter should fallback to default name');
   assert.strictEqual(cfg.trackingPixelEndpoint, '', 'trackingPixelEndpoint should fallback to empty string');
   assert.strictEqual(cfg.trackingIncludeMetadata, true, 'trackingIncludeMetadata should default to true to collect anonymous data');
 })();
