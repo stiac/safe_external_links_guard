@@ -273,14 +273,11 @@
     }
     cfg.keepWarnMessageOnAllow = Boolean(cfg.keepWarnMessageOnAllow);
     cfg.trackingEnabled = Boolean(cfg.trackingEnabled);
-    if (!cfg.trackingPixelEndpoint) {
-      cfg.trackingEnabled = false;
-    }
     if (!cfg.trackingParameter || !/^[a-zA-Z0-9_\-]+$/.test(cfg.trackingParameter)) {
       cfg.trackingParameter = DEFAULTS.trackingParameter;
     }
     cfg.trackingPixelEndpoint = cfg.trackingPixelEndpoint
-      ? String(cfg.trackingPixelEndpoint)
+      ? String(cfg.trackingPixelEndpoint).trim()
       : "";
     cfg.trackingIncludeMetadata = Boolean(cfg.trackingIncludeMetadata);
     return cfg;

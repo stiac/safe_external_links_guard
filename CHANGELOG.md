@@ -1,4 +1,11 @@
 # Changelog
+## [1.9.4] - 2025-11-21
+### Changed
+- La normalizzazione delle impostazioni mantiene attivo `trackingEnabled` anche senza endpoint del pixel e pulisce gli spazi indesiderati, così l'integrazione può aggiungere il parametro personalizzato pur delegando la raccolta eventi al backend.
+
+### Fixed
+- I link esterni ricevono nuovamente il parametro di tracciamento configurato anche quando l'endpoint del pixel è vuoto, evitando di perdere gli identificatori delle campagne pur mantenendo opzionale l'invio del beacon client-side.
+
 ## [1.9.3] - 2025-11-20
 ### Fixed
 - Rimossa la doppia dichiarazione della variabile `url` in `collectExternalLinksForAmp()` che generava un errore JavaScript in modalità AMP o Reader, impedendo l'inizializzazione della protezione.
