@@ -433,9 +433,12 @@
     style.id = "slg-styles";
     style.textContent = `
       .slg--hidden{display:none!important}
-      .slg-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:saturate(120%) blur(1px)}
+      .slg-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:saturate(120%) blur(1px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .24s ease}
+      .slg-overlay.slg--visible{opacity:1;visibility:visible;pointer-events:auto}
       .slg-wrap{position:fixed;inset:0;display:grid;grid-template-columns:10px 1fr 10px;grid-template-rows:minmax(10px,1fr) auto minmax(10px,1fr);overflow:auto}
-      .slg-dialog{grid-column:2;grid-row:2;max-width:640px;width:100%;margin-inline:auto;background:#fff;color:#111;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.25);outline:none;display:flex;flex-direction:column;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
+      .slg-dialog{grid-column:2;grid-row:2;max-width:640px;width:100%;margin-inline:auto;background:#fff;color:#111;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.25);outline:none;display:flex;flex-direction:column;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;opacity:0;transform:translateY(8px);transition:opacity .24s ease,transform .24s ease}
+      .slg-overlay.slg--visible .slg-dialog{opacity:1;transform:none}
+      @media (prefers-reduced-motion:reduce){.slg-overlay{transition:none}.slg-dialog{transform:none;transition:none}}
       @media (prefers-color-scheme:dark){.slg-dialog{background:#111;color:#eee}}
       .slg-header{display:flex;justify-content:space-between;align-items:center;padding:12px 12px 0 16px}
       .slg-title{font-size:18px;font-weight:600;margin:0}
@@ -824,12 +827,36 @@
     // indesiderati ai controlli della UI.
     openLink.dataset.safeLinkGuard = "modal";
 
-    const hide = () => {
-      root.classList.add("slg--hidden");
+    const finalizeHide = () => {
+      // Ripristina lo stato "nascosto" della modale dopo la transizione di fade-out.
+      root.classList.remove("slg--visible");
+      if (!root.classList.contains("slg--hidden")) {
+        root.classList.add("slg--hidden");
+      }
       document.body.classList.remove("slg-no-scroll");
       pendingUrl = null;
       pendingMessage = null;
       if (lastFocused && lastFocused.focus) lastFocused.focus();
+    };
+
+    const hide = () => {
+      const onTransitionEnd = (evt) => {
+        if (evt.target !== root || evt.propertyName !== "opacity") return;
+        root.removeEventListener("transitionend", onTransitionEnd);
+        finalizeHide();
+      };
+
+      if (root.classList.contains("slg--visible")) {
+        // Attende il termine dell'animazione per evitare che l'overlay scompaia di colpo.
+        root.addEventListener("transitionend", onTransitionEnd);
+        root.classList.remove("slg--visible");
+        setTimeout(() => {
+          root.removeEventListener("transitionend", onTransitionEnd);
+          finalizeHide();
+        }, 320);
+      } else {
+        finalizeHide();
+      }
     };
 
     root.addEventListener("click", (e) => { if (e.target === root) hide(); });
@@ -890,6 +917,9 @@
     modalRoot.querySelector("#slg-message").textContent = pendingMessage;
     lastFocused = document.activeElement;
     modalRoot.classList.remove("slg--hidden");
+    requestAnimationFrame(() => {
+      modalRoot.classList.add("slg--visible");
+    });
     document.body.classList.add("slg-no-scroll");
     const dialog = modalRoot.querySelector(".slg-dialog");
     dialog.focus();

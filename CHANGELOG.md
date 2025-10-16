@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.5.10] - 2025-10-31
+### Changed
+- Introdotto un effetto di fade-in/fade-out sulla modale di conferma, coordinato con la preferenza di movimento ridotto del sistema operativo per mantenere un'esperienza accessibile.
+
 ## [1.5.9] - 2025-10-30
 ### Fixed
 - Impedita l'applicazione dei codici di protezione agli elementi della modale di conferma, evitando che attributi come `title=""` o listener superflui alterino l'interfaccia.
