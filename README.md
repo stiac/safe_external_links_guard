@@ -1,8 +1,8 @@
 # Safe External Links Guard
 
-**Versione:** 1.12.3
+**Versione:** 1.12.4
 
-> Novità 1.12.3: il bootstrap PHP ora è caricabile anche dal percorso storico `safe_external_links_guard/bootstrap.php`, evitando errori di include sugli ambienti legacy e mantenendo invariati gli helper `safe_external_links_guard_bootstrap()`.
+> Novità 1.12.4: aggiunta la guida passo-passo per integrare Safe External Links Guard (bootstrap PHP + asset JS) in Sngine mantenendo la compatibilità con il loader legacy `safe_external_links_guard/bootstrap.php`.
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
@@ -70,8 +70,12 @@ Lo script:
   <!-- data-remove-node è opzionale: se impostato a true sostituisce <a> con <span> -->
   <!-- imposta data-mode="warn" per evidenziare i link e chiedere conferma prima di aprirli -->
   <!-- imposta data-show-copy-button="true" per mostrare il pulsante "Copia link" -->
-  <!-- imposta data-hover-feedback="title" per usare il tooltip nativo del browser -->
-  ```
+    <!-- imposta data-hover-feedback="title" per usare il tooltip nativo del browser -->
+    ```
+
+> **Suggerimento:** dalla versione 1.9.4 `links-guard.js` processa una coda di callback (`SafeExternalLinksGuard.__i18nReadyQueue`) per riallineare automaticamente le traduzioni quando il modulo i18n viene caricato in ritardo. Mantieni comunque l'ordine suggerito per ridurre al minimo eventuali flash di testo in inglese sui dispositivi più lenti.
+
+Adatta `src` e `data-endpoint` ai percorsi effettivi del tuo sito.
 
 ### Bootstrap inline (<head>)
 
@@ -143,9 +147,44 @@ safe_external_links_guard_bootstrap([
 ```
 
 Il bootstrap PHP intercetta tutto l'output HTML, aggiorna gli `<a>` esterni con `target="_blank"` e con il valore `rel` scelto (`noopener`, `noreferrer` o entrambi) e trasferisce il markup già sanificato al browser. Se il tuo hosting punta ancora a `safe_external_links_guard/bootstrap.php` (ad esempio perché i file sono stati copiati in `/assets/app/safe_external_links_guard/`), non devi aggiornare il percorso: il file di compatibilità `bootstrap.php` reindirizza automaticamente al nuovo bootstrap applicativo. In modalità `debug` (`'debug' => true`) eventuali eccezioni vengono loggate tramite `error_log`. Passando `'force' => true` è possibile riapplicare la configurazione durante la stessa richiesta, mentre `safe_external_links_guard_bootstrap_release(false)` consente di annullare le modifiche se necessario (ad esempio nelle pagine di amministrazione).
-  > **Suggerimento:** dalla versione 1.9.4 `links-guard.js` processa una coda di callback (`SafeExternalLinksGuard.__i18nReadyQueue`) per riallineare automaticamente le traduzioni quando il modulo i18n viene caricato in ritardo. Mantieni comunque l'ordine suggerito per ridurre al minimo eventuali flash di testo in inglese sui dispositivi più lenti.
 
-  Adatta `src` e `data-endpoint` ai percorsi effettivi del tuo sito.
+#### Integrazione con Sngine
+
+Per integrare il bootstrap PHP in **Sngine** (social network script in PHP) senza shell è sufficiente copiare i file tramite FTP/File Manager e aggiungere due piccoli hook:
+
+1. **Caricamento dei file** – Copia l'intera cartella `safe_external_links_guard/` (contenente `app/`, `links-guard.js`, ecc.) nella directory pubblica di Sngine, ad esempio in `content/themes/default/custom/safe_external_links_guard/`. Assicurati che `bootstrap.php` e la sottocartella `app/` siano leggibili dal server.
+2. **Avvio del bootstrap** – Apri `bootloader.php` (nella root di Sngine) e, subito dopo l'inclusione di `includes/config.php`, aggiungi:
+   ```php
+   // Safe External Links Guard – bootstrap PHP per l'output buffering
+   require_once __DIR__ . '/content/themes/default/custom/safe_external_links_guard/bootstrap.php';
+
+   safe_external_links_guard_bootstrap([
+       'allowlist' => [
+           parse_url(SYS_URL, PHP_URL_HOST), // host principale configurato in Sngine
+           'cdn.tuosito.com',                // eventuale CDN o domini interni aggiuntivi
+       ],
+       'rel_strategy' => 'both',             // noopener + noreferrer
+       'add_nofollow' => true,
+       'debug' => false,
+   ]);
+   ```
+   Il buffer resta attivo fino al termine della richiesta e applica `target="_blank"` e `rel` sicuri a ogni link esterno renderizzato da Smarty o da altre parti dell'applicazione.
+3. **Disattivazione selettiva (opzionale)** – Se desideri saltare l'enforcement in aree specifiche (es. pannello admin), richiama `safe_external_links_guard_bootstrap_release(false);` prima di inviare l'output della pagina.
+4. **Inclusione degli asset JS/CSS** – Inserisci gli script nel template head principale, tipicamente `content/themes/default/templates/_head.tpl` (o il file equivalente del tema attivo):
+   ```smarty
+   {literal}
+   <script src="{$system['system_url']}/content/themes/default/custom/safe_external_links_guard/links-guard.i18n.js"></script>
+   <script src="{$system['system_url']}/content/themes/default/custom/safe_external_links_guard/links-guard.settings.js"></script>
+   <script
+     defer
+     src="{$system['system_url']}/content/themes/default/custom/safe_external_links_guard/links-guard.js"
+     data-endpoint="{$system['system_url']}/content/themes/default/custom/safe_external_links_guard/links/policy/policy.php"
+     data-mode="warn"
+     data-remove-node="false"
+   ></script>
+   {/literal}
+   ```
+    Adatta il percorso allo storage scelto e, se utilizzi un tema child, replica la modifica nella relativa `_head.tpl`. In questo modo anche i crawler che leggono l'HTML generato da Sngine troveranno già gli attributi `rel`/`target` corretti, mentre gli utenti beneficeranno della modale JS appena caricata la pagina.
 3. Aggiungi alla pagina (tipicamente subito dopo l'inclusione degli script o nel footer) il template HTML della modale. Copia il contenuto di `links/modal-template.html` e personalizzalo mantenendo gli attributi `data-slg-*` per collegare i campi dinamici:
    ```html
    <template id="slg-modal-template">

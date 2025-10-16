@@ -2,8 +2,8 @@
 
 ## Informazioni Generali
 - **Progetto:** Safe External Links Guard
-- **Versione:** 1.12.3
-- **Data:** 2025-11-30
+- **Versione:** 1.12.4
+- **Data:** 2025-12-02
 - **Autore aggiornamento:** AI Development Assistant
 
 ## Stato Moduli
@@ -13,7 +13,7 @@
 | Localizzazione (links-guard.i18n.js) | Aggiornato | Coda `__i18nReadyQueue` e fallback localizzati nel core per garantire la traduzione della modale anche quando il modulo i18n non viene caricato dal browser. |
 | Tracciamento clic (links-guard.js) | Aggiornato | Runtime `myclid` modulare con matrice di cattura, sampling, rispetto DNT, retry e firma HMAC opzionale, più API pubblica `SafeExternalLinksGuard.tracking`. |
 | Configurazione (links-guard.settings.js) | Aggiornato | Nuovi parser per sampling, allowlist/blocklist, preset matrice, timeout/retry e campi HMAC, completi di attributi `data-*` dedicati. |
-| Documentazione | Aggiornata | README, CHANGELOG e guide aggiornate alla release 1.12.3 con note sul bootstrap PHP compatibile con il percorso legacy `bootstrap.php`. |
+| Documentazione | Aggiornata | README, CHANGELOG e guide aggiornate alla release 1.12.4 con istruzioni dettagliate per l'integrazione in Sngine e nota sul bootstrap PHP compatibile con il percorso legacy `bootstrap.php`. |
 | Bootstrap inline (resources/bootstrap-inline.min.js) | Aggiornato | Guardia click inline <2 KB caricata in `<head>` che ora rimuove il listener di fallback dopo l'inizializzazione dello script principale, prevenendo blocchi permanenti dei link. |
 | Sanitizzazione markup (app/Services/Markup/ExternalLinkAttributeEnforcer.php) | Aggiornato | Servizio PHP con token `rel` personalizzabili per applicare `noopener`/`noreferrer` (più `nofollow` opzionale) durante il rendering server-side. |
 | Bootstrap PHP (app/bootstrap.php) | Aggiornato | Buffer di output che garantisce `target="_blank"` e `rel` sicuro prima che gli script JavaScript vengano caricati; compatibilità ripristinata tramite loader root `bootstrap.php`. |
@@ -37,6 +37,7 @@
 | 2025-11-29 | AI Development Assistant | Correzione del listener del bootstrap inline che restava attivo dopo l'hand-off al modulo principale, con aggiornamento documentale e versionamento a 1.12.1. | 0.3 |
 | 2025-11-30 | AI Development Assistant | Introduzione del bootstrap PHP per l'enforcement immediato degli attributi `rel`, aggiornamento del servizio di sanitizzazione e nuovi test CLI. | 0.4 |
 | 2025-12-01 | AI Development Assistant | Ripristino del file `bootstrap.php` nella root del pacchetto per supportare gli ambienti che includono ancora il percorso legacy, allineando documentazione e test. | 0.2 |
+| 2025-12-02 | AI Development Assistant | Documentazione dell'integrazione di Safe External Links Guard in Sngine (bootstrap PHP + asset front-end) e aggiornamento del report alla versione 1.12.4. | 0.2 |
 
 
 ## Rischi e Note Tecniche
