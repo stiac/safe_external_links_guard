@@ -1,11 +1,11 @@
 # Safe External Links Guard
 
-**Versione:** 1.7.4
+**Versione:** 1.8.1
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
 
-Con la versione 1.5.0 la logica interna è stata riorganizzata in moduli indipendenti (tooltip, cache, coda delle richieste) per semplificare la manutenzione e migliorare la leggibilità del codice. La release 1.5.6 assicura che i click sui link consentiti vengano gestiti una sola volta, prevenendo aperture duplicate anche quando sono presenti handler `onclick` personalizzati, e mantiene il supporto diretto all'attributo `data-new-tab` nel file di configurazione. La release 1.5.7 migliora la gestione dei timeout di rete, restituendo messaggi più chiari e degradando a warning in modo controllato quando la policy non risponde in tempo utile. La release 1.5.8 evita i doppi redirect quando si apre un link dalla modale in una nuova scheda, mantenendo l'utente nella pagina originale, mentre la release 1.5.9 protegge la modale dagli automatismi della scansione dei link e ne affina l'accessibilità generale. La release 1.5.10 introduce una transizione di fade-in/fade-out per la modale, rispettosa delle preferenze di movimento ridotto dell'utente e allineata a un'esperienza più professionale, la release 1.5.11 risolve i problemi di cache in fase di deploy generando automaticamente una nuova firma di configurazione e aggiungendo l'attributo `data-config-version` per forzare aggiornamenti mirati, mentre la release 1.5.12 mantiene stabile il layout durante l'apertura della modale compensando la sparizione della scrollbar. La release 1.5.14 aggiorna inoltre il messaggio di avviso predefinito per i domini non presenti nelle liste per chiarire i rischi di condivisione dei dati di navigazione verso terze parti e supportare scelte più consapevoli, la release 1.5.15 introduce un template HTML dedicato per la modale che rende più semplice modificarne la struttura senza intervenire direttamente sul codice JavaScript, mentre la release 1.6.0 abilita un sistema i18n modulare con rilevazione automatica della lingua, file JSON centralizzati e fallback immediato in inglese per ogni stringa non tradotta. La release 1.7.0 estende questo ecosistema con un renderer di contenuti dichiarativo capace di sincronizzare testi, attributi e proprietà UI con i dizionari multilingua, riducendo il codice manuale necessario per aggiornare l'interfaccia e mantenendo i fallback inglesi automatici. Con la release 1.7.2 viene corretta la registrazione dell'handler di cambio lingua durante il bootstrap dello script, evitando errori JavaScript quando il modulo i18n è presente, mentre la release 1.7.3 rafforza il resolver multilingua introducendo il caricamento asincrono dei bundle, la normalizzazione dei codici regionali (`pt-BR`, `pt-PT`) e una funzione `t()` capace di gestire catene di fallback verso la lingua inglese. La release 1.7.4 completa il quadro traducendo anche i messaggi restituiti dal resolver (warning, deny ed errori di rete) tramite `messageKey` e `messageFallbackKey`, così tooltip e modale rispettano sempre la lingua dell'utente.
+Con la versione 1.5.0 la logica interna è stata riorganizzata in moduli indipendenti (tooltip, cache, coda delle richieste) per semplificare la manutenzione e migliorare la leggibilità del codice. La release 1.5.6 assicura che i click sui link consentiti vengano gestiti una sola volta, prevenendo aperture duplicate anche quando sono presenti handler `onclick` personalizzati, e mantiene il supporto diretto all'attributo `data-new-tab` nel file di configurazione. La release 1.5.7 migliora la gestione dei timeout di rete, restituendo messaggi più chiari e degradando a warning in modo controllato quando la policy non risponde in tempo utile. La release 1.5.8 evita i doppi redirect quando si apre un link dalla modale in una nuova scheda, mantenendo l'utente nella pagina originale, mentre la release 1.5.9 protegge la modale dagli automatismi della scansione dei link e ne affina l'accessibilità generale. La release 1.5.10 introduce una transizione di fade-in/fade-out per la modale, rispettosa delle preferenze di movimento ridotto dell'utente e allineata a un'esperienza più professionale, la release 1.5.11 risolve i problemi di cache in fase di deploy generando automaticamente una nuova firma di configurazione e aggiungendo l'attributo `data-config-version` per forzare aggiornamenti mirati, mentre la release 1.5.12 mantiene stabile il layout durante l'apertura della modale compensando la sparizione della scrollbar. La release 1.5.14 aggiorna inoltre il messaggio di avviso predefinito per i domini non presenti nelle liste per chiarire i rischi di condivisione dei dati di navigazione verso terze parti e supportare scelte più consapevoli, la release 1.5.15 introduce un template HTML dedicato per la modale che rende più semplice modificarne la struttura senza intervenire direttamente sul codice JavaScript, mentre la release 1.6.0 abilita un sistema i18n modulare con rilevazione automatica della lingua, file JSON centralizzati e fallback immediato in inglese per ogni stringa non tradotta. La release 1.7.0 estende questo ecosistema con un renderer di contenuti dichiarativo capace di sincronizzare testi, attributi e proprietà UI con i dizionari multilingua, riducendo il codice manuale necessario per aggiornare l'interfaccia e mantenendo i fallback inglesi automatici. Con la release 1.7.2 viene corretta la registrazione dell'handler di cambio lingua durante il bootstrap dello script, evitando errori JavaScript quando il modulo i18n è presente, mentre la release 1.7.3 rafforza il resolver multilingua introducendo il caricamento asincrono dei bundle, la normalizzazione dei codici regionali (`pt-BR`, `pt-PT`) e una funzione `t()` capace di gestire catene di fallback verso la lingua inglese. La release 1.7.4 completa il quadro traducendo anche i messaggi restituiti dal resolver (warning, deny ed errori di rete) tramite `messageKey` e `messageFallbackKey`, così tooltip e modale rispettano sempre la lingua dell'utente. La release 1.8.0 introduce inoltre un tracciamento opzionale dei click con parametro personalizzato, pixel configurabile e metadati anonimi rispettosi della privacy. La release 1.8.1 corregge la riscrittura degli URL garantendo che il parametro venga aggiunto senza perdere query string o hash, evitando duplicazioni e preservando l'encoding.
 
 Lo script:
 - impone attributi di sicurezza (`rel`, `target`) sui link esterni;
@@ -15,6 +15,7 @@ Lo script:
 - rende configurabile la visualizzazione dei messaggi su hover tramite tooltip personalizzato oppure attributo `title` standard;
 - espone un file di impostazioni dedicato (`links-guard.settings.js`) per gestire i valori di default e facilitare la manutenzione;
 - osserva il DOM con `MutationObserver` per gestire i link aggiunti dinamicamente, rispettando selettori esclusi configurati.
+- può aggiungere automaticamente un parametro di tracciamento a ogni link esterno consentito e inviare un evento analytics personalizzato con metadati anonimi nel rispetto delle preferenze privacy.
 
 ## Struttura del repository
 ```
@@ -56,6 +57,10 @@ Lo script:
      data-exclude-selectors=".slg-ignore, .newsletter-footer a"
      data-show-copy-button="true"
      data-hover-feedback="tooltip"
+     data-tracking-enabled="true"
+     data-tracking-parameter="myclid"
+     data-tracking-pixel-endpoint="/analytics/pixel.php"
+     data-tracking-include-metadata="true"
    ></script>
    <!-- data-remove-node è opzionale: se impostato a true sostituisce <a> con <span> -->
    <!-- imposta data-mode="warn" per evidenziare i link e chiedere conferma prima di aprirli -->
@@ -158,6 +163,29 @@ const renderer = SafeExternalLinksGuard.i18n.createContentRenderer({
 ```
 
 È possibile registrare dinamicamente altri descriptor tramite `renderer.register({ node, key, ... })`, limitare il rendering a determinate condizioni con `shouldRender` e personalizzare i valori tramite `replacements` o `transform`. Quando non serve più, invoca `renderer.disconnect()` per rimuovere gli ascoltatori.
+
+### Tracciamento dei clic con parametro personalizzato
+Il modulo principale (`links-guard.js`) può generare automaticamente un identificatore univoco per ogni click consentito e appenderlo come parametro query personalizzabile (es. `?myclid=UUID`) all'URL di destinazione. Contestualmente viene inviata una richiesta al pixel configurato con i seguenti metadati anonimi:
+
+- lingua e lingue preferite del browser;
+- timezone rilevata tramite `Intl.DateTimeFormat()`;
+- tipo di dispositivo stimato dall'user agent (desktop, tablet, mobile, TV o unknown);
+- referrer della pagina che ha generato il click;
+- timestamp ISO 8601 del momento del click;
+- modalità privacy (`extended` o `minimal`) in base alla configurazione.
+
+Le impostazioni disponibili nel file `links-guard.settings.js` (sovrascrivibili tramite attributi `data-*` o override JavaScript) sono:
+
+| Opzione | Descrizione | Default |
+| --- | --- | --- |
+| `trackingEnabled` | Attiva il tracciamento dei click. | `false` |
+| `trackingParameter` | Nome del parametro aggiunto alla query string (es. `myclid`). | `"myclid"` |
+| `trackingPixelEndpoint` | Endpoint HTTP a cui inviare l'evento (POST JSON con fallback `sendBeacon`/immagine). | `""` |
+| `trackingIncludeMetadata` | Se `true` invia lingua, timezone e tipo di dispositivo; se `false` invia solo identificatore, privacy minimale, referrer e timestamp. | `true` |
+
+Quando il pixel è disabilitato (`trackingEnabled: false` o endpoint vuoto) i link vengono aperti normalmente senza modifiche alla query string. Se `trackingIncludeMetadata` è impostato su `false` il payload inviato contiene solo i campi strettamente necessari (`trackingId`, `parameterName`, `destination`, `originalDestination`, `timestamp`, `referrer`, `privacyMode: "minimal"`).
+
+> **Suggerimento privacy:** per conformarsi al GDPR abilita il tracciamento solo dopo aver raccolto il consenso esplicito dell'utente e imposta `trackingIncludeMetadata: false` quando vuoi evitare la raccolta di dati aggiuntivi sul dispositivo.
 
 Per adattare i default al tuo progetto puoi:
 - modificare direttamente `links-guard.settings.js`, mantenendo in chiaro i valori attesi;

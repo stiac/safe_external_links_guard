@@ -38,7 +38,11 @@
     warnHighlightClass: "slg-warn-highlight", // Classe CSS dei link warn in modalità `soft`/`warn`. Impostabile con `data-warn-highlight-class`.
     warnMessageDefault: FALLBACK_WARN_MESSAGE, // Messaggio fallback, modificabile con `data-warn-message`.
     excludeSelectors: [], // Selettori da ignorare nella scansione. Accetta CSV tramite `data-exclude-selectors` o array via override.
-    configVersion: "1.6.0" // Versione di configurazione usata per invalidare cache e asset in fase di deploy.
+    configVersion: "1.6.0", // Versione di configurazione usata per invalidare cache e asset in fase di deploy.
+    trackingEnabled: false, // Abilita il tracciamento dei click con parametro personalizzato. Override con `data-tracking-enabled`.
+    trackingParameter: "myclid", // Nome del parametro di tracciamento (es. myclid). Override con `data-tracking-parameter`.
+    trackingPixelEndpoint: "", // Endpoint del pixel di raccolta dati. Impostabile con `data-tracking-pixel-endpoint`.
+    trackingIncludeMetadata: true // Invia metadati anonimi (lingua, device, timezone). Disattivabile con `data-tracking-include-metadata`.
   };
 
   const VALID_MODES = new Set(["strict", "warn", "soft"]); // Modalità supportate: `strict` (solo modale), `warn` (modale + evidenza), `soft` (solo evidenza).
@@ -165,6 +169,29 @@
       const version = getAttribute(scriptEl, "data-config-version");
       cfg.configVersion = version || cfg.configVersion;
     }
+    if (hasDataAttribute(scriptEl, "data-tracking-enabled")) {
+      cfg.trackingEnabled = parseBoolean(
+        getAttribute(scriptEl, "data-tracking-enabled"),
+        cfg.trackingEnabled
+      );
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-parameter")) {
+      const param = getAttribute(scriptEl, "data-tracking-parameter");
+      cfg.trackingParameter = param || cfg.trackingParameter;
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-pixel-endpoint")) {
+      const endpointAttr = getAttribute(
+        scriptEl,
+        "data-tracking-pixel-endpoint"
+      );
+      cfg.trackingPixelEndpoint = endpointAttr || cfg.trackingPixelEndpoint;
+    }
+    if (hasDataAttribute(scriptEl, "data-tracking-include-metadata")) {
+      cfg.trackingIncludeMetadata = parseBoolean(
+        getAttribute(scriptEl, "data-tracking-include-metadata"),
+        cfg.trackingIncludeMetadata
+      );
+    }
 
     return cfg;
   }; // Applica selettivamente gli attributi `data-*` presenti sul tag <script>.
@@ -185,7 +212,11 @@
       "maxConcurrent",
       "warnHighlightClass",
       "warnMessageDefault",
-      "configVersion"
+      "configVersion",
+      "trackingEnabled",
+      "trackingParameter",
+      "trackingPixelEndpoint",
+      "trackingIncludeMetadata"
     ];
     simpleKeys.forEach((key) => {
       if (Object.prototype.hasOwnProperty.call(overrides, key)) {
@@ -231,6 +262,17 @@
     } else {
       cfg.configVersion = DEFAULTS.configVersion;
     }
+    cfg.trackingEnabled = Boolean(cfg.trackingEnabled);
+    if (!cfg.trackingPixelEndpoint) {
+      cfg.trackingEnabled = false;
+    }
+    if (!cfg.trackingParameter || !/^[a-zA-Z0-9_\-]+$/.test(cfg.trackingParameter)) {
+      cfg.trackingParameter = DEFAULTS.trackingParameter;
+    }
+    cfg.trackingPixelEndpoint = cfg.trackingPixelEndpoint
+      ? String(cfg.trackingPixelEndpoint)
+      : "";
+    cfg.trackingIncludeMetadata = Boolean(cfg.trackingIncludeMetadata);
     return cfg;
   }; // Rifinisce la configurazione finale evitando stati inconsistenti.
 
@@ -260,7 +302,11 @@
       warnHighlightClass: String(config.warnHighlightClass || ""),
       warnMessageDefault: String(config.warnMessageDefault || ""),
       excludeSelectors: normalizeArray(config.excludeSelectors),
-      configVersion: String(config.configVersion || "")
+      configVersion: String(config.configVersion || ""),
+      trackingEnabled: Boolean(config.trackingEnabled),
+      trackingParameter: String(config.trackingParameter || ""),
+      trackingPixelEndpoint: String(config.trackingPixelEndpoint || ""),
+      trackingIncludeMetadata: Boolean(config.trackingIncludeMetadata)
     };
     return JSON.stringify(safeConfig);
   }; // Genera una firma stabile delle impostazioni correnti per invalidare cache e asset.
