@@ -32,6 +32,8 @@ class FakeScript {
   assert.strictEqual(cfg.trackingParameter, 'myclid', 'trackingParameter should fallback to default name');
   assert.strictEqual(cfg.trackingPixelEndpoint, '', 'trackingPixelEndpoint should fallback to empty string');
   assert.strictEqual(cfg.trackingIncludeMetadata, true, 'trackingIncludeMetadata should default to true to collect anonymous data');
+  assert.strictEqual(cfg.debugMode, false, 'debugMode should be disabled by default');
+  assert.strictEqual(cfg.debugLevel, 'basic', 'debugLevel should default to basic');
 })();
 
 (() => {
@@ -58,6 +60,24 @@ class FakeScript {
   assert.strictEqual(cfg.trackingParameter, 'myclid', 'data-tracking-parameter should override the default name');
   assert.strictEqual(cfg.trackingPixelEndpoint, '/collect', 'data-tracking-pixel-endpoint should override the default endpoint');
   assert.strictEqual(cfg.trackingIncludeMetadata, false, 'data-tracking-include-metadata="false" should disable metadata collection');
+  assert.strictEqual(cfg.debugMode, false, 'debugMode should remain disabled when not provided');
+  assert.strictEqual(cfg.debugLevel, 'basic', 'debugLevel should stay basic when attribute is missing');
+})();
+
+(() => {
+  const script = new FakeScript({
+    'data-debug-mode': 'true',
+    'data-debug-level': 'verbose'
+  });
+  const cfg = SafeExternalLinksGuard.buildSettings(script);
+  assert.strictEqual(cfg.debugMode, true, 'data-debug-mode="true" should enable debug mode');
+  assert.strictEqual(cfg.debugLevel, 'verbose', 'data-debug-level="verbose" should enable verbose logging');
+})();
+
+(() => {
+  const script = new FakeScript({ 'data-debug-level': 'unsupported' });
+  const cfg = SafeExternalLinksGuard.buildSettings(script);
+  assert.strictEqual(cfg.debugLevel, 'basic', 'invalid data-debug-level should fallback to basic');
 })();
 
 (() => {
