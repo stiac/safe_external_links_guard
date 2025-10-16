@@ -56,7 +56,14 @@
     trackingUtmKeys: [], // Chiavi UTM extra per il payload. Override con `data-tracking-utm-keys`.
     keepWarnMessageOnAllow: false, // Mantiene il messaggio di avviso anche per i link consentiti (utile in contesti limitati).
     debugMode: false, // Modalità debug disattivata di default. Attivabile con `data-debug-mode` o override JS.
-    debugLevel: "basic" // Livello di dettaglio dei log (`basic` o `verbose`). Configurabile con `data-debug-level` o override JS.
+    debugLevel: "basic", // Livello di dettaglio dei log (`basic` o `verbose`). Configurabile con `data-debug-level` o override JS.
+    bootstrap: {
+      enabled: true,
+      allowlist: [],
+      externalPolicy: { action: "warn", message: FALLBACK_WARN_MESSAGE },
+      seo: { enforceAttributes: true, enforceNewTab: true },
+      debug: false
+    }
   };
 
   const VALID_MODES = new Set(["strict", "warn", "soft"]); // Modalità supportate: `strict` (solo modale), `warn` (modale + evidenza), `soft` (solo evidenza).
@@ -129,6 +136,20 @@
   const cloneDefaults = () => {
     const warnMessageDefault = resolveDefaultWarnMessage();
     DEFAULTS.warnMessageDefault = warnMessageDefault;
+    const bootstrapDefaults = {
+      enabled: DEFAULTS.bootstrap.enabled,
+      allowlist: [...DEFAULTS.bootstrap.allowlist],
+      externalPolicy: {
+        action: DEFAULTS.bootstrap.externalPolicy.action,
+        message:
+          (DEFAULTS.bootstrap.externalPolicy.message &&
+            DEFAULTS.bootstrap.externalPolicy.message !== FALLBACK_WARN_MESSAGE)
+            ? DEFAULTS.bootstrap.externalPolicy.message
+            : warnMessageDefault
+      },
+      seo: { ...DEFAULTS.bootstrap.seo },
+      debug: DEFAULTS.bootstrap.debug
+    };
     return {
       ...DEFAULTS,
       warnMessageDefault,
@@ -139,9 +160,74 @@
       trackingBlocklist: [...DEFAULTS.trackingBlocklist],
       trackingRetry: { ...DEFAULTS.trackingRetry },
       trackingCampaignKeys: [...DEFAULTS.trackingCampaignKeys],
-      trackingUtmKeys: [...DEFAULTS.trackingUtmKeys]
+      trackingUtmKeys: [...DEFAULTS.trackingUtmKeys],
+      bootstrap: bootstrapDefaults
     };
   }; // Produce una copia isolata dei valori di default aggiornando il messaggio di avviso alla lingua corrente.
+
+  const parseBootstrapConfig = (cfg, scriptEl) => {
+    const bootstrapCfg = {
+      enabled: true,
+      allowlist: [],
+      externalPolicy: {
+        action: "warn",
+        message: cfg.warnMessageDefault || FALLBACK_WARN_MESSAGE
+      },
+      seo: {
+        enforceAttributes: true,
+        enforceNewTab: cfg.newTab !== false
+      },
+      debug: false
+    };
+
+    if (!scriptEl) {
+      return bootstrapCfg;
+    }
+
+    if (hasDataAttribute(scriptEl, "data-bootstrap-enabled")) {
+      bootstrapCfg.enabled = parseBoolean(
+        getAttribute(scriptEl, "data-bootstrap-enabled"),
+        bootstrapCfg.enabled
+      );
+    }
+
+    if (hasDataAttribute(scriptEl, "data-bootstrap-allowlist")) {
+      bootstrapCfg.allowlist = parseList(
+        getAttribute(scriptEl, "data-bootstrap-allowlist")
+      );
+    }
+
+    if (hasDataAttribute(scriptEl, "data-bootstrap-policy-action")) {
+      const action = getAttribute(scriptEl, "data-bootstrap-policy-action");
+      const normalized = action ? action.trim().toLowerCase() : "";
+      if (normalized === "allow" || normalized === "warn" || normalized === "deny") {
+        bootstrapCfg.externalPolicy.action = normalized;
+      }
+    }
+
+    if (hasDataAttribute(scriptEl, "data-bootstrap-policy-message")) {
+      const message = getAttribute(scriptEl, "data-bootstrap-policy-message");
+      if (message) {
+        bootstrapCfg.externalPolicy.message = message;
+      }
+    }
+
+    if (hasDataAttribute(scriptEl, "data-seo-enforce-attributes")) {
+      bootstrapCfg.seo.enforceAttributes = parseBoolean(
+        getAttribute(scriptEl, "data-seo-enforce-attributes"),
+        bootstrapCfg.seo.enforceAttributes
+      );
+    }
+
+    if (hasDataAttribute(scriptEl, "data-bootstrap-debug")) {
+      bootstrapCfg.debug = parseBoolean(
+        getAttribute(scriptEl, "data-bootstrap-debug"),
+        bootstrapCfg.debug
+      );
+    }
+
+    return bootstrapCfg;
+  };
 
   const applyScriptAttributes = (cfg, scriptEl) => {
     if (!scriptEl) return cfg;
@@ -367,6 +453,8 @@
         cfg.trackingIncludeMetadata
       );
     }
+
+    cfg.bootstrap = parseBootstrapConfig(cfg, scriptEl);
 
     return cfg;
   }; // Applica selettivamente gli attributi `data-*` presenti sul tag <script>.
@@ -650,6 +738,59 @@
     } else {
       cfg.debugLevel = String(cfg.debugLevel).trim().toLowerCase();
     }
+
+    const bootstrapRaw =
+      cfg.bootstrap && typeof cfg.bootstrap === "object" ? cfg.bootstrap : null;
+    let bootstrapCfg;
+    if (bootstrapRaw) {
+      bootstrapCfg = {
+        enabled: bootstrapRaw.enabled !== false,
+        allowlist: Array.isArray(bootstrapRaw.allowlist)
+          ? bootstrapRaw.allowlist.map((item) => String(item).trim()).filter(Boolean)
+          : bootstrapRaw.allowlist
+          ? parseList(String(bootstrapRaw.allowlist))
+          : [],
+        externalPolicy:
+          bootstrapRaw.externalPolicy && typeof bootstrapRaw.externalPolicy === "object"
+            ? { ...bootstrapRaw.externalPolicy }
+            : {},
+        seo:
+          bootstrapRaw.seo && typeof bootstrapRaw.seo === "object"
+            ? { ...bootstrapRaw.seo }
+            : {},
+        debug: Boolean(bootstrapRaw.debug)
+      };
+    } else {
+      bootstrapCfg = parseBootstrapConfig(cfg, null);
+    }
+
+    const allowedBootstrapActions = new Set(["allow", "warn", "deny"]);
+    const normalizedAction = String(
+      bootstrapCfg.externalPolicy?.action || ""
+    ).toLowerCase();
+    bootstrapCfg.externalPolicy = {
+      action: allowedBootstrapActions.has(normalizedAction)
+        ? normalizedAction
+        : "warn",
+      message:
+        typeof bootstrapCfg.externalPolicy?.message === "string" &&
+        bootstrapCfg.externalPolicy.message.trim()
+          ? bootstrapCfg.externalPolicy.message
+          : cfg.warnMessageDefault
+    };
+
+    bootstrapCfg.seo = {
+      enforceAttributes: bootstrapCfg.seo?.enforceAttributes !== false,
+      enforceNewTab: cfg.newTab !== false
+    };
+    bootstrapCfg.enabled = bootstrapCfg.enabled !== false;
+    bootstrapCfg.allowlist = Array.isArray(bootstrapCfg.allowlist)
+      ? bootstrapCfg.allowlist.map((item) => item.trim()).filter(Boolean)
+      : [];
+    bootstrapCfg.debug = Boolean(bootstrapCfg.debug);
+
+    cfg.bootstrap = bootstrapCfg;
+
     return cfg;
   }; // Rifinisce la configurazione finale evitando stati inconsistenti.
 
@@ -690,7 +831,16 @@
         String(config.debugLevel || "").toLowerCase()
       )
         ? String(config.debugLevel).toLowerCase()
-        : DEFAULTS.debugLevel
+        : DEFAULTS.debugLevel,
+      bootstrap: {
+        enabled: Boolean(config.bootstrap?.enabled),
+        allowlist: normalizeArray(config.bootstrap?.allowlist || []),
+        action: String(config.bootstrap?.externalPolicy?.action || ""),
+        message: String(config.bootstrap?.externalPolicy?.message || ""),
+        enforceAttributes: Boolean(
+          config.bootstrap?.seo?.enforceAttributes !== false
+        )
+      }
     };
     return JSON.stringify(safeConfig);
   }; // Genera una firma stabile delle impostazioni correnti per invalidare cache e asset.

@@ -44,6 +44,20 @@ class FakeScript {
   );
   assert.strictEqual(cfg.debugMode, false, 'debugMode should be disabled by default');
   assert.strictEqual(cfg.debugLevel, 'basic', 'debugLevel should default to basic');
+  assert.ok(cfg.bootstrap, 'bootstrap configuration should be present by default');
+  assert.strictEqual(cfg.bootstrap.enabled, true, 'bootstrap should be enabled by default');
+  assert.deepStrictEqual(cfg.bootstrap.allowlist, [], 'bootstrap allowlist should default to empty array');
+  assert.strictEqual(cfg.bootstrap.externalPolicy.action, 'warn', 'bootstrap external policy should default to warn');
+  assert.strictEqual(
+    cfg.bootstrap.externalPolicy.message,
+    SafeExternalLinksGuard.defaults.warnMessageDefault,
+    'bootstrap policy message should align with default warn message'
+  );
+  assert.strictEqual(
+    cfg.bootstrap.seo.enforceAttributes,
+    true,
+    'bootstrap should enforce SEO attributes by default'
+  );
 })();
 
 (() => {
@@ -69,7 +83,13 @@ class FakeScript {
     'data-tracking-matrix-preset': 'extended',
     'data-tracking-user-ip-hash': 'hash-value',
     'data-tracking-campaign-keys': 'cid,gclid',
-    'data-tracking-utm-keys': 'utm_source,utm_medium,utm_campaign'
+    'data-tracking-utm-keys': 'utm_source,utm_medium,utm_campaign',
+    'data-bootstrap-enabled': 'false',
+    'data-bootstrap-allowlist': 'external.test,cdn.test',
+    'data-bootstrap-policy-message': 'Attenzione',
+    'data-bootstrap-policy-action': 'deny',
+    'data-seo-enforce-attributes': 'false',
+    'data-bootstrap-debug': 'true'
   });
   const cfg = SafeExternalLinksGuard.buildSettings(script);
   assert.strictEqual(cfg.timeoutMs, 1500, 'data-timeout should be parsed as integer');
@@ -96,6 +116,21 @@ class FakeScript {
   assert.deepStrictEqual(cfg.trackingUtmKeys, ['utm_source', 'utm_medium', 'utm_campaign'], 'data-tracking-utm-keys should parse list');
   assert.strictEqual(cfg.debugMode, false, 'debugMode should remain disabled when not provided');
   assert.strictEqual(cfg.debugLevel, 'basic', 'debugLevel should stay basic when attribute is missing');
+  assert.strictEqual(cfg.bootstrap.enabled, false, 'data-bootstrap-enabled="false" should disable bootstrap');
+  assert.deepStrictEqual(
+    cfg.bootstrap.allowlist,
+    ['external.test', 'cdn.test'],
+    'data-bootstrap-allowlist should parse domains list'
+  );
+  assert.strictEqual(cfg.bootstrap.externalPolicy.action, 'deny', 'data-bootstrap-policy-action should override action');
+  assert.strictEqual(
+    cfg.bootstrap.externalPolicy.message,
+    'Attenzione',
+    'data-bootstrap-policy-message should override message'
+  );
+  assert.strictEqual(cfg.bootstrap.seo.enforceAttributes, false, 'data-seo-enforce-attributes="false" should disable SEO enforcement');
+  assert.strictEqual(cfg.bootstrap.seo.enforceNewTab, false, 'bootstrap enforceNewTab should mirror newTab=false');
+  assert.strictEqual(cfg.bootstrap.debug, true, 'data-bootstrap-debug="true" should enable bootstrap debug');
 })();
 
 (() => {
