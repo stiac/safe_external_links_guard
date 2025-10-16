@@ -21,12 +21,14 @@
   // Mappa dei codici normalizzati -> forma canonica mostrata ai consumatori dell'API pubblica.
   const CANONICAL_DISPLAY = {
     'pt-br': 'pt-BR',
-    pt: 'pt'
+    pt: 'pt',
+    'it-it': 'it-IT'
   };
   // Alias aggiuntivi per normalizzare varianti regionali o codici legacy.
   const LANGUAGE_ALIASES = {
     'pt-pt': 'pt',
-    br: 'pt-br'
+    br: 'pt-br',
+    'it-it': 'it'
   };
 
   // Catalogo di fallback per garantire sempre la disponibilità della lingua inglese
@@ -530,9 +532,43 @@
     return params.get(paramName) || '';
   };
 
+  /**
+   * Risolve il miglior candidato disponibile considerando alias e fallback alla lingua base.
+   */
+  const resolveCandidateLanguage = (candidate, data) => {
+    const normalized = normalizeLanguageCode(candidate);
+    if (!normalized) return '';
+
+    const resolved = resolveAlias(normalized, data);
+    if (resolved) {
+      // Se il candidato include una variante regionale disponibile come alias
+      // manteniamo la forma canonica con regione per esporre il codice atteso (es. it-IT -> it-IT).
+      if (normalized !== resolved && normalized.startsWith(`${resolved}-`)) {
+        return formatDisplayLanguage(normalized);
+      }
+      return formatDisplayLanguage(resolved);
+    }
+
+    if (data[normalized]) {
+      return formatDisplayLanguage(normalized);
+    }
+
+    if (normalized.includes('-')) {
+      const base = normalized.split('-')[0];
+      if (data[base]) {
+        return formatDisplayLanguage(base);
+      }
+      const baseAlias = LANGUAGE_ALIASES[base];
+      if (baseAlias && data[baseAlias]) {
+        return formatDisplayLanguage(baseAlias);
+      }
+    }
+
+    return '';
+  };
+
   const detectLanguage = (options = {}) => {
     const data = ensureCatalog();
-    const available = Object.keys(data);
     const paramName = options.paramName || 'lang';
     const defaultLang = options.defaultLanguage || DEFAULT_LANGUAGE;
     const candidates = [];
@@ -566,17 +602,9 @@
 
     for (let i = 0; i < candidates.length; i += 1) {
       const candidate = candidates[i];
-      const normalized = normalizeLanguageCode(candidate);
-      if (!normalized) continue;
-      const resolved = resolveAlias(normalized, data);
-      if (resolved) return formatDisplayLanguage(resolved);
-      if (available.includes(normalized)) return formatDisplayLanguage(normalized);
-      if (normalized.includes('-')) {
-        const base = normalized.split('-')[0];
-        if (available.includes(base)) return formatDisplayLanguage(base);
-      }
-      if (normalized === 'br' && available.includes('pt-br')) {
-        return formatDisplayLanguage('pt-br');
+      const resolvedDisplay = resolveCandidateLanguage(candidate, data);
+      if (resolvedDisplay) {
+        return resolvedDisplay;
       }
     }
 
