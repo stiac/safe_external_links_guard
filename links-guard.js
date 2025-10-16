@@ -19,6 +19,12 @@
 
   const guardNamespace = (window.SafeExternalLinksGuard =
     window.SafeExternalLinksGuard || {});
+  let runtimeLanguageSnapshot = {
+    preferred: null,
+    alternatives: [],
+    documentLang: null,
+    sources: []
+  };
   const VALID_MODES = new Set(["strict", "warn", "soft"]);
   const DEBUG_LEVELS = new Set(["basic", "verbose"]);
 
@@ -299,6 +305,302 @@
     "modal.cancelButton": "Cancel"
   };
 
+  const LOCALIZED_FALLBACK_TRANSLATIONS = {
+    it: {
+      "messages.defaultWarn":
+        "Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile.",
+      "messages.denyDefault": "Dominio bloccato. Procedi con cautela.",
+      "messages.endpointUnavailable":
+        "Resolver delle policy temporaneamente non disponibile. Procedi con cautela.",
+      "messages.timeout": "La verifica del dominio è scaduta. Procedi con cautela.",
+      "messages.error": "Si è verificato un errore durante la verifica del dominio. Procedi con cautela.",
+      "messages.missingHost": "Host mancante nella richiesta.",
+      "messages.policy.phishing": "Dominio segnalato per phishing.",
+      "messages.policy.ruBlock": "Tutti i sottodomini .ru sono bloccati.",
+      "messages.policy.github": "Repository GitHub verificato.",
+      "messages.policy.officialSubdomain": "Sottodominio ufficiale tuo-sito.it.",
+      "messages.policy.beta": "Ambiente beta: verifica prima di procedere.",
+      "modal.title": "Controlla che questo link sia sicuro",
+      "modal.closeLabel": "Chiudi",
+      "modal.closeTitle": "Chiudi",
+      "modal.hostLabel": "Host:",
+      "modal.openButton": "Apri link",
+      "modal.copyButton": "Copia link",
+      "modal.cancelButton": "Annulla"
+    },
+    es: {
+      "messages.defaultWarn":
+        "Este enlace no está verificado y puede compartir tus datos de navegación con un sitio de terceros. Antes de continuar, asegúrate de que el destino sea de confianza.",
+      "messages.denyDefault": "Dominio bloqueado. Procede con precaución.",
+      "messages.endpointUnavailable":
+        "El resolvedor de políticas no está disponible temporalmente. Procede con precaución.",
+      "messages.timeout": "La verificación del dominio superó el tiempo límite. Procede con precaución.",
+      "messages.error": "Se produjo un error al verificar el dominio. Procede con precaución.",
+      "messages.missingHost": "Falta el host en la solicitud.",
+      "messages.policy.phishing": "Dominio reportado por phishing.",
+      "messages.policy.ruBlock": "Se bloquean todos los subdominios .ru.",
+      "messages.policy.github": "Repositorio de GitHub verificado.",
+      "messages.policy.officialSubdomain": "Subdominio oficial de tuo-sito.it.",
+      "messages.policy.beta": "Entorno beta: verifica antes de continuar.",
+      "modal.title": "Comprueba que este enlace sea seguro",
+      "modal.closeLabel": "Cerrar",
+      "modal.closeTitle": "Cerrar",
+      "modal.hostLabel": "Host:",
+      "modal.openButton": "Abrir enlace",
+      "modal.copyButton": "Copiar enlace",
+      "modal.cancelButton": "Cancelar"
+    },
+    fr: {
+      "messages.defaultWarn":
+        "Ce lien n'est pas vérifié et peut partager vos données de navigation avec un site tiers. Assurez-vous que la destination est fiable avant de continuer.",
+      "messages.denyDefault": "Domaine bloqué. Procédez avec prudence.",
+      "messages.endpointUnavailable":
+        "Le service de résolution des politiques est temporairement indisponible. Procédez avec prudence.",
+      "messages.timeout": "La vérification du domaine a expiré. Procédez avec prudence.",
+      "messages.error": "Une erreur est survenue lors de la vérification du domaine. Procédez avec prudence.",
+      "messages.missingHost": "Hôte manquant dans la requête.",
+      "messages.policy.phishing": "Domaine signalé pour phishing.",
+      "messages.policy.ruBlock": "Tous les sous-domaines .ru sont bloqués.",
+      "messages.policy.github": "Référentiel GitHub vérifié.",
+      "messages.policy.officialSubdomain": "Sous-domaine officiel tuo-sito.it.",
+      "messages.policy.beta": "Environnement bêta : vérifiez avant de continuer.",
+      "modal.title": "Vérifiez que ce lien est sûr",
+      "modal.closeLabel": "Fermer",
+      "modal.closeTitle": "Fermer",
+      "modal.hostLabel": "Hôte :",
+      "modal.openButton": "Ouvrir le lien",
+      "modal.copyButton": "Copier le lien",
+      "modal.cancelButton": "Annuler"
+    },
+    de: {
+      "messages.defaultWarn":
+        "Dieser Link ist nicht verifiziert und kann Ihre Browsing-Daten mit einer Drittanbieter-Website teilen. Stellen Sie vor dem Fortfahren sicher, dass das Ziel vertrauenswürdig ist.",
+      "messages.denyDefault": "Domain blockiert. Bitte mit Vorsicht fortfahren.",
+      "messages.endpointUnavailable":
+        "Policy-Resolver vorübergehend nicht verfügbar. Bitte mit Vorsicht fortfahren.",
+      "messages.timeout": "Die Überprüfung der Domain hat zu lange gedauert. Bitte mit Vorsicht fortfahren.",
+      "messages.error": "Bei der Überprüfung der Domain ist ein Fehler aufgetreten. Bitte mit Vorsicht fortfahren.",
+      "messages.missingHost": "Host in der Anfrage fehlt.",
+      "messages.policy.phishing": "Domain wegen Phishing gemeldet.",
+      "messages.policy.ruBlock": "Alle .ru-Subdomains sind blockiert.",
+      "messages.policy.github": "Verifiziertes GitHub-Repository.",
+      "messages.policy.officialSubdomain": "Offizielle tuo-sito.it-Subdomain.",
+      "messages.policy.beta": "Beta-Umgebung: Vor dem Fortfahren prüfen.",
+      "modal.title": "Prüfen Sie, ob dieser Link sicher ist",
+      "modal.closeLabel": "Schließen",
+      "modal.closeTitle": "Schließen",
+      "modal.hostLabel": "Host:",
+      "modal.openButton": "Link öffnen",
+      "modal.copyButton": "Link kopieren",
+      "modal.cancelButton": "Abbrechen"
+    },
+    pt: {
+      "messages.defaultWarn":
+        "Este link não é verificado e pode compartilhar seus dados de navegação com um site de terceiros. Antes de continuar, garanta que o destino seja confiável.",
+      "messages.denyDefault": "Domínio bloqueado. Prossiga com cautela.",
+      "messages.endpointUnavailable":
+        "Resolver de políticas temporariamente indisponível. Prossiga com cautela.",
+      "messages.timeout": "A verificação do domínio excedeu o tempo limite. Prossiga com cautela.",
+      "messages.error": "Ocorreu um erro ao verificar este domínio. Prossiga com cautela.",
+      "messages.missingHost": "Host ausente na requisição.",
+      "messages.policy.phishing": "Domínio sinalizado por phishing.",
+      "messages.policy.ruBlock": "Todos os subdomínios .ru estão bloqueados.",
+      "messages.policy.github": "Repositório GitHub verificado.",
+      "messages.policy.officialSubdomain": "Subdomínio oficial tuo-sito.it.",
+      "messages.policy.beta": "Ambiente beta: verifique antes de continuar.",
+      "modal.title": "Verifique se este link é seguro",
+      "modal.closeLabel": "Fechar",
+      "modal.closeTitle": "Fechar",
+      "modal.hostLabel": "Host:",
+      "modal.openButton": "Abrir link",
+      "modal.copyButton": "Copiar link",
+      "modal.cancelButton": "Cancelar"
+    },
+    "pt-br": {
+      "messages.defaultWarn":
+        "Este link não é verificado e pode compartilhar os seus dados de navegação com um site de terceiros. Antes de continuar, garanta que o destino seja confiável.",
+      "messages.denyDefault": "Domínio bloqueado. Prossiga com cautela.",
+      "messages.endpointUnavailable":
+        "Resolver de políticas temporariamente indisponível. Prossiga com cautela.",
+      "messages.timeout": "A verificação do domínio excedeu o tempo limite. Prossiga com cautela.",
+      "messages.error": "Ocorreu um erro ao verificar este domínio. Prossiga com cautela.",
+      "messages.missingHost": "Host ausente na requisição.",
+      "messages.policy.phishing": "Domínio sinalizado por phishing.",
+      "messages.policy.ruBlock": "Todos os subdomínios .ru estão bloqueados.",
+      "messages.policy.github": "Repositório GitHub verificado.",
+      "messages.policy.officialSubdomain": "Subdomínio oficial tuo-sito.it.",
+      "messages.policy.beta": "Ambiente beta: verifique antes de continuar.",
+      "modal.title": "Verifique se este link é seguro",
+      "modal.closeLabel": "Fechar",
+      "modal.closeTitle": "Fechar",
+      "modal.hostLabel": "Host:",
+      "modal.openButton": "Abrir link",
+      "modal.copyButton": "Copiar link",
+      "modal.cancelButton": "Cancelar"
+    },
+    ru: {
+      "messages.defaultWarn":
+        "Эта ссылка не проверена и может передавать ваши данные о просмотре стороннему сайту. Перед продолжением убедитесь, что адрес доверенный.",
+      "messages.denyDefault": "Домен заблокирован. Действуйте с осторожностью.",
+      "messages.endpointUnavailable":
+        "Определитель политик временно недоступен. Действуйте с осторожностью.",
+      "messages.timeout": "Проверка домена превысила допустимое время. Действуйте с осторожностью.",
+      "messages.error": "Произошла ошибка при проверке домена. Действуйте с осторожностью.",
+      "messages.missingHost": "В запросе отсутствует хост.",
+      "messages.policy.phishing": "Домен отмечен как источник фишинга.",
+      "messages.policy.ruBlock": "Все поддомены .ru заблокированы.",
+      "messages.policy.github": "Подтверждённый репозиторий GitHub.",
+      "messages.policy.officialSubdomain": "Официальный поддомен tuo-sito.it.",
+      "messages.policy.beta": "Бета-среда: проверьте данные перед продолжением.",
+      "modal.title": "Убедитесь, что эта ссылка безопасна",
+      "modal.closeLabel": "Закрыть",
+      "modal.closeTitle": "Закрыть",
+      "modal.hostLabel": "Хост:",
+      "modal.openButton": "Открыть ссылку",
+      "modal.copyButton": "Копировать ссылку",
+      "modal.cancelButton": "Отмена"
+    }
+  };
+
+  const normalizeFallbackLanguage = (lang) => {
+    if (!lang || typeof lang !== "string") {
+      return "";
+    }
+    const trimmed = lang.trim();
+    if (!trimmed) {
+      return "";
+    }
+    return trimmed.replace(/[_\s]+/g, "-").toLowerCase();
+  };
+
+  const collectEnvironmentLanguageHints = () => {
+    const hints = [];
+    if (typeof navigator !== "undefined" && navigator) {
+      const navLanguages = Array.isArray(navigator.languages)
+        ? navigator.languages
+        : [];
+      for (let i = 0; i < navLanguages.length; i += 1) {
+        const candidate = navLanguages[i];
+        if (candidate) {
+          hints.push(candidate);
+        }
+      }
+      if (!navLanguages.length && typeof navigator.language === "string") {
+        hints.push(navigator.language);
+      }
+    }
+    if (typeof document !== "undefined" && document) {
+      const docEl = document.documentElement;
+      if (docEl && typeof docEl.lang === "string" && docEl.lang) {
+        hints.push(docEl.lang);
+      }
+    }
+    return hints;
+  };
+
+  const buildFallbackLanguagePriority = (languageHints) => {
+    const seen = new Set();
+    const priority = [];
+    const pushLanguage = (value) => {
+      const normalized = normalizeFallbackLanguage(value);
+      if (!normalized || seen.has(normalized)) {
+        return;
+      }
+      seen.add(normalized);
+      priority.push(normalized);
+    };
+
+    if (languageHints) {
+      if (Array.isArray(languageHints)) {
+        for (let i = 0; i < languageHints.length; i += 1) {
+          pushLanguage(languageHints[i]);
+        }
+      } else {
+        pushLanguage(languageHints);
+      }
+    } else {
+      if (
+        guardNamespace.i18n &&
+        typeof guardNamespace.i18n.getLanguage === "function"
+      ) {
+        pushLanguage(guardNamespace.i18n.getLanguage());
+      }
+      if (runtimeLanguageSnapshot) {
+        if (runtimeLanguageSnapshot.preferred) {
+          pushLanguage(runtimeLanguageSnapshot.preferred);
+        }
+        if (Array.isArray(runtimeLanguageSnapshot.alternatives)) {
+          for (let i = 0; i < runtimeLanguageSnapshot.alternatives.length; i += 1) {
+            pushLanguage(runtimeLanguageSnapshot.alternatives[i]);
+          }
+        }
+        if (runtimeLanguageSnapshot.documentLang) {
+          pushLanguage(runtimeLanguageSnapshot.documentLang);
+        }
+      }
+    }
+
+    const environmentHints = collectEnvironmentLanguageHints();
+    for (let i = 0; i < environmentHints.length; i += 1) {
+      pushLanguage(environmentHints[i]);
+    }
+
+    pushLanguage("en");
+    return priority;
+  };
+
+  const resolveLocalizedFallback = (key, replacements, languageHints) => {
+    const languages = buildFallbackLanguagePriority(languageHints);
+    for (let i = 0; i < languages.length; i += 1) {
+      const language = languages[i];
+      const variants = [language];
+      if (language.includes("-")) {
+        const base = language.split("-")[0];
+        if (base && variants.indexOf(base) === -1) {
+          variants.push(base);
+        }
+      }
+      for (let j = 0; j < variants.length; j += 1) {
+        const variant = variants[j];
+        if (
+          Object.prototype.hasOwnProperty.call(
+            LOCALIZED_FALLBACK_TRANSLATIONS,
+            variant
+          )
+        ) {
+          const dictionary = LOCALIZED_FALLBACK_TRANSLATIONS[variant];
+          if (Object.prototype.hasOwnProperty.call(dictionary, key)) {
+            const template = dictionary[key];
+            if (typeof template === "string") {
+              return applyTemplate(template, replacements);
+            }
+          }
+        }
+      }
+    }
+    return null;
+  };
+
+  const resolveFallbackText = (key, replacements, languageHints) => {
+    const localized = resolveLocalizedFallback(key, replacements, languageHints);
+    if (localized) {
+      return localized;
+    }
+    if (Object.prototype.hasOwnProperty.call(FALLBACK_UI_TEXT, key)) {
+      return applyTemplate(FALLBACK_UI_TEXT[key], replacements);
+    }
+    return null;
+  };
+
+  guardNamespace.__internals = guardNamespace.__internals || {};
+  guardNamespace.__internals.resolveFallbackText = (
+    key,
+    replacements,
+    languageHints
+  ) => resolveFallbackText(key, replacements, languageHints);
+  guardNamespace.__internals.getFallbackLanguages = () =>
+    Object.keys(LOCALIZED_FALLBACK_TRANSLATIONS);
+
   const applyTemplate = (text, replacements) => {
     if (!replacements || typeof replacements !== "object") {
       return text;
@@ -440,8 +742,14 @@
     }
     for (let i = 0; i < chain.length; i += 1) {
       const candidate = chain[i];
-      if (typeof candidate === "string" && FALLBACK_UI_TEXT[candidate]) {
-        return applyTemplate(FALLBACK_UI_TEXT[candidate], replacements);
+      if (typeof candidate === "string") {
+        const fallbackText = resolveFallbackText(
+          candidate,
+          replacements
+        );
+        if (fallbackText) {
+          return fallbackText;
+        }
       }
     }
     const last = chain[chain.length - 1];
@@ -459,9 +767,9 @@
         return value;
       }
     }
-    const fallback = FALLBACK_UI_TEXT[key];
-    if (fallback) {
-      return applyTemplate(fallback, replacements);
+    const fallbackText = resolveFallbackText(key, replacements);
+    if (fallbackText) {
+      return fallbackText;
     }
     return key;
   };
@@ -881,7 +1189,7 @@
   // Memorizza l'istantanea della lingua per riutilizzarla in altri punti del
   // modulo (tracking, report policy, esportazione JSON, ecc.). In questo modo
   // i log e gli export condividono sempre gli stessi dati di detection.
-  const runtimeLanguageSnapshot = collectRuntimeLanguageSnapshot();
+  runtimeLanguageSnapshot = collectRuntimeLanguageSnapshot();
 
   if (cfg.debugMode) {
     debug.info(
@@ -1825,20 +2133,35 @@
     if (!set) { set = new Set(); anchorsByHost.set(host, set); }
     set.add(node);
   };
-  const mapReplaceNode = (host, oldNode, newNode) => {
-    const set = anchorsByHost.get(host);
-    if (!set) return;
-    set.delete(oldNode);
+  const mapReplaceNode = (host, oldNode, newNode, overrideState) => {
+    let set = anchorsByHost.get(host);
 
-    const previousState = anchorStates.get(oldNode);
-    if (previousState) {
-      anchorStates.delete(oldNode);
-      if (newNode && newNode.tagName === "A") {
-        anchorStates.set(newNode, { ...previousState });
-      }
+    const previousState = overrideState
+      ? { ...overrideState }
+      : anchorStates.get(oldNode)
+      ? { ...anchorStates.get(oldNode) }
+      : null;
+
+    if (!set && previousState?.host) {
+      set = anchorsByHost.get(previousState.host) || null;
     }
 
-    if (newNode) set.add(newNode);
+    if (set) {
+      set.delete(oldNode);
+    }
+
+    if (anchorStates.has(oldNode)) {
+      anchorStates.delete(oldNode);
+    }
+
+    if (newNode) {
+      if (set) {
+        set.add(newNode);
+      }
+      if (previousState) {
+        anchorStates.set(newNode, previousState);
+      }
+    }
   };
 
   const invalidExcludeSelectors = new Set();
@@ -1862,9 +2185,77 @@
     return false;
   };
 
-  const disableLink = (a, reason = null, hostForIndex = null) => {
+  const disableLink = (a, reason = null, hostForIndex = null, policyMeta = null) => {
     const message = reason || defaultDenyMessage;
-    anchorStates.delete(a);
+    const previousState = anchorStates.get(a) || null;
+    const originalHref = (() => {
+      try {
+        if (typeof a.getAttribute === "function") {
+          const attr = a.getAttribute("href");
+          if (attr) {
+            return attr;
+          }
+        }
+      } catch (err) {
+        // Alcuni ambienti potrebbero lanciare eccezioni sugli accessor: ignoriamo e passiamo oltre.
+      }
+      if (a && typeof a.href === "string" && a.href) {
+        return a.href;
+      }
+      if (previousState?.url?.href) {
+        return previousState.url.href;
+      }
+      return null;
+    })();
+    const resolveUrlFromHref = (href) => {
+      if (!href) {
+        return previousState?.url || null;
+      }
+      const parsed = toURL(href);
+      return parsed || previousState?.url || null;
+    };
+    const normalizedHost = hostForIndex || previousState?.host || null;
+    const nextState = (() => {
+      if (!previousState && !normalizedHost && !originalHref) {
+        return null;
+      }
+      const state = previousState ? { ...previousState } : {};
+      if (normalizedHost && !state.host) {
+        state.host = normalizedHost;
+      }
+      const resolvedUrl = resolveUrlFromHref(originalHref);
+      if (resolvedUrl) {
+        state.url = resolvedUrl;
+      }
+      state.originalHref = originalHref || state.originalHref || null;
+      state.disabledAt = Date.now();
+      state.removed = Boolean(cfg.removeNode);
+      state.policy = {
+        ...(previousState?.policy || {}),
+        action: "deny",
+        reason: message,
+        source:
+          policyMeta && typeof policyMeta.source === "string"
+            ? policyMeta.source
+            : previousState?.policy?.source || null
+      };
+      if (policyMeta && Number.isFinite(policyMeta.ttl)) {
+        state.policy.ttl = policyMeta.ttl;
+      } else if (state.policy.ttl && !Number.isFinite(state.policy.ttl)) {
+        delete state.policy.ttl;
+      }
+      if (policyMeta && Number.isFinite(policyMeta.cacheAgeSec)) {
+        state.policy.cacheAgeSec = policyMeta.cacheAgeSec;
+      }
+      if (policyMeta && Number.isFinite(policyMeta.cachedAt)) {
+        state.policy.cachedAt = policyMeta.cachedAt;
+      }
+      if (policyMeta && policyMeta.message) {
+        state.policy.messageDescriptor = sanitizeDetails(policyMeta.message);
+      }
+      return state;
+    })();
+
     clearHoverMessage(a, null, true);
     if (cfg.removeNode) {
       const span = document.createElement("span");
@@ -1873,21 +2264,39 @@
       span.className = cls ? `${cls} slg-disabled` : "slg-disabled";
       span.setAttribute("aria-disabled", "true");
       span.dataset.safeLinkGuard = "1";
+      if (nextState) {
+        nextState.replacementTag = "span";
+      }
       setHoverMessage(span, message);
       const parent = a.parentNode;
+      const hostKey = normalizedHost;
       if (parent) {
         parent.replaceChild(span, a);
-        if (hostForIndex) mapReplaceNode(hostForIndex, a, span);
       }
+      mapReplaceNode(hostKey, a, span, nextState || undefined);
       return span;
     }
+
     a.removeAttribute("href");
     a.setAttribute("role", "link");
     a.setAttribute("aria-disabled", "true");
     a.classList.add("slg-disabled");
     setHoverMessage(a, message);
-    a.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); }, { capture: true });
+    a.addEventListener(
+      "click",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      },
+      { capture: true }
+    );
     a.dataset.safeLinkGuard = "1";
+    if (nextState) {
+      nextState.replacementTag = a.tagName ? a.tagName.toLowerCase() : "a";
+      anchorStates.set(a, nextState);
+    } else if (anchorStates.has(a)) {
+      anchorStates.delete(a);
+    }
     return a;
   };
 
@@ -2105,7 +2514,7 @@
     for (const node of nodes) {
       if (!node.isConnected) { set.delete(node); continue; }
       if (action === "deny") {
-        disableLink(node, denyReason, host);
+        disableLink(node, denyReason, host, meta);
       } else if (action === "allow") {
         if (node.tagName === "A") {
           ensureAttrs(node);
@@ -2247,10 +2656,55 @@
           sample.dataset = { safeLinkGuard: node.dataset.safeLinkGuard };
         }
         if (state) {
-          sample.state = {
-            host: state.host,
-            url: state.url ? state.url.href : null
-          };
+          const stateSummary = {};
+          if (state.host) {
+            stateSummary.host = state.host;
+          }
+          if (state.url && state.url.href) {
+            stateSummary.url = state.url.href;
+          }
+          if (state.originalHref) {
+            stateSummary.originalHref = state.originalHref;
+          }
+          if (state.removed) {
+            stateSummary.removed = true;
+          }
+          if (state.disabledAt) {
+            stateSummary.disabledAt = state.disabledAt;
+          }
+          if (state.replacementTag) {
+            stateSummary.replacementTag = state.replacementTag;
+          }
+          if (state.policy) {
+            const policyInfo = {};
+            if (state.policy.action) {
+              policyInfo.action = state.policy.action;
+            }
+            if (state.policy.reason) {
+              policyInfo.reason = state.policy.reason;
+            }
+            if (state.policy.source) {
+              policyInfo.source = state.policy.source;
+            }
+            if (Number.isFinite(state.policy.ttl)) {
+              policyInfo.ttl = state.policy.ttl;
+            }
+            if (Number.isFinite(state.policy.cacheAgeSec)) {
+              policyInfo.cacheAgeSec = state.policy.cacheAgeSec;
+            }
+            if (Number.isFinite(state.policy.cachedAt)) {
+              policyInfo.cachedAt = state.policy.cachedAt;
+            }
+            if (state.policy.messageDescriptor) {
+              policyInfo.messageDescriptor = state.policy.messageDescriptor;
+            }
+            if (Object.keys(policyInfo).length) {
+              stateSummary.policy = policyInfo;
+            }
+          }
+          if (Object.keys(stateSummary).length) {
+            sample.state = stateSummary;
+          }
         }
         return sample;
       });
@@ -2268,7 +2722,8 @@
     debug.event("Policy applicata", summary, {
       scope: "policy",
       level,
-      tags
+      tags,
+      depth: -2
     });
 
     if (action === "deny") {
@@ -2881,7 +3336,16 @@
       const denyMsg =
         translateMessageDescriptor(cached.message, defaultDenyMessage) ||
         defaultDenyMessage;
-      disableLink(a, denyMsg, host);
+      const nowSec = Math.floor(Date.now() / 1000);
+      const meta = {
+        source: "cache",
+        ttl: cached.ttl,
+        cachedAt: cached.ts,
+        cacheAgeSec:
+          Number.isFinite(cached.ts) && cached.ts <= nowSec ? nowSec - cached.ts : undefined,
+        message: cached.message
+      };
+      disableLink(a, denyMsg, host, meta);
       return state;
     }
 
@@ -3174,7 +3638,13 @@
 
       if (policy.action === "deny") {
         results.denied += 1;
-        disableLink(node, policy.message, host);
+        const denyMessage =
+          translateMessageDescriptor(policy.message, defaultDenyMessage) ||
+          defaultDenyMessage;
+        disableLink(node, denyMessage, host, {
+          source: "amp",
+          message: policy.message || null
+        });
         return;
       }
 
