@@ -1,5 +1,11 @@
 # Changelog
 # Changelog
+## [1.12.3] - 2025-12-01
+### Fixed
+- Ripristinato `bootstrap.php` nella root del pacchetto per reindirizzare automaticamente verso `app/bootstrap.php`, evitando errori di include sui deployment che puntavano al percorso storico (`assets/app/safe_external_links_guard/bootstrap.php`).
+
+### Changed
+- Aggiornata la documentazione (`README.md`) con la nota sul file di compatibilità del bootstrap PHP e le istruzioni per gli hosting legacy.
 ## [1.12.2] - 2025-11-30
 ### Added
 - Bootstrap PHP (`app/bootstrap.php`) che intercetta l'output, imposta `target="_blank"` e applica `rel="noopener"`/`rel="noreferrer"` ai link esterni con configurazione runtime e supporto al flush programmato.

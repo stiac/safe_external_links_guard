@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../../app/bootstrap.php';
+require_once __DIR__ . '/../../bootstrap.php';
 
 function run_test(string $name, callable $callback): void
 {
