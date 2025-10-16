@@ -962,7 +962,7 @@
         ? urlLike.href
         : null;
 
-    if (cfg.trackingEnabled && cfg.trackingPixelEndpoint) {
+    if (cfg.trackingEnabled) {
       if (!trackingContext || !trackingContext.href) {
         trackingContext = prepareTrackedNavigation(urlLike);
       }
@@ -982,15 +982,17 @@
           }
         }
 
-        const metadata = collectAnonymousMetadata();
-        const payload = buildTrackingPayload({
-          trackingId: trackingContext.trackingId,
-          parameterName: trackingContext.parameterName,
-          destination: trackingContext.href,
-          original: trackingContext.originalHref,
-          metadata
-        });
-        dispatchTrackingPixel(payload);
+        if (cfg.trackingPixelEndpoint) {
+          const metadata = collectAnonymousMetadata();
+          const payload = buildTrackingPayload({
+            trackingId: trackingContext.trackingId,
+            parameterName: trackingContext.parameterName,
+            destination: trackingContext.href,
+            original: trackingContext.originalHref,
+            metadata
+          });
+          dispatchTrackingPixel(payload);
+        }
       }
     }
 
@@ -2232,7 +2234,7 @@
     let { url, host } = state;
     let trackingContext = null;
 
-    if (cfg.trackingEnabled && cfg.trackingPixelEndpoint) {
+    if (cfg.trackingEnabled) {
       trackingContext = prepareTrackedNavigation(url);
       if (trackingContext?.href) {
         try {

@@ -61,6 +61,24 @@ class FakeScript {
 })();
 
 (() => {
+  const script = new FakeScript({
+    'data-tracking-enabled': 'true',
+    'data-tracking-parameter': 'clid'
+  });
+  const cfg = SafeExternalLinksGuard.buildSettings(script);
+  assert.strictEqual(
+    cfg.trackingEnabled,
+    true,
+    'trackingEnabled should stay active to append the parameter even without a pixel endpoint'
+  );
+  assert.strictEqual(
+    cfg.trackingPixelEndpoint,
+    '',
+    'trackingPixelEndpoint should remain empty when not provided'
+  );
+})();
+
+(() => {
   const script = new FakeScript({ 'data-config-version': 'deploy-2025-11-01' });
   const cfg = SafeExternalLinksGuard.buildSettings(script);
   assert.strictEqual(cfg.configVersion, 'deploy-2025-11-01', 'data-config-version should override default version');
