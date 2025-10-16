@@ -21,13 +21,22 @@
   // Mappa dei codici normalizzati -> forma canonica mostrata ai consumatori dell'API pubblica.
   const CANONICAL_DISPLAY = {
     'pt-br': 'pt-BR',
-    pt: 'pt'
+    pt: 'pt',
+    'it-it': 'it-IT'
   };
   // Alias aggiuntivi per normalizzare varianti regionali o codici legacy.
   const LANGUAGE_ALIASES = {
     'pt-pt': 'pt',
-    br: 'pt-br'
+    br: 'pt-br',
+    'it-it': 'it'
   };
+  // Chiavi comuni utilizzate per salvare la preferenza linguistica nei vari storage del browser.
+  const LANGUAGE_STORAGE_KEYS = [
+    'SafeExternalLinksGuard.language',
+    'SafeExternalLinksGuard.lang',
+    'SafeExternalLinksGuardLang',
+    'SafeExternalLinksGuard_language'
+  ];
 
   // Catalogo di fallback per garantire sempre la disponibilità della lingua inglese
   // e delle lingue predefinite anche quando i file JSON non sono accessibili.
@@ -285,9 +294,22 @@
   let sourceRefs = { base: null, preload: null };
   let pendingLoad = null;
 
+  const safeAccess = (fn) => {
+    try {
+      return fn();
+    } catch (err) {
+      return undefined;
+    }
+  };
+
   const normalizeLanguageCode = (lang) => {
     if (!lang || typeof lang !== 'string') return '';
-    return lang.trim().toLowerCase().replace('_', '-');
+    const trimmed = lang.trim();
+    if (!trimmed) return '';
+    const sanitisedBase = trimmed.split(',')[0].split(';')[0].trim();
+    if (!sanitisedBase) return '';
+    const withoutExtensions = sanitisedBase.replace(/[_\s]+/g, '-').replace(/-(u|x)-.*/, '');
+    return withoutExtensions.toLowerCase();
   };
 
   const mergeDeep = (target, source) => {
@@ -530,16 +552,254 @@
     return params.get(paramName) || '';
   };
 
+  /**
+   * Risolve il miglior candidato disponibile considerando alias e fallback alla lingua base.
+   */
+  const resolveCandidateLanguage = (candidate, data) => {
+    const normalized = normalizeLanguageCode(candidate);
+    if (!normalized) return '';
+
+    const resolved = resolveAlias(normalized, data);
+    if (resolved) {
+      // Se il candidato include una variante regionale disponibile come alias
+      // manteniamo la forma canonica con regione per esporre il codice atteso (es. it-IT -> it-IT).
+      if (normalized !== resolved && normalized.startsWith(`${resolved}-`)) {
+        return formatDisplayLanguage(normalized);
+      }
+      return formatDisplayLanguage(resolved);
+    }
+
+    if (data[normalized]) {
+      return formatDisplayLanguage(normalized);
+    }
+
+    if (normalized.includes('-')) {
+      const base = normalized.split('-')[0];
+      if (data[base]) {
+        return formatDisplayLanguage(base);
+      }
+      const baseAlias = LANGUAGE_ALIASES[base];
+      if (baseAlias && data[baseAlias]) {
+        return formatDisplayLanguage(baseAlias);
+      }
+    }
+
+    return '';
+  };
+
+  /**
+   * Recupera la lingua preferita salvata nei vari storage disponibili (local/session storage o cookie).
+   */
+  const readPersistedLanguage = (options) => {
+    if (options && typeof options.persistedLang === 'string') {
+      return options.persistedLang;
+    }
+
+    const storages = [];
+    if (options && options.storage && typeof options.storage.getItem === 'function') {
+      storages.push(options.storage);
+    }
+
+    const maybePushStorage = (getter) => {
+      const storage = safeAccess(getter);
+      if (storage && typeof storage.getItem === 'function') {
+        storages.push(storage);
+      }
+    };
+
+    maybePushStorage(() => root.localStorage);
+    maybePushStorage(() => root.sessionStorage);
+
+    for (let i = 0; i < storages.length; i += 1) {
+      const storage = storages[i];
+      for (let j = 0; j < LANGUAGE_STORAGE_KEYS.length; j += 1) {
+        const key = LANGUAGE_STORAGE_KEYS[j];
+        const value = safeAccess(() => storage.getItem(key));
+        if (value && typeof value === 'string') {
+          return value;
+        }
+      }
+    }
+
+    const cookieSource = options && Object.prototype.hasOwnProperty.call(options, 'cookies')
+      ? options.cookies
+      : safeAccess(() => root.document && root.document.cookie);
+
+    if (cookieSource && typeof cookieSource === 'string') {
+      const cookies = cookieSource.split(';');
+      for (let i = 0; i < cookies.length; i += 1) {
+        const raw = cookies[i];
+        if (!raw) continue;
+        const parts = raw.split('=');
+        if (parts.length < 2) continue;
+        const name = parts[0].trim();
+        if (!name) continue;
+        if (LANGUAGE_STORAGE_KEYS.includes(name)) {
+          const rawValue = parts.slice(1).join('=').trim();
+          if (rawValue) {
+            return decodeURIComponent(rawValue);
+          }
+        }
+      }
+    }
+
+    return '';
+  };
+
+  /**
+   * Estrae la lingua indicata dal documento HTML (attributi lang, xml:lang o meta content-language).
+   */
+  const readDocumentLanguage = (options) => {
+    if (options && typeof options.documentLang === 'string') {
+      return options.documentLang;
+    }
+
+    const documentRef = options && options.document ? options.document : safeAccess(() => root.document);
+    if (!documentRef) {
+      return '';
+    }
+
+    const htmlNode = documentRef.documentElement || null;
+    const pickNodeLang = (node) => {
+      if (!node) return '';
+      const attrs = ['lang', 'xml:lang'];
+      for (let i = 0; i < attrs.length; i += 1) {
+        const attr = attrs[i];
+        const value = safeAccess(() =>
+          typeof node.getAttribute === 'function' ? node.getAttribute(attr) : node[attr]
+        );
+        if (value && typeof value === 'string' && value.trim()) {
+          return value;
+        }
+      }
+      return '';
+    };
+
+    const htmlLang = pickNodeLang(htmlNode);
+    if (htmlLang) {
+      return htmlLang;
+    }
+
+    const bodyLang = pickNodeLang(documentRef.body || null);
+    if (bodyLang) {
+      return bodyLang;
+    }
+
+    const metaLang = safeAccess(() =>
+      typeof documentRef.querySelector === 'function'
+        ? documentRef.querySelector('meta[http-equiv="content-language"]')
+        : null
+    );
+    if (metaLang && typeof metaLang.content === 'string' && metaLang.content.trim()) {
+      const parts = metaLang.content.split(',');
+      if (parts.length) {
+        return parts[0].trim();
+      }
+    }
+
+    return '';
+  };
+
+  /**
+   * Recupera l'elenco delle lingue esposte dal browser, includendo le varianti storiche.
+   */
+  const collectNavigatorLanguages = (options) => {
+    if (options && Array.isArray(options.navigatorLanguages)) {
+      return options.navigatorLanguages;
+    }
+
+    const navigatorRef = options && options.navigator ? options.navigator : safeAccess(() => root.navigator);
+    if (!navigatorRef) {
+      return [];
+    }
+
+    const result = [];
+    const navigatorLanguages = safeAccess(() => navigatorRef.languages);
+    if (Array.isArray(navigatorLanguages)) {
+      navigatorLanguages.forEach((lang) => {
+        if (lang) {
+          result.push(lang);
+        }
+      });
+    }
+
+    const legacyKeys = ['language', 'browserLanguage', 'userLanguage', 'systemLanguage'];
+    legacyKeys.forEach((key) => {
+      const value = navigatorRef[key];
+      if (typeof value === 'string' && value) {
+        result.push(value);
+      }
+    });
+
+    return result;
+  };
+
+  /**
+   * Recupera la lingua inferita dall'engine Intl quando il browser non espone informazioni esplicite.
+   */
+  const readIntlLocale = (options) => {
+    if (options && typeof options.intlLocale === 'string') {
+      return options.intlLocale;
+    }
+
+    const intlRef = options && options.intl ? options.intl : typeof Intl !== 'undefined' ? Intl : null;
+    if (!intlRef || typeof intlRef.DateTimeFormat !== 'function') {
+      return '';
+    }
+
+    const locale = safeAccess(() => {
+      const formatter = intlRef.DateTimeFormat();
+      if (!formatter || typeof formatter.resolvedOptions !== 'function') {
+        return '';
+      }
+      const resolved = formatter.resolvedOptions();
+      return resolved && resolved.locale ? resolved.locale : '';
+    });
+
+    return locale || '';
+  };
+
   const detectLanguage = (options = {}) => {
     const data = ensureCatalog();
-    const available = Object.keys(data);
     const paramName = options.paramName || 'lang';
     const defaultLang = options.defaultLanguage || DEFAULT_LANGUAGE;
+    const seen = new Set();
     const candidates = [];
 
-    if (options.lang) {
-      candidates.push(options.lang);
-    }
+    const pushCandidate = (value) => {
+      if (!value) return;
+      if (Array.isArray(value)) {
+        value.forEach((item) => {
+          pushCandidate(item);
+        });
+        return;
+      }
+      if (typeof value !== 'string') {
+        return;
+      }
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return;
+      }
+      if (trimmed.includes(',') || trimmed.includes(';')) {
+        trimmed.split(',').forEach((part) => {
+          if (!part) return;
+          const token = part.split(';')[0].trim();
+          if (token) {
+            pushCandidate(token);
+          }
+        });
+        return;
+      }
+      const normalized = normalizeLanguageCode(trimmed);
+      if (!normalized || seen.has(normalized)) {
+        return;
+      }
+      seen.add(normalized);
+      candidates.push(trimmed);
+    };
+
+    pushCandidate(options.lang);
 
     const search =
       Object.prototype.hasOwnProperty.call(options, 'search')
@@ -547,36 +807,29 @@
         : typeof root.location === 'object'
         ? root.location.search
         : '';
-    const queryLang = parseQueryLanguage(search, paramName);
-    if (queryLang) candidates.push(queryLang);
+    pushCandidate(parseQueryLanguage(search, paramName));
 
-    const navigatorLanguages = options.navigatorLanguages
-      ? options.navigatorLanguages
-      : typeof root.navigator !== 'undefined'
-      ? root.navigator.languages || [root.navigator.language]
-      : [];
+    pushCandidate(readPersistedLanguage(options));
+    pushCandidate(readDocumentLanguage(options));
+    pushCandidate(collectNavigatorLanguages(options));
+    pushCandidate(readIntlLocale(options));
 
-    if (Array.isArray(navigatorLanguages)) {
-      navigatorLanguages.forEach((langCode) => {
-        if (langCode) candidates.push(langCode);
-      });
+    if (options && Array.isArray(options.additionalHints)) {
+      options.additionalHints.forEach((hint) => pushCandidate(hint));
+    } else if (options && typeof options.additionalHints === 'string') {
+      pushCandidate(options.additionalHints);
     }
 
-    candidates.push(defaultLang);
+    pushCandidate(defaultLang);
+    if (defaultLang !== DEFAULT_LANGUAGE) {
+      pushCandidate(DEFAULT_LANGUAGE);
+    }
 
     for (let i = 0; i < candidates.length; i += 1) {
       const candidate = candidates[i];
-      const normalized = normalizeLanguageCode(candidate);
-      if (!normalized) continue;
-      const resolved = resolveAlias(normalized, data);
-      if (resolved) return formatDisplayLanguage(resolved);
-      if (available.includes(normalized)) return formatDisplayLanguage(normalized);
-      if (normalized.includes('-')) {
-        const base = normalized.split('-')[0];
-        if (available.includes(base)) return formatDisplayLanguage(base);
-      }
-      if (normalized === 'br' && available.includes('pt-br')) {
-        return formatDisplayLanguage('pt-br');
+      const resolvedDisplay = resolveCandidateLanguage(candidate, data);
+      if (resolvedDisplay) {
+        return resolvedDisplay;
       }
     }
 

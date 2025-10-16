@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.8.3] - 2025-11-15
+### Added
+- Sorgenti di rilevazione aggiuntive in `links-guard.i18n.js` (storage persistenti, attributi HTML, meta `content-language`,
+  locale `Intl`) per identificare correttamente la lingua anche quando il browser limita le API di fingerprinting.
+
+### Changed
+- Riorganizzata la normalizzazione dei codici lingua con gestione dei quality value e delle estensioni BCP 47 per preservare
+  la forma canonica esposta all'esterno.
+- Documentazione (`README.md`) aggiornata con il nuovo flusso di detection multilivello e relativi esempi pratici.
+
+### Fixed
+- Evitato il fallback forzato all'inglese su browser anonimi o con `navigator.languages` vuoto grazie ai nuovi meccanismi di
+  discovery e ai test che coprono le varianti (`documentLang`, `persistedLang`, locale `Intl`).
+
+## [1.8.2] - 2025-11-14
+### Changed
+- Migliorata la logica di rilevazione lingua in `links-guard.i18n.js` introducendo una risoluzione centralizzata dei candidati che preserva i codici regionali canonici.
+
+### Fixed
+- Mappati correttamente i codici `it` e `it-IT` sul dizionario italiano assicurando che il browser mostri sempre i testi localizzati anziché il fallback inglese.
+- Aggiornata la documentazione con esempi di utilizzo della detection multilingua e note sui nuovi alias per le varianti italiane.
+
 ## [1.8.1] - 2025-11-13
 ### Changed
 - Aggiornato il nome del parametro di tracciamento di default a `myclid` in `links-guard.settings.js` e nella documentazione per allinearsi alle aspettative di integrazione.
