@@ -13,10 +13,16 @@ class ExternalLinkAttributeEnforcer
 {
     private array $allowlist;
     private array $ignoredSchemes = ['mailto', 'tel', 'javascript', 'data', 'blob'];
+    private array $relTokens;
 
-    public function __construct(array $allowlist = [])
+    /**
+     * @param array $allowlist Elenco dei domini consentiti (no normalizzazione schema).
+     * @param array $relTokens Token da aggiungere al valore dell'attributo rel.
+     */
+    public function __construct(array $allowlist = [], array $relTokens = ['noopener', 'noreferrer', 'nofollow'])
     {
         $this->allowlist = array_map('strtolower', $allowlist);
+        $this->relTokens = $this->normalizeRelTokens($relTokens);
     }
 
     public function enforce(string $html): string
@@ -27,7 +33,7 @@ class ExternalLinkAttributeEnforcer
 
         $document = new DOMDocument('1.0', 'UTF-8');
         @$document->loadHTML(
-            '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />' . $html,
+            '<?xml encoding="utf-8" ?>' . $html,
             LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
         );
 
@@ -47,14 +53,20 @@ class ExternalLinkAttributeEnforcer
             }
 
             $anchor->setAttribute('target', '_blank');
-            $rel = trim($anchor->getAttribute('rel') . ' noopener noreferrer nofollow');
-            $anchor->setAttribute('rel', preg_replace('/\s+/', ' ', $rel));
+
+            if (!empty($this->relTokens)) {
+                $anchor->setAttribute('rel', $this->mergeRelTokens($anchor->getAttribute('rel')));
+            }
         }
 
         $html = $document->saveHTML();
-        $html = preg_replace('/^<meta[^>]+>/', '', $html);
+        $html = preg_replace('/^<\?xml[^>]+>/', '', $html);
 
-        return $html ?? '';
+        if (!is_string($html)) {
+            return '';
+        }
+
+        return rtrim($html, "\r\n");
     }
 
     private function shouldIgnore(string $href): bool
@@ -102,5 +114,38 @@ class ExternalLinkAttributeEnforcer
         }
 
         return false;
+    }
+
+    private function normalizeRelTokens(array $tokens): array
+    {
+        $normalized = [];
+
+        foreach ($tokens as $token) {
+            $token = strtolower(trim((string) $token));
+            if ($token !== '' && !in_array($token, $normalized, true)) {
+                $normalized[] = $token;
+            }
+        }
+
+        return $normalized;
+    }
+
+    private function mergeRelTokens(?string $existing): string
+    {
+        $existingTokens = [];
+
+        if (is_string($existing) && trim($existing) !== '') {
+            $existingTokens = preg_split('/\s+/', trim($existing)) ?: [];
+        }
+
+        $merged = $existingTokens;
+
+        foreach ($this->relTokens as $token) {
+            if (!in_array($token, $merged, true)) {
+                $merged[] = $token;
+            }
+        }
+
+        return implode(' ', $merged);
     }
 }

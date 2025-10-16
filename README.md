@@ -1,8 +1,8 @@
 # Safe External Links Guard
 
-**Versione:** 1.12.1
+**Versione:** 1.12.2
 
-> Novità 1.12.1: il bootstrap inline rimuove correttamente il proprio listener dopo il passaggio di consegne allo script principale, evitando che i click sui link esterni restino bloccati una volta completato il caricamento.
+> Novità 1.12.2: puoi inizializzare il bootstrap PHP (`app/bootstrap.php`) per applicare subito `rel="noopener"`/`rel="noreferrer"` ai link esterni e configurare i token `rel` anche lato server prima che JavaScript venga eseguito.
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
@@ -115,14 +115,34 @@ use App\Services\Markup\ExternalLinkAttributeEnforcer;
 $enforcer = new ExternalLinkAttributeEnforcer([
     'example.com',
     '*.trusted.partner'
-]);
+], ['noopener', 'noreferrer']);
 
 $html = file_get_contents('templates/newsletter.html');
 $secured = $enforcer->enforce($html);
 echo $secured;
 ```
 
-Il servizio ignora gli schemi `mailto:`, `tel:`, `javascript:`, `data:` e `blob:`, preserva i link interni (inclusi i wildcard) e aggiunge gli attributi richiesti (`target="_blank"`, `rel="noopener noreferrer nofollow"`). È pensato per essere eseguito in build oppure al momento del rendering della pagina.
+Il servizio ignora gli schemi `mailto:`, `tel:`, `javascript:`, `data:` e `blob:`, preserva i link interni (inclusi i wildcard) e aggiunge gli attributi richiesti (`target="_blank"`, `rel="noopener noreferrer nofollow"` di default, oppure i token che preferisci passare come secondo argomento). È pensato per essere eseguito in build oppure al momento del rendering della pagina.
+
+#### Bootstrap PHP (output buffering)
+
+Per applicare gli attributi SEO prima ancora di generare l'HTML definitivo puoi includere `app/bootstrap.php` all'inizio del tuo entry point e avviare il buffer dedicato:
+
+```php
+require_once __DIR__ . '/../app/bootstrap.php';
+
+safe_external_links_guard_bootstrap([
+    'allowlist' => ['intranet.example'],
+    'rel_strategy' => 'noopener', // oppure 'noreferrer', 'both' o un array di token
+    'add_nofollow' => false,      // opzionale: disabilita l'aggiunta automatica di nofollow
+]);
+
+// ... genera il markup della pagina ...
+
+// opzionale: safe_external_links_guard_bootstrap_release(); // forza il flush anticipato
+```
+
+Il bootstrap PHP intercetta tutto l'output HTML, aggiorna gli `<a>` esterni con `target="_blank"` e con il valore `rel` scelto (`noopener`, `noreferrer` o entrambi) e trasferisce il markup già sanificato al browser. In modalità `debug` (`'debug' => true`) eventuali eccezioni vengono loggate tramite `error_log`. Passando `'force' => true` è possibile riapplicare la configurazione durante la stessa richiesta, mentre `safe_external_links_guard_bootstrap_release(false)` consente di annullare le modifiche se necessario (ad esempio nelle pagine di amministrazione).
   > **Suggerimento:** dalla versione 1.9.4 `links-guard.js` processa una coda di callback (`SafeExternalLinksGuard.__i18nReadyQueue`) per riallineare automaticamente le traduzioni quando il modulo i18n viene caricato in ritardo. Mantieni comunque l'ordine suggerito per ridurre al minimo eventuali flash di testo in inglese sui dispositivi più lenti.
 
   Adatta `src` e `data-endpoint` ai percorsi effettivi del tuo sito.

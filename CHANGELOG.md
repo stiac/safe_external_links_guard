@@ -1,5 +1,14 @@
 # Changelog
 # Changelog
+## [1.12.2] - 2025-11-30
+### Added
+- Bootstrap PHP (`app/bootstrap.php`) che intercetta l'output, imposta `target="_blank"` e applica `rel="noopener"`/`rel="noreferrer"` ai link esterni con configurazione runtime e supporto al flush programmato.
+- Test CLI `tests/unit/php_bootstrap_test.php` che verifica il bootstrap server-side (token `rel`, allowlist, modalità disabilitata).
+
+### Changed
+- `App\Services\Markup\ExternalLinkAttributeEnforcer` accetta ora token `rel` personalizzati per supportare scenari che richiedono solo `noopener` o `noreferrer`.
+- Documentazione (`README.md`) aggiornata con istruzioni per il bootstrap PHP e la configurazione degli attributi `rel` lato server.
+
 ## [1.12.1] - 2025-11-29
 ### Fixed
 - Il bootstrap inline (`resources/bootstrap-inline.min.js`) rimuove ora il proprio listener di cattura dopo l'inizializzazione di `links-guard.js`, impedendo che blocchi i click sui link esterni una volta che l'handler principale è pronto.
