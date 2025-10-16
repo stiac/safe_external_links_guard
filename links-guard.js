@@ -1620,6 +1620,57 @@
     };
   };
 
+  /**
+   * Applica il parametro di tracking all'ancora fornita sincronizzando lo stato locale.
+   * Quando il parametro è già presente mantiene il valore esistente evitando duplicazioni.
+   * @param {HTMLAnchorElement|{href?: string, setAttribute?: Function}} anchor
+   * @param {{ url?: URL, trackingId?: string }|null} state
+   * @returns {{ href: string, trackingId: string, url: URL, parameterName: string }|null}
+   */
+  const applyTrackingParameterToAnchor = (
+    anchor,
+    state = null,
+    context = null
+  ) => {
+    if (!cfg.trackingEnabled || !anchor) {
+      return null;
+    }
+
+    const baseSource =
+      state && state.url && typeof state.url.href === "string"
+        ? state.url
+        : anchor;
+
+    const trackingContext =
+      context && context.href
+        ? context
+        : prepareTrackedNavigation(baseSource);
+    if (!trackingContext || !trackingContext.href) {
+      return null;
+    }
+
+    try {
+      anchor.href = trackingContext.href;
+    } catch (errSetHref) {
+      if (typeof anchor.setAttribute === "function") {
+        try {
+          anchor.setAttribute("href", trackingContext.href);
+        } catch (errSetAttr) {
+          return null;
+        }
+      } else {
+        return null;
+      }
+    }
+
+    if (state && typeof state === "object") {
+      state.url = trackingContext.url;
+      state.trackingId = trackingContext.trackingId;
+    }
+
+    return trackingContext;
+  };
+
   const dispatchTrackingPixel = (payload) => {
     if (!cfg.trackingEnabled || !cfg.trackingPixelEndpoint) {
       return;
@@ -1707,6 +1758,12 @@
   if (typeof guardNamespace.utils.ensureTrackingParameter !== "function") {
     guardNamespace.utils.ensureTrackingParameter = ensureTrackingParameter;
   }
+  if (
+    typeof guardNamespace.utils.applyTrackingParameterToAnchor !== "function"
+  ) {
+    guardNamespace.utils.applyTrackingParameterToAnchor =
+      applyTrackingParameterToAnchor;
+  }
 
   const followExternalUrl = (urlLike, options = {}) => {
     const anchor = options.element || null;
@@ -1727,14 +1784,14 @@
         href = trackingContext.href;
 
         if (anchor) {
-          try {
-            anchor.href = trackingContext.href;
-          } catch (errSetHref) {
-            try {
-              anchor.setAttribute("href", trackingContext.href);
-            } catch (errSetAttr) {
-              // Se non è possibile aggiornare l'attributo continuiamo comunque la navigazione.
-            }
+          const updatedContext = applyTrackingParameterToAnchor(
+            anchor,
+            anchorStates.get(anchor) || null,
+            trackingContext
+          );
+          if (updatedContext?.href) {
+            trackingContext = updatedContext;
+            href = updatedContext.href;
           }
         }
 
@@ -2534,6 +2591,10 @@
           }
           node.replaceWith(clone);
           mapReplaceNode(host, node, clone);
+          if (cfg.trackingEnabled) {
+            const cloneState = anchorStates.get(clone) || null;
+            applyTrackingParameterToAnchor(clone, cloneState);
+          }
         } else {
           node.classList?.remove(cfg.warnHighlightClass);
           if (keepWarnMessageOnAllow) {
@@ -3422,21 +3483,12 @@
     let trackingContext = null;
 
     if (cfg.trackingEnabled) {
-      trackingContext = prepareTrackedNavigation(url);
-      if (trackingContext?.href) {
-        try {
-          anchor.href = trackingContext.href;
-        } catch (errSetHref) {
-          try {
-            anchor.setAttribute("href", trackingContext.href);
-          } catch (errSetAttr) {
-            // Ambienti limitati (es. Reader/AMP) potrebbero bloccare l'operazione: ignoriamo l'errore.
-          }
-        }
-        if (trackingContext.url) {
-          url = trackingContext.url;
-          state.url = trackingContext.url;
-        }
+      trackingContext = applyTrackingParameterToAnchor(
+        anchor,
+        state
+      );
+      if (trackingContext?.url) {
+        url = trackingContext.url;
       }
     }
 

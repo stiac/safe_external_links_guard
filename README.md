@@ -338,7 +338,7 @@ Le impostazioni disponibili nel file `links-guard.settings.js` (sovrascrivibili 
 
 Quando il pixel è disabilitato (`trackingEnabled: false`) i link vengono aperti normalmente. Se mantieni `trackingEnabled: true` ma lasci l'endpoint vuoto, il parametro viene comunque aggiunto alla query string per consentire analisi server-side o campagne marketing, ma non viene inviato alcun evento client. Se `trackingIncludeMetadata` è impostato su `false` il payload inviato contiene solo i campi strettamente necessari (`trackingId`, `parameterName`, `destination`, `originalDestination`, `timestamp`, `referrer`, `privacyMode: "minimal"`).
 
-Quando il tracciamento è attivo, il parametro viene sincronizzato direttamente sull'attributo `href` del link prima della navigazione per coprire anche i casi di apertura in nuove schede tramite modificatori da tastiera o menu contestuale, oltre alla copia dell'URL dall'interfaccia.
+Quando il tracciamento è attivo, il parametro viene sincronizzato direttamente sull'attributo `href` del link sia al momento della concessione della policy `allow` sia immediatamente prima della navigazione. In questo modo anche aperture da menu contestuale, nuove schede, copie dell'URL o interazioni successive riutilizzano sempre il valore `myclid` già applicato.
 
 > **Suggerimento privacy:** per conformarsi al GDPR abilita il tracciamento solo dopo aver raccolto il consenso esplicito dell'utente e imposta `trackingIncludeMetadata: false` quando vuoi evitare la raccolta di dati aggiuntivi sul dispositivo.
 

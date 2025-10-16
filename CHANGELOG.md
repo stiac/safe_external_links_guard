@@ -1,10 +1,8 @@
 # Changelog
 ## [1.10.4] - 2025-11-26
-### Added
-- Test unitario `debug_policy_summary_test.js` che verifica la presenza di campioni completi (host, URL, motivo e sorgente) nei log verbose quando i link vengono rimossi dal DOM.
-
 ### Fixed
-- I log di debug in modalità verbose includono nuovamente analisi e metadati di policy per i link rimossi, preservando host, URL e messaggio anche quando `<a>` viene sostituito da `<span>`.
+- Il parametro di tracking `myclid` viene ora applicato subito ai link consentiti e sincronizzato con lo stato interno,
+  garantendo l'aggiornamento dell'attributo `href` per aperture da menu contestuale, nuove schede e copie dell'URL. (links-guard.js)
 
 ## [1.10.3] - 2025-11-25
 ### Added
