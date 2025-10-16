@@ -6,6 +6,7 @@
 - [ ] Documentare scenari di fallback per `loadTranslations()` quando il fetch non è disponibile (es. ambienti legacy).
 - [ ] Coprire con test automatici la serializzazione di `messageKey`/`messageFallbackKey` nel resolver PHP per garantire coerenza con i dizionari multilingua.
 - [ ] Pubblicare esempi di integrazione server-side del pixel di tracciamento (PHP/JS) e delle politiche di consenso GDPR.
+- [ ] Preparare una demo automatizzata che verifichi l'integrazione `SafeExternalLinksGuard.amp` all'interno di `<amp-script>` con dataset di policy precalcolato.
 
 ## Obiettivi a Medio Termine
 - [ ] Semplificare la gestione dei template della modale consentendo override tramite configurazione JSON.

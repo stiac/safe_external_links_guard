@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.9.0] - 2025-11-17
+### Added
+- Namespace `SafeExternalLinksGuard.amp` con le utility `collectExternalLinks()` e `applyPolicies()` per integrare le policy su pagine AMP o in contesti con JavaScript limitato, complete di test automatici (`tests/unit/amp_utils_test.js`).
+
+### Changed
+- Gestione dei link esterni delegata a livello di `document` per supportare la modalità lettura dei browser, garantendo che gli anchor clonati mantengano gli attributi di sicurezza e la verifica delle policy.
+- Documentazione aggiornata con scenari di fallback per Reader mode e AMP, inclusi snippet `<amp-script>` e linee guida per la validazione server-side.
+
+### Fixed
+- I link malevoli in modalità lettura o AMP non sfuggono più alla protezione: il listener delegato riesamina ogni click e applica le policy cached anche quando il DOM viene rigenerato o limitato.
+
 ## [1.8.4] - 2025-11-16
 ### Fixed
 - Il parametro di tracciamento viene ora applicato direttamente all'attributo `href` dei link esterni quando il tracciamento è attivo, così anche aperture con modificatori da tastiera, pulsante centrale o copia dell'indirizzo usano l'URL arricchito.
