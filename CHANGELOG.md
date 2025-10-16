@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.9.1] - 2025-11-18
+### Added
+- Opzione `keepWarnMessageOnAllow` nel builder delle impostazioni (e relativo attributo `data-keep-warn-on-allow`) per mantenere i messaggi di sicurezza anche quando la policy restituisce `allow`, completa di test aggiornati in `tests/unit/amp_utils_test.js`.
+
+### Changed
+- Rilevazione automatica della modalità lettura e delle pagine AMP che forza il mantenimento del tooltip di avviso sui link consentiti e allinea gli helper AMP allo stesso comportamento.
+
+### Fixed
+- I link esterni consentiti in Reader mode o AMP mostrano ora l'avviso di sicurezza predefinito, evitando che gli utenti perdano il messaggio quando la modale non è disponibile.
+
 ## [1.9.0] - 2025-11-17
 ### Added
 - Namespace `SafeExternalLinksGuard.amp` con le utility `collectExternalLinks()` e `applyPolicies()` per integrare le policy su pagine AMP o in contesti con JavaScript limitato, complete di test automatici (`tests/unit/amp_utils_test.js`).

@@ -24,7 +24,8 @@ const factory = new Function(`
     warnHighlightClass: 'slg-warn-highlight',
     warnMessageDefault: 'Default warn',
     newTab: false,
-    rel: ['noopener']
+    rel: ['noopener'],
+    keepWarnMessageOnAllow: false
   };
   const defaultWarnMessage = 'Default warn fallback';
   const defaultDenyMessage = 'Denied';
@@ -63,6 +64,10 @@ const factory = new Function(`
   const setHoverMessage = (node, message) => {
     node.tooltip = message;
   };
+  const clearHoverMessage = (node) => {
+    if (!node) return;
+    delete node.tooltip;
+  };
   const translateMessageDescriptor = (descriptor, fallback) => {
     if (!descriptor) return fallback;
     if (descriptor.text) return descriptor.text;
@@ -71,7 +76,14 @@ const factory = new Function(`
   ${normalizePoliciesMatch[0]}
   ${collectMatch[0]}
   ${applyPoliciesMatch[0]}
-  return { collectExternalLinksForAmp, applyAmpPolicies, normalizeAmpPolicies };
+  return {
+    collectExternalLinksForAmp,
+    applyAmpPolicies,
+    normalizeAmpPolicies,
+    setKeepWarnMessageOnAllow(value) {
+      cfg.keepWarnMessageOnAllow = Boolean(value);
+    }
+  };
 `);
 
 const helpers = factory();
@@ -84,7 +96,8 @@ class StubAnchor {
     const classSet = new Set();
     this.classList = {
       add: (cls) => classSet.add(cls),
-      has: (cls) => classSet.has(cls)
+      has: (cls) => classSet.has(cls),
+      remove: (cls) => classSet.delete(cls)
     };
     this.dataset = {};
   }
@@ -171,6 +184,29 @@ class StubAnchor {
     anchors[1]._href,
     '',
     'L\'href del link deny deve essere rimosso dal fallback disabilitante'
+  );
+})();
+
+(() => {
+  const anchors = [new StubAnchor('https://allowed.example/path', 'Allowed anchor')];
+  const root = {
+    querySelectorAll: (selector) => (selector === 'a[href]' ? anchors : [])
+  };
+
+  helpers.setKeepWarnMessageOnAllow(false);
+  helpers.applyAmpPolicies(root, { 'allowed.example': { action: 'allow' } }, { warnClass: 'warn-class' });
+  assert.strictEqual(
+    anchors[0].tooltip,
+    undefined,
+    'Il tooltip deve essere rimosso per i link allow quando keepWarnMessageOnAllow è false'
+  );
+
+  helpers.setKeepWarnMessageOnAllow(true);
+  helpers.applyAmpPolicies(root, { 'allowed.example': { action: 'allow' } }, { warnClass: 'warn-class' });
+  assert.strictEqual(
+    anchors[0].tooltip,
+    'Default warn',
+    'Il tooltip deve usare il messaggio di default quando keepWarnMessageOnAllow è true'
   );
 })();
 

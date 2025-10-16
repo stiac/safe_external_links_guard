@@ -298,7 +298,12 @@
       warnHighlightClass: "slg-warn-highlight",
       warnMessageDefault: defaultWarnMessage,
       excludeSelectors: [],
-      configVersion: "1.5.14"
+      configVersion: "1.5.14",
+      trackingEnabled: false,
+      trackingParameter: "myclid",
+      trackingPixelEndpoint: "",
+      trackingIncludeMetadata: true,
+      keepWarnMessageOnAllow: false
     };
 
     const getAttribute = (node, attr) => {
@@ -367,7 +372,12 @@
         warnHighlightClass: String(config.warnHighlightClass || ""),
         warnMessageDefault: String(config.warnMessageDefault || ""),
         excludeSelectors: normalizeArray(config.excludeSelectors),
-        configVersion: String(config.configVersion || "")
+        configVersion: String(config.configVersion || ""),
+        trackingEnabled: Boolean(config.trackingEnabled),
+        trackingParameter: String(config.trackingParameter || ""),
+        trackingPixelEndpoint: String(config.trackingPixelEndpoint || ""),
+        trackingIncludeMetadata: Boolean(config.trackingIncludeMetadata),
+        keepWarnMessageOnAllow: Boolean(config.keepWarnMessageOnAllow)
       };
       return JSON.stringify(safeConfig);
     };
@@ -418,7 +428,25 @@
         ),
         configVersion:
           getAttribute(scriptEl, "data-config-version") ||
-          fallbackDefaults.configVersion
+          fallbackDefaults.configVersion,
+        trackingEnabled: parseBoolean(
+          getAttribute(scriptEl, "data-tracking-enabled"),
+          fallbackDefaults.trackingEnabled
+        ),
+        trackingParameter:
+          getAttribute(scriptEl, "data-tracking-parameter") ||
+          fallbackDefaults.trackingParameter,
+        trackingPixelEndpoint:
+          getAttribute(scriptEl, "data-tracking-pixel-endpoint") ||
+          fallbackDefaults.trackingPixelEndpoint,
+        trackingIncludeMetadata: parseBoolean(
+          getAttribute(scriptEl, "data-tracking-include-metadata"),
+          fallbackDefaults.trackingIncludeMetadata
+        ),
+        keepWarnMessageOnAllow: parseBoolean(
+          getAttribute(scriptEl, "data-keep-warn-on-allow"),
+          fallbackDefaults.keepWarnMessageOnAllow
+        )
       };
 
       if (!VALID_MODES.has(cfg.mode)) cfg.mode = "strict";
@@ -426,6 +454,8 @@
       if (!cfg.warnMessageDefault) {
         cfg.warnMessageDefault = fallbackDefaults.warnMessageDefault;
       }
+      cfg.keepWarnMessageOnAllow = Boolean(cfg.keepWarnMessageOnAllow);
+      cfg.trackingEnabled = Boolean(cfg.trackingEnabled);
       return cfg;
     };
 
@@ -478,6 +508,99 @@
 
   guardNamespace.activeConfigSignature = configFingerprint;
   guardNamespace.activeConfigVersion = cfg.configVersion;
+
+  // Rileva ambienti con restrizioni (Reader mode, AMP) per attivare fallback UI automatici.
+  const detectLimitedExecutionContext = () => {
+    const docEl = document && document.documentElement;
+    const body = document && document.body;
+
+    const checkClassList = (element, classNames) => {
+      if (!element || !element.classList) {
+        return false;
+      }
+      for (let i = 0; i < classNames.length; i += 1) {
+        if (element.classList.contains(classNames[i])) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const checkAttributes = (element, attributes) => {
+      if (!element || typeof element.getAttribute !== "function") {
+        return false;
+      }
+      for (let i = 0; i < attributes.length; i += 1) {
+        const value = element.getAttribute(attributes[i]);
+        if (value && value !== "false" && value !== "0") {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const readerClasses = [
+      "reader-mode",
+      "reader",
+      "is-reader-mode",
+      "reader-view",
+      "reading-mode",
+      "moz-reader-view",
+      "apple-reader",
+      "apple-reader-mode",
+      "safari-reader"
+    ];
+    const readerAttributes = [
+      "data-reader-mode",
+      "data-reader",
+      "data-reading-mode"
+    ];
+    let isReaderMode =
+      checkClassList(docEl, readerClasses) ||
+      checkClassList(body, readerClasses) ||
+      checkAttributes(docEl, readerAttributes) ||
+      checkAttributes(body, readerAttributes);
+
+    if (!isReaderMode) {
+      const bodyId = body && typeof body.id === "string" ? body.id : "";
+      if (bodyId) {
+        const normalized = bodyId.toLowerCase();
+        if (
+          normalized.includes("reader") ||
+          normalized.startsWith("readability")
+        ) {
+          isReaderMode = true;
+        }
+      }
+    }
+
+    const ampClasses = ["amp-mode", "amp-document", "amp-html"];
+    const isAmpByAttr =
+      (docEl &&
+        (docEl.hasAttribute("amp") ||
+          docEl.hasAttribute("⚡") ||
+          docEl.hasAttribute("amp-version"))) ||
+      checkClassList(docEl, ampClasses);
+    const ampRuntime =
+      typeof window !== "undefined" &&
+      (window.AMP || window.__AMP_MODE || window.AMP_MODE);
+    const isAmpDocument = Boolean(isAmpByAttr || ampRuntime);
+
+    return {
+      isReaderMode,
+      isAmpDocument
+    };
+  };
+
+  const limitedContextInfo = detectLimitedExecutionContext();
+  if (
+    !cfg.keepWarnMessageOnAllow &&
+    (limitedContextInfo.isReaderMode || limitedContextInfo.isAmpDocument)
+  ) {
+    cfg.keepWarnMessageOnAllow = true;
+  }
+
+  const keepWarnMessageOnAllow = Boolean(cfg.keepWarnMessageOnAllow);
 
   const hoverFeedback = createHoverFeedback(cfg);
   const useTooltip = hoverFeedback.useTooltip;
@@ -1420,16 +1543,30 @@
       } else if (action === "allow") {
         if (node.tagName === "A") {
           ensureAttrs(node);
-          clearHoverMessage(node, warnMessage, useTooltip);
+          if (keepWarnMessageOnAllow) {
+            // I link consentiti mantengono un tooltip informativo per i contesti Reader/AMP.
+            setHoverMessage(node, warnFallback);
+          } else {
+            clearHoverMessage(node, warnMessage, useTooltip);
+          }
           // reset listener: clone per sicurezza
           const clone = node.cloneNode(true);
           clone.classList?.remove(cfg.warnHighlightClass);
-          clearHoverMessage(clone, warnMessage, useTooltip);
+          if (keepWarnMessageOnAllow) {
+            setHoverMessage(clone, warnFallback);
+          } else {
+            clearHoverMessage(clone, warnMessage, useTooltip);
+          }
           node.replaceWith(clone);
           mapReplaceNode(host, node, clone);
         } else {
           node.classList?.remove(cfg.warnHighlightClass);
-          clearHoverMessage(node, warnMessage, useTooltip);
+          if (keepWarnMessageOnAllow) {
+            // Anche per elementi non ancora sostituiti (es. <span>) manteniamo il messaggio di sicurezza.
+            setHoverMessage(node, warnFallback);
+          } else {
+            clearHoverMessage(node, warnMessage, useTooltip);
+          }
         }
       } else {
         if (node.tagName === "A") ensureAttrs(node); // warn
@@ -1993,6 +2130,11 @@
 
     // Altrimenti impone attributi e chiede la policy in background
     ensureAttrs(a);
+    if (keepWarnMessageOnAllow) {
+      // Mantiene un messaggio di avviso accessibile anche quando la policy finale è `allow`.
+      const warnFallback = cfg.warnMessageDefault || defaultWarnMessage;
+      setHoverMessage(a, warnFallback);
+    }
     enqueueHost(host);
 
     return state;
@@ -2149,6 +2291,29 @@
       if (!url || !isHttpLike(url.href) || !isExternal(url)) {
         return;
       }
+      const url = toURL(href);
+      if (!url || !isHttpLike(url.href) || !isExternal(url)) {
+        return;
+      }
+
+      results.push({
+        index,
+        href: url.href,
+        host: url.host.toLowerCase(),
+        origin: url.origin,
+        text: options.includeText ? (node.textContent || "").trim() : undefined,
+        id: typeof node.getAttribute === "function" ? node.getAttribute("id") : undefined
+      });
+    });
+
+    return results;
+  };
+
+  const normalizeAmpPolicies = (policies) => {
+    const map = new Map();
+    if (!policies) {
+      return map;
+    }
 
       results.push({
         index,
@@ -2229,6 +2394,7 @@
 
     const normalizedPolicies = normalizeAmpPolicies(policies);
     const warnClass = options.warnClass || cfg.warnHighlightClass || "slg-warn-highlight";
+    const warnFallback = cfg.warnMessageDefault || defaultWarnMessage;
     const results = { processed: 0, denied: 0, warned: 0 };
 
     const anchors = Array.from(scope.querySelectorAll("a[href]"));
@@ -2276,7 +2442,6 @@
         if (node.classList && warnClass) {
           node.classList.add(warnClass);
         }
-        const warnFallback = cfg.warnMessageDefault || defaultWarnMessage;
         const messageText =
           translateMessageDescriptor(policy.message, warnFallback) || warnFallback;
         setHoverMessage(node, messageText);
@@ -2285,6 +2450,15 @@
 
       if (policy.action === "allow") {
         ensureAttrs(node);
+        if (cfg.keepWarnMessageOnAllow) {
+          // In ambienti limitati manteniamo un avviso visibile anche per i link consentiti.
+          setHoverMessage(node, warnFallback);
+        } else {
+          clearHoverMessage(node, null, true);
+        }
+        if (node.classList && warnClass) {
+          node.classList.remove(warnClass);
+        }
       }
     });
 
