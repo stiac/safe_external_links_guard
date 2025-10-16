@@ -1,0 +1,17 @@
+{
+  "messages": {
+    "defaultWarn": "Este link não está verificado e pode compartilhar seus dados de navegação com um site de terceiros. Antes de continuar, confirme que o destino é confiável."
+  },
+  "modal": {
+    "title": "Verifique se este link é seguro",
+    "closeLabel": "Fechar",
+    "closeTitle": "Fechar",
+    "hostLabel": "Host:",
+    "openButton": "Abrir link",
+    "copyButton": "Copiar link",
+    "cancelButton": "Cancelar"
+  },
+  "tooltip": {
+    "warn": "Link externo não verificado"
+  }
+}

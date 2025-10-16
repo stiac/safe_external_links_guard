@@ -1,0 +1,17 @@
+{
+  "messages": {
+    "defaultWarn": "Ce lien n'est pas vérifié et peut partager vos données de navigation avec un site tiers. Avant de continuer, assurez-vous que la destination est fiable."
+  },
+  "modal": {
+    "title": "Vérifiez que ce lien est sûr",
+    "closeLabel": "Fermer",
+    "closeTitle": "Fermer",
+    "hostLabel": "Hôte :",
+    "openButton": "Ouvrir le lien",
+    "copyButton": "Copier le lien",
+    "cancelButton": "Annuler"
+  },
+  "tooltip": {
+    "warn": "Lien externe non vérifié"
+  }
+}

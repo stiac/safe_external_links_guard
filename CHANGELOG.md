@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.6.0] - 2025-11-06
+### Added
+- Modulo `links-guard.i18n.js` con rilevazione automatica della lingua, fallback inglese e API per gestire traduzioni personalizzate.
+- Cataloghi JSON in `resources/lang/` e registro Node `app/Services/Localization/translationRegistry.js` per centralizzare i testi multilingua.
+- Test `node tests/unit/translation_service_test.js` per validare il comportamento del servizio di localizzazione.
+
+### Changed
+- `links-guard.js` e `links-guard.settings.js` ora consumano il servizio i18n, aggiornando dinamicamente la modale e il messaggio di avviso in base alla lingua selezionata.
+- Template HTML della modale e documentazione (`README.md`) aggiornati con testi neutrali in inglese, attributo `data-slg-element="host-label"` e snippet che include il nuovo modulo di traduzione.
+
 ## [1.5.15] - 2025-11-05
 ### Added
 - Template HTML dedicato (`links/modal-template.html`) per la modale, caricabile come `<template>` o tramite namespace JavaScript per personalizzare il layout senza modificare `links-guard.js`.

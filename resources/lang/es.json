@@ -1,0 +1,17 @@
+{
+  "messages": {
+    "defaultWarn": "Este enlace no está verificado y puede compartir tus datos de navegación con un sitio de terceros. Antes de continuar, asegúrate de que el destino sea de confianza."
+  },
+  "modal": {
+    "title": "Comprueba que este enlace sea seguro",
+    "closeLabel": "Cerrar",
+    "closeTitle": "Cerrar",
+    "hostLabel": "Host:",
+    "openButton": "Abrir enlace",
+    "copyButton": "Copiar enlace",
+    "cancelButton": "Cancelar"
+  },
+  "tooltip": {
+    "warn": "Enlace externo no verificado"
+  }
+}

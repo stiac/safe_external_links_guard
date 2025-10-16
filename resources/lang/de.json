@@ -1,0 +1,17 @@
+{
+  "messages": {
+    "defaultWarn": "Dieser Link ist nicht verifiziert und könnte Ihre Browserdaten mit einer Drittseite teilen. Stellen Sie vor dem Fortfahren sicher, dass das Ziel vertrauenswürdig ist."
+  },
+  "modal": {
+    "title": "Prüfen Sie, ob dieser Link sicher ist",
+    "closeLabel": "Schließen",
+    "closeTitle": "Schließen",
+    "hostLabel": "Host:",
+    "openButton": "Link öffnen",
+    "copyButton": "Link kopieren",
+    "cancelButton": "Abbrechen"
+  },
+  "tooltip": {
+    "warn": "Externer Link nicht verifiziert"
+  }
+}

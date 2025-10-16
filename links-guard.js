@@ -20,8 +20,94 @@
   const guardNamespace = (window.SafeExternalLinksGuard =
     window.SafeExternalLinksGuard || {});
   const VALID_MODES = new Set(["strict", "warn", "soft"]);
-  const DEFAULT_WARN_MESSAGE =
-    "Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile."; // Messaggio predefinito mostrato quando il dominio non è presente nelle liste di policy.
+
+  const FALLBACK_WARN_MESSAGE =
+    "This link is not verified and may share your browsing data with a third-party site. Make sure the destination is trustworthy before continuing.";
+
+  const FALLBACK_UI_TEXT = {
+    "messages.defaultWarn": FALLBACK_WARN_MESSAGE,
+    "modal.title": "Check that this link is safe",
+    "modal.closeLabel": "Close",
+    "modal.closeTitle": "Close",
+    "modal.hostLabel": "Host:",
+    "modal.openButton": "Open link",
+    "modal.copyButton": "Copy link",
+    "modal.cancelButton": "Cancel"
+  };
+
+  const applyTemplate = (text, replacements) => {
+    if (!replacements || typeof replacements !== "object") {
+      return text;
+    }
+    return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, token) => {
+      if (Object.prototype.hasOwnProperty.call(replacements, token)) {
+        const value = replacements[token];
+        return value == null ? "" : String(value);
+      }
+      return match;
+    });
+  };
+
+  const translate = (key, replacements) => {
+    const i18n = guardNamespace.i18n;
+    if (i18n && typeof i18n.t === "function") {
+      const value = i18n.t(key, replacements);
+      if (value && value !== key) {
+        return value;
+      }
+    }
+    const fallback = FALLBACK_UI_TEXT[key];
+    if (fallback) {
+      return applyTemplate(fallback, replacements);
+    }
+    return key;
+  };
+
+  const escapeHtml = (value) =>
+    String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  const getDefaultModalTemplate = () => {
+    const title = escapeHtml(translate("modal.title"));
+    const closeLabel = escapeHtml(translate("modal.closeLabel"));
+    const closeTitle = escapeHtml(translate("modal.closeTitle"));
+    const hostLabel = escapeHtml(translate("modal.hostLabel"));
+    const openButton = escapeHtml(translate("modal.openButton"));
+    const copyButton = escapeHtml(translate("modal.copyButton"));
+    const cancelButton = escapeHtml(translate("modal.cancelButton"));
+    const message = escapeHtml(translate("messages.defaultWarn"));
+    return `
+    <div data-slg-root class="slg-overlay slg--hidden">
+      <div class="slg-wrap">
+        <div class="slg-dialog" data-slg-element="dialog">
+          <div class="slg-header">
+            <h2 id="slg-title" class="slg-title" data-slg-element="title">${title}</h2>
+            <button type="button" class="slg-close" data-slg-element="close" aria-label="${closeLabel}" title="${closeTitle}">✕</button>
+          </div>
+          <div class="slg-body">
+            <p id="slg-message" data-slg-element="message">${message}</p>
+            <p>
+              <span class="slg-host-label" data-slg-element="host-label">${hostLabel}</span>
+              <span id="slg-host" class="slg-host" data-slg-element="host"></span>
+            </p>
+            <div class="slg-actions">
+              <a id="slg-open" class="slg-btn primary" data-slg-element="open" rel="noopener noreferrer nofollow" target="_blank">${openButton}</a>
+              <button id="slg-copy" class="slg-btn secondary" data-slg-element="copy" type="button">${copyButton}</button>
+              <button id="slg-cancel" class="slg-btn secondary" data-slg-element="cancel" type="button">${cancelButton}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  };
+
+  let defaultWarnMessage = translate("messages.defaultWarn");
+  const TEXT_NODE = typeof Node !== "undefined" ? Node.TEXT_NODE : 3;
 
   /**
    * Calcola la quantità di padding da applicare al body quando la scrollbar
@@ -60,7 +146,7 @@
       zIndex: 999999,
       maxConcurrent: 4,
       warnHighlightClass: "slg-warn-highlight",
-      warnMessageDefault: DEFAULT_WARN_MESSAGE,
+      warnMessageDefault: defaultWarnMessage,
       excludeSelectors: [],
       configVersion: "1.5.14"
     };
@@ -250,6 +336,11 @@
   const clearHoverMessage = hoverFeedback.clearMessage;
 
   const policyCache = createPolicyCache(cfg, configFingerprint);
+
+  if (guardNamespace.i18n && typeof guardNamespace.i18n.onLanguageChange === "function") {
+    guardNamespace.i18n.onLanguageChange(handleLanguageChange);
+  }
+  handleLanguageChange();
 
   // Gestisce la navigazione effettiva verso un URL rispettando la configurazione
   // `newTab`. L'apertura preferisce una nuova scheda quando richiesto e torna
@@ -871,38 +962,72 @@
     title: modalElementSelector("title"),
     message: modalElementSelector("message"),
     host: modalElementSelector("host"),
+    hostLabel: modalElementSelector("host-label"),
     open: modalElementSelector("open"),
     cancel: modalElementSelector("cancel"),
     close: modalElementSelector("close"),
     copy: modalElementSelector("copy")
   };
-  const DEFAULT_MODAL_TEMPLATE = `
-    <div data-slg-root class="slg-overlay slg--hidden">
-      <div class="slg-wrap">
-        <div class="slg-dialog" data-slg-element="dialog">
-          <div class="slg-header">
-            <h2 id="slg-title" class="slg-title" data-slg-element="title">Controlla che questo link sia sicuro</h2>
-            <button type="button" class="slg-close" data-slg-element="close" aria-label="Chiudi" title="Chiudi">✕</button>
-          </div>
-          <div class="slg-body">
-            <p id="slg-message" data-slg-element="message">${DEFAULT_WARN_MESSAGE}</p>
-            <p>Host: <span id="slg-host" class="slg-host" data-slg-element="host"></span></p>
-            <div class="slg-actions">
-              <a id="slg-open" class="slg-btn primary" data-slg-element="open" rel="noopener noreferrer nofollow" target="_blank">Apri link</a>
-              <button id="slg-copy" class="slg-btn secondary" data-slg-element="copy" type="button">Copia link</button>
-              <button id="slg-cancel" class="slg-btn secondary" data-slg-element="cancel" type="button">Annulla</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
   let modalRoot = null;
   let modalElements = null;
   let pendingUrl = null;
   let pendingMessage = null;
   let lastFocused = null;
   let scrollLockState = null;
+
+  const applyModalTranslations = () => {
+    if (!modalElements) return;
+    const titleText = translate("modal.title");
+    if (modalElements.title) {
+      modalElements.title.textContent = titleText;
+    }
+    if (modalElements.close) {
+      modalElements.close.setAttribute(
+        "aria-label",
+        translate("modal.closeLabel")
+      );
+      modalElements.close.setAttribute(
+        "title",
+        translate("modal.closeTitle")
+      );
+    }
+    if (modalElements.open) {
+      modalElements.open.textContent = translate("modal.openButton");
+    }
+    if (modalElements.copy) {
+      modalElements.copy.textContent = translate("modal.copyButton");
+    }
+    if (modalElements.cancel) {
+      modalElements.cancel.textContent = translate("modal.cancelButton");
+    }
+    const hostLabelText = translate("modal.hostLabel");
+    if (modalElements.hostLabel) {
+      modalElements.hostLabel.textContent = hostLabelText;
+    } else if (modalElements.hostLabelTextNode) {
+      modalElements.hostLabelTextNode.nodeValue = `${hostLabelText} `;
+    }
+    if (
+      modalElements.message &&
+      (!pendingMessage || pendingMessage === defaultWarnMessage)
+    ) {
+      modalElements.message.textContent = defaultWarnMessage;
+    }
+  };
+
+  const handleLanguageChange = () => {
+    const previousDefault = defaultWarnMessage;
+    defaultWarnMessage = translate("messages.defaultWarn");
+    if (!cfg.warnMessageDefault || cfg.warnMessageDefault === previousDefault) {
+      cfg.warnMessageDefault = defaultWarnMessage;
+    }
+    if (!pendingMessage || pendingMessage === previousDefault) {
+      pendingMessage = defaultWarnMessage;
+      if (modalElements?.message) {
+        modalElements.message.textContent = defaultWarnMessage;
+      }
+    }
+    applyModalTranslations();
+  };
 
   /**
    * Restituisce il template HTML della modale da utilizzare, preferendo
@@ -936,7 +1061,7 @@
 
     const fallback = document.createElement("template");
     fallback.id = MODAL_TEMPLATE_ID;
-    fallback.innerHTML = DEFAULT_MODAL_TEMPLATE;
+    fallback.innerHTML = getDefaultModalTemplate();
     guardNamespace.templates = guardNamespace.templates || {};
     guardNamespace.templates.modal = fallback;
     return fallback;
@@ -1058,6 +1183,19 @@
       hostEl.id = "slg-host";
     }
 
+    const hostLabelEl = queryModalElement(
+      root,
+      MODAL_SELECTORS.hostLabel,
+      ".slg-host-label"
+    );
+    let hostLabelTextNode = null;
+    if (!hostLabelEl && hostEl) {
+      const sibling = hostEl.previousSibling;
+      if (sibling && sibling.nodeType === TEXT_NODE) {
+        hostLabelTextNode = sibling;
+      }
+    }
+
     const openLink = queryModalElement(
       root,
       MODAL_SELECTORS.open,
@@ -1160,13 +1298,18 @@
 
     modalElements = {
       dialog,
+      title: titleEl,
       message: messageEl,
       host: hostEl,
+      hostLabel: hostLabelEl,
+      hostLabelTextNode,
       open: openLink,
       cancel: cancelBtn,
       close: closeBtn,
       copy: copyBtn
     };
+
+    applyModalTranslations();
 
     return { root, dialog };
   };
@@ -1186,8 +1329,9 @@
 
   const showModal = (url, message) => {
     ensureModal();
+    applyModalTranslations();
     pendingUrl = url;
-    pendingMessage = message || cfg.warnMessageDefault;
+    pendingMessage = message || cfg.warnMessageDefault || defaultWarnMessage;
     if (modalElements?.host) {
       modalElements.host.textContent = url.host;
     }
