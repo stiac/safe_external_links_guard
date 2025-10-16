@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.12] - 2025-11-02
+### Fixed
+- Eliminato lo shift orizzontale della pagina quando si apre la modale di conferma compensando automaticamente la scomparsa della scrollbar.
+- Allineato il test del resolver alla stringa di fallback effettivamente restituita per i domini sconosciuti.
+
+### Added
+- Utility `computeScrollLockPadding` esposta su `SafeExternalLinksGuard.utils` con relativo test unitario per validare il calcolo della compensazione.
+
 ## [1.5.11] - 2025-11-01
 ### Fixed
 - Risolta l'invalidazione della cache client quando cambiano le impostazioni, evitando che le decisioni restino bloccate ai valori precedenti dopo il deploy.

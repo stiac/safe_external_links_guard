@@ -20,6 +20,21 @@
   const guardNamespace = (window.SafeExternalLinksGuard =
     window.SafeExternalLinksGuard || {});
   const VALID_MODES = new Set(["strict", "warn", "soft"]);
+
+  /**
+   * Calcola la quantità di padding da applicare al body quando la scrollbar
+   * verticale scompare (modal aperta) per evitare lo shift orizzontale del layout.
+   * Restituisce sempre un numero >= del padding di partenza.
+   * @param {number} basePadding - Padding destro corrente (px).
+   * @param {number} scrollbarWidth - Larghezza della scrollbar da compensare (px).
+   * @returns {number}
+   */
+  const computeScrollLockPadding = (basePadding, scrollbarWidth) => {
+    const base = Number.isFinite(basePadding) && basePadding > 0 ? basePadding : 0;
+    const extra =
+      Number.isFinite(scrollbarWidth) && scrollbarWidth > 0 ? scrollbarWidth : 0;
+    return base + extra;
+  };
   let buildSettings = guardNamespace.buildSettings;
   let computeSettingsFingerprint =
     guardNamespace.utils &&
@@ -210,6 +225,14 @@
   if (!Array.isArray(cfg.excludeSelectors)) cfg.excludeSelectors = [];
   if (!VALID_MODES.has(cfg.mode)) cfg.mode = "strict";
   if (cfg.hoverFeedback !== "tooltip") cfg.hoverFeedback = "title";
+
+  // Espone l'utility anche sul namespace globale per consentire test e riuso.
+  if (!guardNamespace.utils) guardNamespace.utils = {};
+  if (
+    typeof guardNamespace.utils.computeScrollLockPadding !== "function"
+  ) {
+    guardNamespace.utils.computeScrollLockPadding = computeScrollLockPadding;
+  }
 
   const configFingerprint =
     typeof computeSettingsFingerprint === "function"
@@ -842,6 +865,46 @@
   let pendingUrl = null;
   let pendingMessage = null;
   let lastFocused = null;
+  let scrollLockState = null;
+
+  /**
+   * Applica un padding aggiuntivo al body quando la scrollbar scompare per
+   * mantenere fissa la larghezza del layout ed evitare shift visivi.
+   */
+  const applyScrollLockCompensation = () => {
+    const body = document.body;
+    if (!body) return;
+    if (scrollLockState?.applied) return;
+
+    const scrollbarWidth =
+      window.innerWidth - document.documentElement.clientWidth;
+    scrollLockState = {
+      applied: true,
+      inlinePaddingRight: body.style.paddingRight || ""
+    };
+
+    if (scrollbarWidth <= 0) return;
+
+    const computed = window.getComputedStyle(body);
+    const currentPadding = parseFloat(computed?.paddingRight || "0");
+    const compensated = computeScrollLockPadding(currentPadding, scrollbarWidth);
+    body.style.paddingRight = `${compensated}px`;
+  };
+
+  /**
+   * Ripristina lo stato del body riportando padding e flag alla configurazione iniziale.
+   */
+  const releaseScrollLockCompensation = () => {
+    const body = document.body;
+    if (!body) return;
+    if (!scrollLockState?.applied) {
+      scrollLockState = null;
+      return;
+    }
+
+    body.style.paddingRight = scrollLockState.inlinePaddingRight;
+    scrollLockState = null;
+  };
 
   const buildModal = () => {
     const root = document.createElement("div");
@@ -904,6 +967,7 @@
         root.classList.add("slg--hidden");
       }
       document.body.classList.remove("slg-no-scroll");
+      releaseScrollLockCompensation();
       pendingUrl = null;
       pendingMessage = null;
       if (lastFocused && lastFocused.focus) lastFocused.focus();
@@ -990,6 +1054,7 @@
     requestAnimationFrame(() => {
       modalRoot.classList.add("slg--visible");
     });
+    applyScrollLockCompensation();
     document.body.classList.add("slg-no-scroll");
     const dialog = modalRoot.querySelector(".slg-dialog");
     dialog.focus();
