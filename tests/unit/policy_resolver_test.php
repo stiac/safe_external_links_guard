@@ -11,9 +11,9 @@ $cases = [
         'minTtl' => 1000,
     ],
     [
-        'host' => 'sub.truffa.xyz',
+        'host' => 'sub.phishing.ru',
         'expectedAction' => 'deny',
-        'expectedMessage' => 'Blocca tutti i sottodomini truffa.xyz.',
+        'expectedMessage' => 'Blocca tutti i sottodomini truffa .ru.',
         'minTtl' => 1000,
     ],
     [
@@ -37,7 +37,7 @@ $cases = [
     [
         'host' => 'unknown.example',
         'expectedAction' => 'warn',
-        'expectedMessage' => 'Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile.',
+        'expectedMessage' => SLG_DEFAULT_WARN_MESSAGE,
         'minTtl' => SLG_DEFAULT_WARN_TTL,
     ],
 ];

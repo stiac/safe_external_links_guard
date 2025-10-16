@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.14] - 2025-11-04
+### Changed
+- Aggiornato il messaggio di avviso predefinito per i domini non presenti nelle liste con una descrizione più esplicita sui dati di navigazione condivisi con terze parti e centralizzato il testo in costanti riutilizzabili in PHP e JavaScript.
+- Allineato i test del resolver al nuovo messaggio predefinito riutilizzando la costante condivisa.
+
 ## [1.5.13] - 2025-11-03
 ### Fixed
 - Corretto il builder delle impostazioni affinché, in assenza di attributi `data-*`, vengano applicati automaticamente i valori di default globali (incluso `showCopyButton: false`) e il fallback legacy di `links-guard.js` rispetti la stessa configurazione.

@@ -6,6 +6,9 @@
 (function (global) {
   "use strict";
 
+  const DEFAULT_WARN_MESSAGE =
+    "Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile."; // Messaggio usato come fallback quando l'endpoint restituisce `warn` senza testo custom.
+
   // ===== Valori di default condivisi =====
   const DEFAULTS = {
     endpoint: "/links/policy", // Endpoint server (relativo o assoluto). Override via `data-endpoint` o override JS.
@@ -20,10 +23,9 @@
     zIndex: 999999, // Livello di stacking per modali/tooltip. Regolabile tramite override JS per integrazioni complesse.
     maxConcurrent: 4, // Limite di richieste simultanee verso l'endpoint. Aggiornabile via override JS.
     warnHighlightClass: "slg-warn-highlight", // Classe CSS dei link warn in modalità `soft`/`warn`. Impostabile con `data-warn-highlight-class`.
-    warnMessageDefault:
-      "Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile.", // Messaggio fallback, modificabile con `data-warn-message`.
+    warnMessageDefault: DEFAULT_WARN_MESSAGE, // Messaggio fallback, modificabile con `data-warn-message`.
     excludeSelectors: [], // Selettori da ignorare nella scansione. Accetta CSV tramite `data-exclude-selectors` o array via override.
-    configVersion: "1.5.13" // Versione di configurazione usata per invalidare cache e asset in fase di deploy.
+    configVersion: "1.5.14" // Versione di configurazione usata per invalidare cache e asset in fase di deploy.
   };
 
   const VALID_MODES = new Set(["strict", "warn", "soft"]); // Modalità supportate: `strict` (solo modale), `warn` (modale + evidenza), `soft` (solo evidenza).
