@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.13] - 2025-11-03
+### Fixed
+- Corretto il builder delle impostazioni affinché, in assenza di attributi `data-*`, vengano applicati automaticamente i valori di default globali (incluso `showCopyButton: false`) e il fallback legacy di `links-guard.js` rispetti la stessa configurazione.
+
+### Added
+- Test dedicati alla priorità tra default, attributi dello snippet e override manuali per l'opzione `showCopyButton`.
+
 ## [1.5.12] - 2025-11-02
 ### Fixed
 - Eliminato lo shift orizzontale della pagina quando si apre la modale di conferma compensando automaticamente la scomparsa della scrollbar.

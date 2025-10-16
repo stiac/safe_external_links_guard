@@ -1,6 +1,6 @@
 # Safe External Links Guard
 
-**Versione:** 1.5.12
+**Versione:** 1.5.13
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
@@ -57,7 +57,7 @@ Lo script:
    ></script>
    <!-- data-remove-node è opzionale: se impostato a true sostituisce <a> con <span> -->
    <!-- imposta data-mode="warn" per evidenziare i link e chiedere conferma prima di aprirli -->
-   <!-- imposta data-show-copy-button="false" per nascondere il pulsante "Copia link" -->
+   <!-- imposta data-show-copy-button="true" per mostrare il pulsante "Copia link" -->
    <!-- imposta data-hover-feedback="title" per usare il tooltip nativo del browser -->
   ```
   Adatta `src` e `data-endpoint` ai percorsi effettivi del tuo sito.
@@ -87,7 +87,7 @@ In questo modo le modifiche alle impostazioni restano concentrate in un file ded
 | `data-cache-ttl` | `3600` | Durata cache lato client (secondi). |
 | `data-mode` | `strict` | Modalità operativa: `strict` richiede conferma in modale; `warn` evidenzia i link e mostra la modale al click; `soft` li evidenzia soltanto. |
 | `data-remove-node` | `false` | Se `true`, i link negati vengono sostituiti da `<span>` disabilitati. |
-| `data-show-copy-button` | `true` | Se impostato a `false`, nasconde il pulsante "Copia link" nella modale. |
+| `data-show-copy-button` | `false` | Se impostato a `true`, mostra il pulsante "Copia link" nella modale. |
 | `data-hover-feedback` | `title` | Determina come mostrare i messaggi su hover: `title` usa il tooltip nativo del browser, `tooltip` attiva la UI personalizzata. |
 | `data-new-tab` | `true` | Imposta se i link consentiti devono aprirsi in una nuova scheda (`true`) o riutilizzare quella corrente (`false`). |
 | `data-warn-message` | Messaggio predefinito | Testo mostrato nella modale e nei messaggi su hover dei link in warning. |

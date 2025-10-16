@@ -22,8 +22,8 @@
     warnHighlightClass: "slg-warn-highlight", // Classe CSS dei link warn in modalità `soft`/`warn`. Impostabile con `data-warn-highlight-class`.
     warnMessageDefault:
       "Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile.", // Messaggio fallback, modificabile con `data-warn-message`.
-    excludeSelectors: [] // Selettori da ignorare nella scansione. Accetta CSV tramite `data-exclude-selectors` o array via override.
-    configVersion: "1.5.11" // Versione di configurazione usata per invalidare cache e asset in fase di deploy.
+    excludeSelectors: [], // Selettori da ignorare nella scansione. Accetta CSV tramite `data-exclude-selectors` o array via override.
+    configVersion: "1.5.13" // Versione di configurazione usata per invalidare cache e asset in fase di deploy.
   };
 
   const VALID_MODES = new Set(["strict", "warn", "soft"]); // Modalità supportate: `strict` (solo modale), `warn` (modale + evidenza), `soft` (solo evidenza).

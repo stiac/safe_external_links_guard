@@ -50,18 +50,18 @@
       timeoutMs: 900,
       cacheTtlSec: 3600,
       mode: "strict",
-      removeNode: false,
-      showCopyButton: true,
-      hoverFeedback: "title",
+      removeNode: true,
+      showCopyButton: false,
+      hoverFeedback: "tooltip",
       rel: ["noopener", "noreferrer", "nofollow"],
       newTab: true,
       zIndex: 999999,
       maxConcurrent: 4,
       warnHighlightClass: "slg-warn-highlight",
       warnMessageDefault:
-        "Questo link non è verificato. Procedi solo se ti fidi del sito.",
+        "Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile.",
       excludeSelectors: [],
-      configVersion: "1.5.11"
+      configVersion: "1.5.13"
     };
 
     const getAttribute = (node, attr) => {
@@ -98,8 +98,8 @@
       return VALID_MODES.has(normalized) ? normalized : "strict";
     };
 
-    const parseHoverFeedback = (value) => {
-      if (!value) return "title";
+    const parseHoverFeedback = (value, defaultValue) => {
+      if (!value) return defaultValue;
       const normalized = value.trim().toLowerCase();
       return normalized === "tooltip" ? "tooltip" : "title";
     };
@@ -163,7 +163,8 @@
           fallbackDefaults.showCopyButton
         ),
         hoverFeedback: parseHoverFeedback(
-          getAttribute(scriptEl, "data-hover-feedback")
+          getAttribute(scriptEl, "data-hover-feedback"),
+          fallbackDefaults.hoverFeedback
         ),
         rel: [...fallbackDefaults.rel],
         newTab: fallbackDefaults.newTab,

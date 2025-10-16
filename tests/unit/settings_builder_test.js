@@ -27,6 +27,7 @@ class FakeScript {
   assert.strictEqual(cfg.cacheTtlSec, SafeExternalLinksGuard.defaults.cacheTtlSec, 'cacheTtlSec should fallback to defaults');
   assert.strictEqual(cfg.mode, 'strict', 'mode should fallback to strict when not provided');
   assert.strictEqual(cfg.configVersion, SafeExternalLinksGuard.defaults.configVersion, 'configVersion should fallback to defaults');
+  assert.strictEqual(cfg.showCopyButton, false, 'showCopyButton should respect default false when attribute is missing');
 })();
 
 (() => {
@@ -54,6 +55,18 @@ class FakeScript {
 })();
 
 (() => {
+  const script = new FakeScript({ 'data-show-copy-button': 'true' });
+  const cfg = SafeExternalLinksGuard.buildSettings(script);
+  assert.strictEqual(cfg.showCopyButton, true, 'data-show-copy-button="true" should display the copy button');
+})();
+
+(() => {
+  const script = new FakeScript({ 'data-show-copy-button': 'false' });
+  const cfg = SafeExternalLinksGuard.buildSettings(script);
+  assert.strictEqual(cfg.showCopyButton, false, 'data-show-copy-button="false" should hide the copy button');
+})();
+
+(() => {
   const script = new FakeScript({ 'data-mode': 'soft' });
   const cfg = SafeExternalLinksGuard.buildSettings(script, { mode: 'strict', cacheTtlSec: 600 });
   assert.strictEqual(cfg.mode, 'strict', 'manual override should win over script attribute');
@@ -64,6 +77,12 @@ class FakeScript {
   const script = new FakeScript({ 'data-new-tab': 'false' });
   const cfg = SafeExternalLinksGuard.buildSettings(script, { newTab: true });
   assert.strictEqual(cfg.newTab, true, 'manual override should be able to force new tab behaviour');
+})();
+
+(() => {
+  const script = new FakeScript({ 'data-show-copy-button': 'true' });
+  const cfg = SafeExternalLinksGuard.buildSettings(script, { showCopyButton: false });
+  assert.strictEqual(cfg.showCopyButton, false, 'manual override should have the highest priority on showCopyButton');
 })();
 
 (() => {
