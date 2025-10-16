@@ -337,6 +337,11 @@
 
   const policyCache = createPolicyCache(cfg, configFingerprint);
 
+  if (guardNamespace.i18n && typeof guardNamespace.i18n.onLanguageChange === "function") {
+    guardNamespace.i18n.onLanguageChange(handleLanguageChange);
+  }
+  handleLanguageChange();
+
   // Gestisce la navigazione effettiva verso un URL rispettando la configurazione
   // `newTab`. L'apertura preferisce una nuova scheda quando richiesto e torna
   // al navigatore corrente se il browser blocca `window.open`.
@@ -1089,6 +1094,60 @@
     guardNamespace.i18n.onLanguageChange(handleLanguageChange);
   }
   handleLanguageChange();
+
+  const applyModalTranslations = () => {
+    if (!modalElements) return;
+    const titleText = translate("modal.title");
+    if (modalElements.title) {
+      modalElements.title.textContent = titleText;
+    }
+    if (modalElements.close) {
+      modalElements.close.setAttribute(
+        "aria-label",
+        translate("modal.closeLabel")
+      );
+      modalElements.close.setAttribute(
+        "title",
+        translate("modal.closeTitle")
+      );
+    }
+    if (modalElements.open) {
+      modalElements.open.textContent = translate("modal.openButton");
+    }
+    if (modalElements.copy) {
+      modalElements.copy.textContent = translate("modal.copyButton");
+    }
+    if (modalElements.cancel) {
+      modalElements.cancel.textContent = translate("modal.cancelButton");
+    }
+    const hostLabelText = translate("modal.hostLabel");
+    if (modalElements.hostLabel) {
+      modalElements.hostLabel.textContent = hostLabelText;
+    } else if (modalElements.hostLabelTextNode) {
+      modalElements.hostLabelTextNode.nodeValue = `${hostLabelText} `;
+    }
+    if (
+      modalElements.message &&
+      (!pendingMessage || pendingMessage === defaultWarnMessage)
+    ) {
+      modalElements.message.textContent = defaultWarnMessage;
+    }
+  };
+
+  const handleLanguageChange = () => {
+    const previousDefault = defaultWarnMessage;
+    defaultWarnMessage = translate("messages.defaultWarn");
+    if (!cfg.warnMessageDefault || cfg.warnMessageDefault === previousDefault) {
+      cfg.warnMessageDefault = defaultWarnMessage;
+    }
+    if (!pendingMessage || pendingMessage === previousDefault) {
+      pendingMessage = defaultWarnMessage;
+      if (modalElements?.message) {
+        modalElements.message.textContent = defaultWarnMessage;
+      }
+    }
+    applyModalTranslations();
+  };
 
   /**
    * Restituisce il template HTML della modale da utilizzare, preferendo
