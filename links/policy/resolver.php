@@ -97,6 +97,6 @@ function slg_resolve_policy(string $host): array
     return [
         'action' => 'warn',
         'ttl' => SLG_DEFAULT_WARN_TTL,
-        'message' => 'Dominio non presente nelle liste, richiesta conferma utente.',
+        'message' => 'Questo link non è verificato e può contenere dati della tua navigazione che saranno condivisi con un sito di terzi. Prima di procedere, assicurati che il link sia affidabile.',
     ];
 }
