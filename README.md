@@ -1,13 +1,13 @@
 # Safe External Links Guard
 
-**Versione:** 1.9.4
+**Versione:** 1.10.2
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
 
 Con la versione 1.5.0 la logica interna è stata riorganizzata in moduli indipendenti (tooltip, cache, coda delle richieste) per semplificare la manutenzione e migliorare la leggibilità del codice. La release 1.5.6 assicura che i click sui link consentiti vengano gestiti una sola volta, prevenendo aperture duplicate anche quando sono presenti handler `onclick` personalizzati, e mantiene il supporto diretto all'attributo `data-new-tab` nel file di configurazione. La release 1.5.7 migliora la gestione dei timeout di rete, restituendo messaggi più chiari e degradando a warning in modo controllato quando la policy non risponde in tempo utile. La release 1.5.8 evita i doppi redirect quando si apre un link dalla modale in una nuova scheda, mantenendo l'utente nella pagina originale, mentre la release 1.5.9 protegge la modale dagli automatismi della scansione dei link e ne affina l'accessibilità generale. La release 1.5.10 introduce una transizione di fade-in/fade-out per la modale, rispettosa delle preferenze di movimento ridotto dell'utente e allineata a un'esperienza più professionale, la release 1.5.11 risolve i problemi di cache in fase di deploy generando automaticamente una nuova firma di configurazione e aggiungendo l'attributo `data-config-version` per forzare aggiornamenti mirati, mentre la release 1.5.12 mantiene stabile il layout durante l'apertura della modale compensando la sparizione della scrollbar. La release 1.5.14 aggiorna inoltre il messaggio di avviso predefinito per i domini non presenti nelle liste per chiarire i rischi di condivisione dei dati di navigazione verso terze parti e supportare scelte più consapevoli, la release 1.5.15 introduce un template HTML dedicato per la modale che rende più semplice modificarne la struttura senza intervenire direttamente sul codice JavaScript, mentre la release 1.6.0 abilita un sistema i18n modulare con rilevazione automatica della lingua, file JSON centralizzati e fallback immediato in inglese per ogni stringa non tradotta. La release 1.7.0 estende questo ecosistema con un renderer di contenuti dichiarativo capace di sincronizzare testi, attributi e proprietà UI con i dizionari multilingua, riducendo il codice manuale necessario per aggiornare l'interfaccia e mantenendo i fallback inglesi automatici. Con la release 1.7.2 viene corretta la registrazione dell'handler di cambio lingua durante il bootstrap dello script, evitando errori JavaScript quando il modulo i18n è presente, mentre la release 1.7.3 rafforza il resolver multilingua introducendo il caricamento asincrono dei bundle, la normalizzazione dei codici regionali (`pt-BR`, `pt-PT`) e una funzione `t()` capace di gestire catene di fallback verso la lingua inglese. La release 1.7.4 completa il quadro traducendo anche i messaggi restituiti dal resolver (warning, deny ed errori di rete) tramite `messageKey` e `messageFallbackKey`, così tooltip e modale rispettano sempre la lingua dell'utente. La release 1.8.0 introduce inoltre un tracciamento opzionale dei click con parametro personalizzato, pixel configurabile e metadati anonimi rispettosi della privacy. La release 1.8.1 corregge la riscrittura degli URL garantendo che il parametro venga aggiunto senza perdere query string o hash, evitando duplicazioni e preservando l'encoding. La release 1.8.4 sincronizza inoltre il parametro di tracciamento direttamente con l'attributo `href`, così anche le aperture modificate (Ctrl/Cmd+click, pulsante centrale) e la copia del link dall'interfaccia ricevono sempre l'URL aggiornato.
 
-La release 1.9.4 risolve definitivamente i casi in cui lo script principale veniva caricato prima del modulo i18n, introducendo una coda di bootstrap (`__i18nReadyQueue`) che riallinea automaticamente i testi tradotti non appena le traduzioni diventano disponibili. La release 1.9.3 corregge infine una duplicazione nella funzione AMP `collectExternalLinks()` che poteva interrompere il bootstrap dello script in ambienti sandboxati, ripristinando la compatibilità con Reader mode e pagine AMP.
+La release 1.9.4 risolve definitivamente i casi in cui lo script principale veniva caricato prima del modulo i18n, introducendo una coda di bootstrap (`__i18nReadyQueue`) che riallinea automaticamente i testi tradotti non appena le traduzioni diventano disponibili. La release 1.9.3 corregge infine una duplicazione nella funzione AMP `collectExternalLinks()` che poteva interrompere il bootstrap dello script in ambienti sandboxati, ripristinando la compatibilità con Reader mode e pagine AMP. La release 1.10.0 aggiunge una modalità debug configurabile (basic/verbose) che centralizza i log operativi, mette a disposizione un’esportazione JSON dei dati diagnostici e rimane completamente silenziosa quando è disattivata, mentre la 1.10.1 arricchisce il debug con riepiloghi puntuali delle decisioni di policy, evidenziando i domini recuperati da cache o endpoint e fornendo esempi di link coinvolti; la 1.10.2 rende inoltre sempre visibile la lingua rilevata (preferita, alternative, sorgenti) per aiutare l’analisi dei link sospetti.
 
 Lo script:
 - impone attributi di sicurezza (`rel`, `target`) sui link esterni;
@@ -104,7 +104,7 @@ Lo script:
 4. Assicurati che l'endpoint PHP sia raggiungibile e configurato con le tue liste di allow/deny.
 
 Lo script legge gli attributi `data-*` dal tag `<script>` per adattare il comportamento senza necessità di ricompilazione. Quando un attributo `data-*` non è presente vengono utilizzati i valori definiti in `links-guard.settings.js`, mentre gli override manuali possono sempre intervenire tramite JavaScript.
-Se `links-guard.settings.js` non è caricato, `links-guard.js` utilizza comunque un fallback legacy, ma verrà mostrato un avviso in console per ricordare di includere il file di impostazioni centralizzato.
+Se `links-guard.settings.js` non è caricato, `links-guard.js` utilizza comunque un fallback legacy; attivando la modalità debug viene registrato un avviso per ricordare di includere il file di impostazioni centralizzato.
 L'attributo `defer` garantisce che gli script vengano eseguiti nell'ordine dichiarato senza bloccare il parsing HTML; evita `async` sul file principale a meno che il file di settings non sia stato precaricato.
 
 ### Modalità lettura e pagine AMP
@@ -152,6 +152,34 @@ Il file `links-guard.settings.js` espone il namespace globale `SafeExternalLinks
 - i valori di default (`defaults`) per tutte le impostazioni supportate;
 - la funzione `buildSettings(scriptEl, overrides)` che genera la configurazione finale partendo dagli attributi `data-*` presenti sul tag `<script>` e applicando i default solo quando i parametri non sono specificati;
 - alcune utility di parsing riutilizzabili.
+
+### Modalità debug
+
+La versione 1.10.0 introduce una modalità debug integrata che aiuta a diagnosticare i problemi senza inquinare la console quando non serve; dalla 1.10.1 il debugger aggiunge inoltre riepiloghi dettagliati delle decisioni di policy e un focus sui domini bloccati o segnalati, mentre la 1.10.2 mette sempre in evidenza la lingua rilevata (preferita, alternative e sorgenti) nei log di livello `basic` e `verbose`.
+
+- Abilita il debug impostando `settings.debugMode = true` (via override JS) oppure l’attributo `data-debug-mode="true"` sul tag `<script>`.
+- Se vuoi più dettagli attiva anche `settings.debugLevel = 'verbose'` o `data-debug-level="verbose"`. Il livello `basic` mostra gli eventi principali (configurazione, fallback attivati, tracking, errori) e, dalla 1.10.1, riassume le policy applicate (host, azione, provenienza cache/endpoint, numero di link interessati) mostrando ora sempre la lingua rilevata; `verbose` aggiunge metadati completi, contesto lingua con sorgenti, payload anonimizzati ed esempi di link coinvolti per ogni dominio.
+- Quando il debug è disattivato non viene emesso alcun log. Tutti i messaggi vengono gestiti da `SafeExternalLinksGuard.debug`, che raccoglie gli eventi in memoria solo mentre il debug è attivo.
+- I dati raccolti possono essere esportati con `SafeExternalLinksGuard.debug.exportAsJson()` (facoltativamente passando `{ pretty: false }` per ottenere un JSON compatto) oppure letti come array con `SafeExternalLinksGuard.debug.getEntries()`.
+
+Esempio rapido di attivazione dalla pagina:
+
+```html
+<script
+  defer
+  src="/assets/app/safe_external_links_guard/links-guard.js"
+  data-endpoint="/links/policy"
+  data-debug-mode="true"
+  data-debug-level="verbose"
+></script>
+```
+
+Nel log compariranno la configurazione normalizzata, la lingua rilevata con preferenza, alternative e sorgenti, i fallback attivati (cache, endpoint non raggiungibile, ecc.), gli eventi di tracking (ID applicati, pixel inviati), le decisioni di policy per ogni host (allow/warn/deny con motivazione e conteggio dei link) e gli errori del resolver. In qualsiasi momento puoi esportare i dati per analisi esterne:
+
+```js
+const debugDump = SafeExternalLinksGuard.debug.exportAsJson();
+// Scarica o invia debugDump al tuo team per un'analisi offline.
+```
 
 ### Sistema di traduzione (`links-guard.i18n.js`)
 Il file `links-guard.i18n.js` inizializza il servizio di localizzazione con le traduzioni contenute in `resources/lang/*.json` (Inglese, Italiano, Spagnolo, Francese, Tedesco, Portoghese, Brasiliano e Russo) e rileva automaticamente la lingua da mostrare interrogando, in ordine, fonti ridondanti che coprono anche i browser con impostazioni privacy aggressive:

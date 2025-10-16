@@ -17,6 +17,60 @@
   const guardNamespace = (root.SafeExternalLinksGuard =
     root.SafeExternalLinksGuard || {});
 
+  const ensureDebug = () => {
+    if (
+      guardNamespace.debug &&
+      typeof guardNamespace.debug.info === 'function' &&
+      typeof guardNamespace.debug.exportAsJson === 'function'
+    ) {
+      return guardNamespace.debug;
+    }
+    if (typeof guardNamespace.createDebugManager === 'function') {
+      const instance = guardNamespace.createDebugManager();
+      guardNamespace.debug = instance;
+      return instance;
+    }
+    const noop = {
+      configure() {},
+      info() {},
+      warn() {},
+      error() {},
+      event() {},
+      verbose() {},
+      getState() {
+        return { enabled: false, level: 'basic' };
+      },
+      getEntries() {
+        return [];
+      },
+      exportAsJson() {
+        return JSON.stringify({ entries: [], state: { enabled: false, level: 'basic' } });
+      }
+    };
+    noop.__isStub = true;
+    guardNamespace.debug = noop;
+    return noop;
+  };
+
+  const debug = ensureDebug();
+
+  const serializeError = (error) => {
+    if (!error || typeof error !== 'object') {
+      return { message: String(error) };
+    }
+    return {
+      name: error.name || 'Error',
+      message:
+        typeof error.message === 'string'
+          ? error.message
+          : String(error.message || error),
+      stack:
+        typeof error.stack === 'string' && error.stack.trim()
+          ? error.stack
+          : undefined
+    };
+  };
+
   const DEFAULT_LANGUAGE = 'en';
   // Mappa dei codici normalizzati -> forma canonica mostrata ai consumatori dell'API pubblica.
   const CANONICAL_DISPLAY = {
@@ -1271,9 +1325,11 @@
       try {
         cb(activeLanguage, translator);
       } catch (err) {
-        if (typeof console !== 'undefined' && console.error) {
-          console.error('[SafeLinkGuard] Listener lingua fallito', err);
-        }
+        debug.error(
+          'Listener lingua fallito',
+          serializeError(err),
+          { scope: 'i18n' }
+        );
       }
     });
   };
@@ -1701,9 +1757,11 @@
 
       pendingLoad = loadPromise
         .catch((err) => {
-          if (typeof console !== 'undefined' && console.error) {
-            console.error('[SafeLinkGuard] Unable to preload translations', err);
-          }
+          debug.error(
+            'Unable to preload translations',
+            serializeError(err),
+            { scope: 'i18n' }
+          );
           // Garantisce comunque la disponibilità del traduttore anche in caso di errore.
           const base = loadBaseCatalog();
           const preload = loadPreloadedCatalog();
@@ -1737,9 +1795,11 @@
         try {
           callback(api);
         } catch (err) {
-          if (typeof console !== 'undefined' && console.error) {
-            console.error('[SafeLinkGuard] Errore durante l\'esecuzione della coda i18n', err);
-          }
+          debug.error(
+            "Errore durante l'esecuzione della coda i18n",
+            serializeError(err),
+            { scope: 'i18n' }
+          );
         }
       }
       return queueRef.length;
@@ -1751,9 +1811,11 @@
       try {
         callback(api);
       } catch (err) {
-        if (typeof console !== 'undefined' && console.error) {
-          console.error('[SafeLinkGuard] Errore durante l\'esecuzione della coda i18n', err);
-        }
+        debug.error(
+          "Errore durante l'esecuzione della coda i18n",
+          serializeError(err),
+          { scope: 'i18n' }
+        );
       }
     });
   }
