@@ -1,6 +1,6 @@
 # Safe External Links Guard
 
-**Versione:** 1.8.2
+**Versione:** 1.8.3
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
@@ -109,12 +109,44 @@ Il file `links-guard.settings.js` espone il namespace globale `SafeExternalLinks
 - alcune utility di parsing riutilizzabili.
 
 ### Sistema di traduzione (`links-guard.i18n.js`)
-Il file `links-guard.i18n.js` inizializza il servizio di localizzazione con le traduzioni contenute in `resources/lang/*.json` (Inglese, Italiano, Spagnolo, Francese, Tedesco, Portoghese, Brasiliano e Russo) e rileva automaticamente la lingua da mostrare leggendo, in ordine:
+Il file `links-guard.i18n.js` inizializza il servizio di localizzazione con le traduzioni contenute in `resources/lang/*.json` (Inglese, Italiano, Spagnolo, Francese, Tedesco, Portoghese, Brasiliano e Russo) e rileva automaticamente la lingua da mostrare interrogando, in ordine, più fonti ridondanti:
 
-1. il parametro `lang` nella query string;
-2. un eventuale override impostato tramite `SafeExternalLinksGuard.i18n.setLanguage('codice')`;
-3. la lista `navigator.languages` esposta dal browser;
-4. il fallback predefinito in inglese (`en`).
+1. un eventuale override esplicito (`SafeExternalLinksGuard.i18n.detectLanguage({ lang: 'codice' })` o `setLanguage()`);
+2. il parametro `lang` (personalizzabile) nella query string;
+3. le preferenze salvate nei vari storage del browser (`localStorage`, `sessionStorage`, cookie) con le chiavi `SafeExternalLinksGuard.*`;
+4. l'attributo `lang`/`xml:lang` del documento HTML o il meta `http-equiv="content-language"`;
+5. `navigator.languages` e le proprietà legacy (`language`, `browserLanguage`, `userLanguage`, `systemLanguage`), con deduplica e gestione dei quality value (`;q=`);
+6. il locale inferito dall'engine `Intl` (utile su browser in modalità anonima o con fingerprinting avanzato disattivato);
+7. il fallback configurato (`defaultLanguage`, inglese di default).
+
+Le varianti regionali vengono normalizzate mantenendo il formato canonico quando la specifica lingua è disponibile oppure quando esiste un alias verso la lingua base (es. `it-IT`, `pt-PT`, `fr-CA`). Quando il bundle dedicato non è presente viene utilizzato il dizionario della lingua madre, ma il codice restituito continua a riflettere la preferenza originale dell'utente.
+
+Esempio di uso robusto della detection con codici brevi e regionali:
+
+```javascript
+const detected = SafeExternalLinksGuard.i18n.detectLanguage({
+  navigatorLanguages: ['pt-BR', 'en-US'],
+  defaultLanguage: 'en'
+});
+// detected === 'pt-BR'
+
+const fallback = SafeExternalLinksGuard.i18n.detectLanguage({
+  navigatorLanguages: ['pt', 'en-US']
+});
+// fallback === 'pt'
+
+const italianFromHtml = SafeExternalLinksGuard.i18n.detectLanguage({
+  navigatorLanguages: [],
+  documentLang: 'it-IT'
+});
+// italianFromHtml === 'it-IT'
+
+const storedPreference = SafeExternalLinksGuard.i18n.detectLanguage({
+  navigatorLanguages: [],
+  persistedLang: 'es-ES'
+});
+// storedPreference === 'es-ES'
+```
 
 > **Nota:** i codici `it` e `it-IT` vengono ora mappati direttamente sul dizionario italiano, mantenendo la forma con suffisso regionale quando presente.
 

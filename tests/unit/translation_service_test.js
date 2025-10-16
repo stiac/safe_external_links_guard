@@ -40,6 +40,34 @@ const run = async () => {
     'detectLanguage should expose the canonical Italian code when locale is it-IT'
   );
 
+  const detectedFromDocument = i18n.detectLanguage({ navigatorLanguages: [], documentLang: 'it-IT' });
+  assert.strictEqual(
+    detectedFromDocument,
+    'it-IT',
+    'detectLanguage should fall back to document language when navigator data is not available'
+  );
+
+  const detectedFromStorage = i18n.detectLanguage({ navigatorLanguages: [], persistedLang: 'pt-BR' });
+  assert.strictEqual(
+    detectedFromStorage,
+    'pt-BR',
+    'detectLanguage should honour persisted language preferences'
+  );
+
+  const detectedFromIntl = i18n.detectLanguage({ navigatorLanguages: [], intlLocale: 'fr-CA' });
+  assert.strictEqual(
+    detectedFromIntl,
+    'fr-CA',
+    'detectLanguage should preserve the canonical regional code resolved through Intl locale information'
+  );
+
+  const detectedFromQualityList = i18n.detectLanguage({ navigatorLanguages: ['es-ES;q=0.8', 'en-US'] });
+  assert.strictEqual(
+    detectedFromQualityList,
+    'es-ES',
+    'detectLanguage should parse navigator languages with quality values and preserve the canonical code'
+  );
+
   i18n.setLanguage('it');
   let translator = i18n.getTranslator();
   assert.strictEqual(
