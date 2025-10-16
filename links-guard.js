@@ -471,7 +471,6 @@
   ) {
     guardNamespace.utils.computeScrollLockPadding = computeScrollLockPadding;
   }
-
   const configFingerprint =
     typeof computeSettingsFingerprint === "function"
       ? computeSettingsFingerprint(cfg)
@@ -490,8 +489,276 @@
   // Gestisce la navigazione effettiva verso un URL rispettando la configurazione
   // `newTab`. L'apertura preferisce una nuova scheda quando richiesto e torna
   // al navigatore corrente se il browser blocca `window.open`.
+  const detectDeviceType = (userAgent) => {
+    if (typeof userAgent !== "string" || !userAgent.trim()) {
+      return "unknown";
+    }
+    const ua = userAgent.toLowerCase();
+    if (/(smart[-\s]?tv|hbbtv|appletv|googletv|tizen|webos)/.test(ua)) {
+      return "tv";
+    }
+    if (
+      /(ipad|tablet|android(?!.*mobile)|kindle|silk|playbook|touch)/.test(ua)
+    ) {
+      return "tablet";
+    }
+    if (
+      /(mobile|iphone|ipod|blackberry|phone|opera mini|windows phone|android.*mobile)/.test(
+        ua
+      )
+    ) {
+      return "mobile";
+    }
+    return "desktop";
+  };
+
+  const buildTrackingPayload = ({
+    trackingId,
+    parameterName,
+    destination,
+    original,
+    metadata
+  } = {}) => {
+    const safeMetadata = metadata && typeof metadata === "object" ? metadata : {};
+    const payload = {
+      trackingId: trackingId || "",
+      parameterName: parameterName || "",
+      destination: destination || "",
+      originalDestination: original || destination || ""
+    };
+    if (safeMetadata.timestamp) {
+      payload.timestamp = safeMetadata.timestamp;
+    }
+    if (safeMetadata.referrer !== undefined) {
+      payload.referrer = safeMetadata.referrer;
+    }
+    if (safeMetadata.privacyMode) {
+      payload.privacyMode = safeMetadata.privacyMode;
+    }
+    if (safeMetadata.language) {
+      payload.language = safeMetadata.language;
+    }
+    if (Array.isArray(safeMetadata.languages) && safeMetadata.languages.length) {
+      payload.languages = safeMetadata.languages;
+    }
+    if (safeMetadata.timeZone) {
+      payload.timeZone = safeMetadata.timeZone;
+    }
+    if (safeMetadata.deviceType) {
+      payload.deviceType = safeMetadata.deviceType;
+    }
+    return payload;
+  };
+
+  const collectAnonymousMetadata = () => {
+    const base = {
+      timestamp: new Date().toISOString(),
+      referrer:
+        typeof document !== "undefined" && document
+          ? document.referrer || ""
+          : "",
+      privacyMode: cfg.trackingIncludeMetadata ? "extended" : "minimal"
+    };
+
+    if (!cfg.trackingIncludeMetadata) {
+      return base;
+    }
+
+    if (typeof navigator !== "undefined" && navigator) {
+      const languages = Array.isArray(navigator.languages)
+        ? navigator.languages.filter(Boolean)
+        : [];
+      if (languages.length) {
+        base.language = languages[0];
+        base.languages = languages;
+      } else if (navigator.language) {
+        base.language = navigator.language;
+      }
+      if (navigator.userAgent) {
+        base.deviceType = detectDeviceType(navigator.userAgent);
+      }
+    }
+    if (!base.deviceType) {
+      base.deviceType = "unknown";
+    }
+    try {
+      const tz =
+        typeof Intl !== "undefined" &&
+        Intl &&
+        typeof Intl.DateTimeFormat === "function"
+          ? new Intl.DateTimeFormat().resolvedOptions().timeZone
+          : null;
+      if (tz) {
+        base.timeZone = tz;
+      }
+    } catch (errTz) {
+      // La timezone potrebbe non essere disponibile: ignoriamo l'errore.
+    }
+    return base;
+  };
+
+  const generateTrackingId = () => {
+    if (typeof crypto !== "undefined" && crypto) {
+      if (typeof crypto.randomUUID === "function") {
+        return crypto.randomUUID();
+      }
+      if (typeof crypto.getRandomValues === "function") {
+        const buffer = new Uint8Array(16);
+        crypto.getRandomValues(buffer);
+        const toHex = (num) => num.toString(16).padStart(2, "0");
+        return (
+          toHex(buffer[0]) +
+          toHex(buffer[1]) +
+          toHex(buffer[2]) +
+          toHex(buffer[3]) +
+          "-" +
+          toHex(buffer[4]) +
+          toHex(buffer[5]) +
+          "-" +
+          toHex(buffer[6]) +
+          toHex(buffer[7]) +
+          "-" +
+          toHex(buffer[8]) +
+          toHex(buffer[9]) +
+          "-" +
+          toHex(buffer[10]) +
+          toHex(buffer[11]) +
+          toHex(buffer[12]) +
+          toHex(buffer[13]) +
+          toHex(buffer[14]) +
+          toHex(buffer[15])
+        );
+      }
+    }
+    return (
+      Date.now().toString(36) +
+      "-" +
+      Math.random().toString(36).slice(2, 10) +
+      "-" +
+      Math.random().toString(36).slice(2, 10)
+    );
+  };
+
+  const prepareTrackedNavigation = (urlLike) => {
+    if (!cfg.trackingEnabled) {
+      return null;
+    }
+    const originalHref =
+      typeof urlLike === "string"
+        ? urlLike
+        : typeof urlLike?.href === "string"
+        ? urlLike.href
+        : null;
+    if (!originalHref) {
+      return null;
+    }
+    const urlObj = toURL(originalHref);
+    if (!urlObj) {
+      return null;
+    }
+    const trackingId = generateTrackingId();
+    const parameterName = cfg.trackingParameter || "slgclid";
+    urlObj.searchParams.set(parameterName, trackingId);
+    return {
+      href: urlObj.href,
+      originalHref,
+      trackingId,
+      url: urlObj,
+      parameterName
+    };
+  };
+
+  const dispatchTrackingPixel = (payload) => {
+    if (!cfg.trackingEnabled || !cfg.trackingPixelEndpoint) {
+      return;
+    }
+    if (!payload || typeof payload !== "object") {
+      return;
+    }
+    let serialized = null;
+    try {
+      serialized = JSON.stringify(payload);
+    } catch (errSerialize) {
+      return;
+    }
+    if (!serialized) {
+      return;
+    }
+
+    const endpoint = cfg.trackingPixelEndpoint;
+
+    try {
+      if (
+        typeof navigator !== "undefined" &&
+        navigator &&
+        typeof navigator.sendBeacon === "function"
+      ) {
+        const blob = new Blob([serialized], { type: "application/json" });
+        const sent = navigator.sendBeacon(endpoint, blob);
+        if (sent) {
+          return;
+        }
+      }
+    } catch (errBeacon) {
+      // Alcuni browser potrebbero lanciare eccezioni su sendBeacon: fallback sotto.
+    }
+
+    if (typeof fetch === "function") {
+      try {
+        fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: serialized,
+          keepalive: true,
+          credentials: "omit",
+          mode: "cors"
+        }).catch(() => {});
+        return;
+      } catch (errFetch) {
+        // In caso di eccezione si passa al fallback immagine.
+      }
+    }
+
+    try {
+      const pixel = new Image();
+      pixel.src = `${endpoint}?data=${encodeURIComponent(serialized)}`;
+    } catch (errImage) {
+      // Ultimo fallback: se anche l'immagine fallisce non possiamo registrare l'evento.
+    }
+  };
+
+  if (!guardNamespace.utils) {
+    guardNamespace.utils = {};
+  }
+  if (
+    typeof guardNamespace.utils.buildTrackingPayload !== "function"
+  ) {
+    guardNamespace.utils.buildTrackingPayload = buildTrackingPayload;
+  }
+  if (typeof guardNamespace.utils.detectDeviceType !== "function") {
+    guardNamespace.utils.detectDeviceType = detectDeviceType;
+  }
+
   const followExternalUrl = (urlLike) => {
-    const href = typeof urlLike === "string" ? urlLike : urlLike?.href;
+    let href = typeof urlLike === "string" ? urlLike : urlLike?.href;
+
+    let trackingContext = null;
+    if (cfg.trackingEnabled && cfg.trackingPixelEndpoint) {
+      trackingContext = prepareTrackedNavigation(urlLike);
+      if (trackingContext?.href) {
+        const metadata = collectAnonymousMetadata();
+        const payload = buildTrackingPayload({
+          trackingId: trackingContext.trackingId,
+          parameterName: trackingContext.parameterName,
+          destination: trackingContext.href,
+          original: trackingContext.originalHref,
+          metadata
+        });
+        dispatchTrackingPixel(payload);
+        href = trackingContext.href;
+      }
+    }
+
     if (!href) return;
 
     if (cfg.newTab) {
