@@ -1,13 +1,13 @@
 # Safe External Links Guard
 
-**Versione:** 1.10.4
+**Versione:** 1.11.0
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
 
 Con la versione 1.5.0 la logica interna è stata riorganizzata in moduli indipendenti (tooltip, cache, coda delle richieste) per semplificare la manutenzione e migliorare la leggibilità del codice. La release 1.5.6 assicura che i click sui link consentiti vengano gestiti una sola volta, prevenendo aperture duplicate anche quando sono presenti handler `onclick` personalizzati, e mantiene il supporto diretto all'attributo `data-new-tab` nel file di configurazione. La release 1.5.7 migliora la gestione dei timeout di rete, restituendo messaggi più chiari e degradando a warning in modo controllato quando la policy non risponde in tempo utile. La release 1.5.8 evita i doppi redirect quando si apre un link dalla modale in una nuova scheda, mantenendo l'utente nella pagina originale, mentre la release 1.5.9 protegge la modale dagli automatismi della scansione dei link e ne affina l'accessibilità generale. La release 1.5.10 introduce una transizione di fade-in/fade-out per la modale, rispettosa delle preferenze di movimento ridotto dell'utente e allineata a un'esperienza più professionale, la release 1.5.11 risolve i problemi di cache in fase di deploy generando automaticamente una nuova firma di configurazione e aggiungendo l'attributo `data-config-version` per forzare aggiornamenti mirati, mentre la release 1.5.12 mantiene stabile il layout durante l'apertura della modale compensando la sparizione della scrollbar. La release 1.5.14 aggiorna inoltre il messaggio di avviso predefinito per i domini non presenti nelle liste per chiarire i rischi di condivisione dei dati di navigazione verso terze parti e supportare scelte più consapevoli, la release 1.5.15 introduce un template HTML dedicato per la modale che rende più semplice modificarne la struttura senza intervenire direttamente sul codice JavaScript, mentre la release 1.6.0 abilita un sistema i18n modulare con rilevazione automatica della lingua, file JSON centralizzati e fallback immediato in inglese per ogni stringa non tradotta. La release 1.7.0 estende questo ecosistema con un renderer di contenuti dichiarativo capace di sincronizzare testi, attributi e proprietà UI con i dizionari multilingua, riducendo il codice manuale necessario per aggiornare l'interfaccia e mantenendo i fallback inglesi automatici. Con la release 1.7.2 viene corretta la registrazione dell'handler di cambio lingua durante il bootstrap dello script, evitando errori JavaScript quando il modulo i18n è presente, mentre la release 1.7.3 rafforza il resolver multilingua introducendo il caricamento asincrono dei bundle, la normalizzazione dei codici regionali (`pt-BR`, `pt-PT`) e una funzione `t()` capace di gestire catene di fallback verso la lingua inglese. La release 1.7.4 completa il quadro traducendo anche i messaggi restituiti dal resolver (warning, deny ed errori di rete) tramite `messageKey` e `messageFallbackKey`, così tooltip e modale rispettano sempre la lingua dell'utente. La release 1.8.0 introduce inoltre un tracciamento opzionale dei click con parametro personalizzato, pixel configurabile e metadati anonimi rispettosi della privacy. La release 1.8.1 corregge la riscrittura degli URL garantendo che il parametro venga aggiunto senza perdere query string o hash, evitando duplicazioni e preservando l'encoding. La release 1.8.4 sincronizza inoltre il parametro di tracciamento direttamente con l'attributo `href`, così anche le aperture modificate (Ctrl/Cmd+click, pulsante centrale) e la copia del link dall'interfaccia ricevono sempre l'URL aggiornato.
 
-La release 1.9.4 risolve definitivamente i casi in cui lo script principale veniva caricato prima del modulo i18n, introducendo una coda di bootstrap (`__i18nReadyQueue`) che riallinea automaticamente i testi tradotti non appena le traduzioni diventano disponibili. La release 1.9.3 corregge infine una duplicazione nella funzione AMP `collectExternalLinks()` che poteva interrompere il bootstrap dello script in ambienti sandboxati, ripristinando la compatibilità con Reader mode e pagine AMP. La release 1.10.0 aggiunge una modalità debug configurabile (basic/verbose) che centralizza i log operativi, mette a disposizione un’esportazione JSON dei dati diagnostici e rimane completamente silenziosa quando è disattivata, mentre la 1.10.1 arricchisce il debug con riepiloghi puntuali delle decisioni di policy, evidenziando i domini recuperati da cache o endpoint e fornendo esempi di link coinvolti; la 1.10.2 rende inoltre sempre visibile la lingua rilevata (preferita, alternative, sorgenti) per aiutare l’analisi dei link sospetti, la 1.10.3 introduce fallback localizzati lato client per le lingue principali quando il modulo i18n non è disponibile, prevenendo il ritorno all’inglese sui browser più restrittivi e la 1.10.4 ripristina l’analisi di policy nei log dei link rimossi arricchendo i test automatici dedicati al debugger.
+La release 1.9.4 risolve definitivamente i casi in cui lo script principale veniva caricato prima del modulo i18n, introducendo una coda di bootstrap (`__i18nReadyQueue`) che riallinea automaticamente i testi tradotti non appena le traduzioni diventano disponibili. La release 1.9.3 corregge infine una duplicazione nella funzione AMP `collectExternalLinks()` che poteva interrompere il bootstrap dello script in ambienti sandboxati, ripristinando la compatibilità con Reader mode e pagine AMP. La release 1.10.0 aggiunge una modalità debug configurabile (basic/verbose) che centralizza i log operativi, mette a disposizione un’esportazione JSON dei dati diagnostici e rimane completamente silenziosa quando è disattivata, mentre la 1.10.1 arricchisce il debug con riepiloghi puntuali delle decisioni di policy, evidenziando i domini recuperati da cache o endpoint e fornendo esempi di link coinvolti; la 1.10.2 rende inoltre sempre visibile la lingua rilevata (preferita, alternative, sorgenti) per aiutare l’analisi dei link sospetti, la 1.10.3 introduce fallback localizzati lato client per le lingue principali quando il modulo i18n non è disponibile, prevenendo il ritorno all’inglese sui browser più restrittivi e la 1.10.4 ripristina l’analisi di policy nei log dei link rimossi arricchendo i test automatici dedicati al debugger. La release 1.11.0 introduce infine un runtime di tracciamento modulare con matrice di cattura configurabile, sampling, firma HMAC opzionale e API pubblica per abilitare/disabilitare dinamicamente il parametro `myclid`.
 
 Lo script:
 - impone attributi di sicurezza (`rel`, `target`) sui link esterni;
@@ -318,35 +318,114 @@ const renderer = SafeExternalLinksGuard.i18n.createContentRenderer({
 È possibile registrare dinamicamente altri descriptor tramite `renderer.register({ node, key, ... })`, limitare il rendering a determinate condizioni con `shouldRender` e personalizzare i valori tramite `replacements` o `transform`. Quando non serve più, invoca `renderer.disconnect()` per rimuovere gli ascoltatori.
 
 ### Tracciamento dei clic con parametro personalizzato
-Il modulo principale (`links-guard.js`) può generare automaticamente un identificatore univoco per ogni click consentito e appenderlo come parametro query personalizzabile (es. `?myclid=UUID`) all'URL di destinazione. Contestualmente viene inviata una richiesta al pixel configurato con i seguenti metadati anonimi:
+La versione **1.11.0** introduce un runtime avanzato per il parametro `myclid`. Ogni click consentito riceve un identificatore univoco (UUID v4 o hash crittograficamente sicuro) che viene applicato all'attributo `href` prima della navigazione. Il runtime invia quindi un payload modulare all'endpoint configurato, rispettando sampling, liste di allow/block, consenso e Do Not Track.
 
-- lingua e lingue preferite del browser;
-- timezone rilevata tramite `Intl.DateTimeFormat()`;
-- tipo di dispositivo stimato dall'user agent (desktop, tablet, mobile, TV o unknown);
-- referrer della pagina che ha generato il click;
-- timestamp ISO 8601 del momento del click;
-- modalità privacy (`extended` o `minimal`) in base alla configurazione.
+**Caratteristiche principali**
 
-Le impostazioni disponibili nel file `links-guard.settings.js` (sovrascrivibili tramite attributi `data-*` o override JavaScript) sono:
+- Generazione idempotente di `clid` con rigenerazione forzata quando necessario (`forceNewId`).
+- Campionamento lato client tramite `samplingRate` (0–1) per ridurre il traffico analitico.
+- Liste di allowlist/blocklist dedicate al tracciamento per escludere domini interni o includere soltanto host approvati.
+- Rispetto automatico del segnale **Do Not Track** e di un eventuale `consentResolver` personalizzato.
+- Payload contestuale scomposto per **link**, **pagina**, **utente** e **richiesta**, modulabile tramite **matrice di cattura**.
+- Supporto opzionale alla firma HMAC dell'evento con invio dell'header configurato.
+- Invio non bloccante tramite `navigator.sendBeacon`, con fallback `fetch` keepalive e retry esponenziale configurabile.
+
+**Payload di default** (`captureMatrix` preset `standard`):
+
+- `clid`: identificatore univoco generato lato client.
+- `ts`: timestamp ISO 8601 dell'interazione.
+- `link`: `href` risolto, `host`, `path`, `query`, `hash`, testo anchor facoltativo.
+- `page`: URL corrente, referrer, title corrente.
+- `user`: lingua preferita, timezone locale, tipo di device, viewport, hash IP (se fornito).
+- `request`: sorgente evento (`click`, `keyboard`, `programmatic`), parametri campagna, parametri UTM già presenti, stato consenso e flag Do Not Track.
+
+Quando `trackingIncludeMetadata` è `false` o la matrice disattiva campi specifici, il payload viene ridotto automaticamente mantenendo soltanto i campi autorizzati. In assenza di endpoint l'ID viene comunque scritto sulla query string per consentire correlazioni server-side senza inviare dati aggiuntivi.
+
+Le principali impostazioni disponibili in `links-guard.settings.js` (tutte sovrascrivibili via attributi `data-*` o override JavaScript) sono riepilogate di seguito:
 
 | Opzione | Descrizione | Default |
 | --- | --- | --- |
-| `trackingEnabled` | Attiva il tracciamento dei click. | `false` |
-| `trackingParameter` | Nome del parametro aggiunto alla query string (es. `myclid`). | `"myclid"` |
-| `trackingPixelEndpoint` | Endpoint HTTP a cui inviare l'evento (POST JSON con fallback `sendBeacon`/immagine). | `""` |
-| `trackingIncludeMetadata` | Se `true` invia lingua, timezone e tipo di dispositivo; se `false` invia solo identificatore, privacy minimale, referrer e timestamp. | `true` |
+| `trackingEnabled` | Attiva il runtime di tracciamento. | `false` |
+| `trackingParameter` | Nome del parametro query applicato ai link (es. `myclid`). | `"myclid"` |
+| `trackingPixelEndpoint` | Endpoint HTTPS a cui inviare il payload JSON (usa `sendBeacon` quando disponibile). | `""` |
+| `trackingIncludeMetadata` | Se `true` include il payload completo; se `false` invia solo l'identificatore e i riferimenti minimi. | `true` |
+| `trackingSamplingRate` | Percentuale di eventi da inviare (`1` = tutti, `0.25` = 25%). | `1` |
+| `trackingAllowlist` / `trackingBlocklist` | Liste di host ammessi o esclusi dal tracciamento (supportano wildcard `*.domain.test`). | `[]` |
+| `trackingRespectDnt` | Honora il flag Do Not Track del browser. | `true` |
+| `trackingCaptureMatrix` | Matrice di cattura configurabile (preset `minimal`, `standard`, `extended` + override per dominio/pagina). | preset `standard` |
+| `trackingTimeoutMs` | Timeout dell'invio del pixel. | `2500` |
+| `trackingRetry` | Strategia di retry (`attempts`, `delayMs`, `backoffFactor`). | `{ attempts: 1, delayMs: 150, backoffFactor: 2 }` |
+| `trackingHmac` | Configurazione firma payload (`enabled`, `secret`, `algorithm`, `format`, `header`). | disabilitato |
+| `trackingUserIpHash` | Hash IP pseudonimizzato fornito dal server o da un'API esterna. | `null` |
+| `trackingCampaignKeys` / `trackingUtmKeys` | Elenchi personalizzati di query string da includere nel payload. | `[]` / preset UTM |
 
-Quando il pixel è disabilitato (`trackingEnabled: false`) i link vengono aperti normalmente. Se mantieni `trackingEnabled: true` ma lasci l'endpoint vuoto, il parametro viene comunque aggiunto alla query string per consentire analisi server-side o campagne marketing, ma non viene inviato alcun evento client. Se `trackingIncludeMetadata` è impostato su `false` il payload inviato contiene solo i campi strettamente necessari (`trackingId`, `parameterName`, `destination`, `originalDestination`, `timestamp`, `referrer`, `privacyMode: "minimal"`).
+Quando il tracciamento è attivo, il parametro viene sincronizzato direttamente sull'attributo `href` del link sia al momento della concessione della policy `allow` sia immediatamente prima della navigazione. In questo modo anche aperture da menu contestuale, nuove schede, copie dell'URL o interazioni successive riutilizzano sempre il valore aggiornato.
 
-Quando il tracciamento è attivo, il parametro viene sincronizzato direttamente sull'attributo `href` del link sia al momento della concessione della policy `allow` sia immediatamente prima della navigazione. In questo modo anche aperture da menu contestuale, nuove schede, copie dell'URL o interazioni successive riutilizzano sempre il valore `myclid` già applicato.
+> **Suggerimento privacy:** abilita il tracciamento solo dopo aver raccolto il consenso esplicito dell'utente, sfrutta `trackingSamplingRate` per ridurre il volume dati, imposta `trackingRespectDnt: true` (default) e conserva i segreti HMAC fuori dal markup HTML preferendo override JS protetti.
 
-> **Suggerimento privacy:** per conformarsi al GDPR abilita il tracciamento solo dopo aver raccolto il consenso esplicito dell'utente e imposta `trackingIncludeMetadata: false` quando vuoi evitare la raccolta di dati aggiuntivi sul dispositivo.
+#### Matrice di cattura configurabile
+La matrice definisce quali campi includere per ciascun contesto. È composta da:
 
-Per adattare i default al tuo progetto puoi:
-- modificare direttamente `links-guard.settings.js`, mantenendo in chiaro i valori attesi;
-- creare un tuo file di configurazione che sostituisce `SafeExternalLinksGuard.buildSettings` prima di includere `links-guard.js`.
+- `activePreset`: uno tra `minimal`, `standard`, `extended` (o un preset custom registrato via API).
+- `presets`: dizionario di preset disponibili (ognuno con le chiavi `link`, `page`, `user`, `request`).
+- `overrides`: regole opzionali per domini (`overrides.domains`) o percorsi (`overrides.pages`) che sostituiscono i preset.
 
-In questo modo le modifiche alle impostazioni restano concentrate in un file dedicato e facilmente versionabile.
+Esempio di configurazione inline:
+
+```html
+<script
+  src="/assets/app/safe_external_links_guard/links-guard.js"
+  data-tracking-enabled="true"
+  data-tracking-parameter="myclid"
+  data-tracking-pixel-endpoint="https://collector.example/pixel"
+  data-tracking-sampling-rate="0.5"
+  data-tracking-allowlist="example.com,*.trusted.test"
+  data-tracking-matrix-preset="minimal"
+  data-tracking-matrix-overrides='{"domains":{"analytics.example":{"user":{"timezone":true}}}}'
+  defer
+></script>
+```
+
+In alternativa puoi registrare preset e override dinamicamente:
+
+```js
+SafeExternalLinksGuard.tracking.init({
+  enabled: true,
+  endpoint: 'https://collector.example/pixel',
+  samplingRate: 0.35,
+  captureMatrix: {
+    activePreset: 'extended',
+    presets: {
+      extended: SafeExternalLinksGuard.tracking.getSettings().captureMatrix.presets.extended,
+      audit: {
+        link: { href: true, host: true, path: true, query: true, hash: true, text: true },
+        page: { url: true, referrer: true, title: true },
+        user: { language: true, timezone: true, device: true, viewport: true, ipHash: true },
+        request: { source: true, campaign: true, utm: true, consent: true, dnt: true }
+      }
+    },
+    overrides: {
+      domains: {
+        'internal.example': { request: { campaign: false, utm: false } }
+      }
+    }
+  }
+});
+
+// Cambia matrice in tempo reale (es. dopo consenso marketing)
+SafeExternalLinksGuard.tracking.setMatrix('audit');
+```
+
+#### API runtime pubblica
+Il namespace `SafeExternalLinksGuard.tracking` espone le seguenti funzioni:
+
+- `init(settings)` → inizializza o aggiorna il runtime (merge profondo dei preset).
+- `enable()` / `disable()` → abilita o sospende l'invio degli eventi mantenendo la riscrittura degli URL.
+- `setMatrix(presetOrMatrix)` → applica un nuovo preset (stringa) o una configurazione completa.
+- `getSettings()` → restituisce la configurazione normalizzata correntemente attiva.
+- `onChange(listener)` → registra listener richiamati a ogni aggiornamento di configurazione.
+
+Utilizza queste API per adeguare dinamicamente sampling, consenso o preset in base alle preferenze dell'utente, mantenendo sempre sincronizzate le impostazioni interne (`cfg`) grazie al bridge introdotto nella 1.11.0.
 
 ### Attributi di configurazione supportati
 | Attributo | Default | Descrizione |
@@ -364,6 +443,27 @@ In questo modo le modifiche alle impostazioni restano concentrate in un file ded
 | `data-exclude-selectors` | *(vuoto)* | Lista CSV di selettori CSS da escludere dalla scansione (`.footer a, #nav a.ignore`). |
 | `data-keep-warn-on-allow` | `false` (auto `true` in Reader/AMP) | Mantiene il tooltip di avviso anche per i link consentiti: utile in modalità lettura, pagine AMP o quando si vuole mostrare sempre un messaggio di sicurezza. |
 | `data-config-version` | Valore di `configVersion` in `links-guard.settings.js` | Versione (stringa) che forza l'invalidazione della cache e l'aggiornamento degli asset quando cambia. |
+| `data-tracking-enabled` | `false` | Abilita il runtime di tracciamento senza dover modificare il file di settings. |
+| `data-tracking-parameter` | `myclid` | Nome del parametro query applicato ai link esterni. |
+| `data-tracking-pixel-endpoint` | *(vuoto)* | Endpoint HTTPS del pixel che riceve il payload JSON. |
+| `data-tracking-include-metadata` | `true` | Se `false` invia solo i campi minimi (clid, timestamp, referrer, URL). |
+| `data-tracking-sampling-rate` | `1` | Percentuale di eventi da processare (`0`–`1`). |
+| `data-tracking-allowlist` | *(vuoto)* | Lista CSV di domini consentiti (es. `example.com,*.partner.test`). |
+| `data-tracking-blocklist` | *(vuoto)* | Lista CSV di domini da escludere dal tracciamento. |
+| `data-tracking-respect-dnt` | `true` | Imposta se onorare il flag Do Not Track. |
+| `data-tracking-matrix-preset` | `standard` | Seleziona il preset della matrice (`minimal`, `standard`, `extended`, preset custom). |
+| `data-tracking-matrix-overrides` | *(vuoto)* | JSON con override per dominio/percorso (assicurarsi di usare virgolette singole nel markup). |
+| `data-tracking-timeout-ms` | `2500` | Timeout dell'invio del pixel in millisecondi. |
+| `data-tracking-retry-attempts` | `1` | Numero di retry aggiuntivi quando l'invio fallisce. |
+| `data-tracking-retry-delay` | `150` | Ritardo iniziale (ms) fra un tentativo e l'altro. |
+| `data-tracking-retry-backoff` | `2` | Fattore di moltiplicazione del ritardo per ogni retry successivo. |
+| `data-tracking-hmac-secret` | *(vuoto)* | Segreto condiviso per la firma HMAC (preferisci override JS per evitare esposizione nel markup). |
+| `data-tracking-hmac-algorithm` | `SHA-256` | Algoritmo HMAC (`SHA-256` o `SHA-1`, `SHA-512`, ecc.). |
+| `data-tracking-hmac-format` | `base64` | Formato della firma (`base64` o `hex`). |
+| `data-tracking-hmac-header` | `X-Myclid-Signature` | Header HTTP in cui inviare la firma HMAC calcolata. |
+| `data-tracking-user-ip-hash` | *(vuoto)* | Hash IP pseudonimizzato fornito dal server. |
+| `data-tracking-campaign-keys` | *(vuoto)* | Lista CSV di parametri campagne aggiuntivi da includere nel payload. |
+| `data-tracking-utm-keys` | *(vuoto)* | Lista CSV di parametri UTM personalizzati (oltre a `utm_*` standard). |
 
 #### Come interpretare i TTL restituiti dal resolver
 Il campo `ttl` presente nelle risposte dell'endpoint indica per quanti secondi la decisione può restare in cache lato client prima di richiedere nuovamente il verdetto al server. Alcuni esempi pratici:

@@ -32,6 +32,16 @@ class FakeScript {
   assert.strictEqual(cfg.trackingParameter, 'myclid', 'trackingParameter should fallback to default name');
   assert.strictEqual(cfg.trackingPixelEndpoint, '', 'trackingPixelEndpoint should fallback to empty string');
   assert.strictEqual(cfg.trackingIncludeMetadata, true, 'trackingIncludeMetadata should default to true to collect anonymous data');
+  assert.strictEqual(cfg.trackingSamplingRate, 1, 'trackingSamplingRate should default to full sampling');
+  assert.deepStrictEqual(cfg.trackingAllowlist, [], 'trackingAllowlist should default to empty array');
+  assert.deepStrictEqual(cfg.trackingBlocklist, [], 'trackingBlocklist should default to empty array');
+  assert.strictEqual(cfg.trackingRespectDnt, true, 'trackingRespectDnt should default to true');
+  assert.strictEqual(cfg.trackingTimeoutMs, SafeExternalLinksGuard.defaults.trackingTimeoutMs, 'trackingTimeoutMs should fallback to defaults');
+  assert.deepStrictEqual(
+    cfg.trackingRetry,
+    SafeExternalLinksGuard.defaults.trackingRetry,
+    'trackingRetry should fallback to default strategy'
+  );
   assert.strictEqual(cfg.debugMode, false, 'debugMode should be disabled by default');
   assert.strictEqual(cfg.debugLevel, 'basic', 'debugLevel should default to basic');
 })();
@@ -47,7 +57,19 @@ class FakeScript {
     'data-tracking-enabled': 'true',
     'data-tracking-parameter': 'myclid',
     'data-tracking-pixel-endpoint': '/collect',
-    'data-tracking-include-metadata': 'false'
+    'data-tracking-include-metadata': 'false',
+    'data-tracking-sampling-rate': '0.5',
+    'data-tracking-allowlist': 'example.com, docs.example.com',
+    'data-tracking-blocklist': 'bad.example.com',
+    'data-tracking-respect-dnt': 'false',
+    'data-tracking-timeout-ms': '5000',
+    'data-tracking-retry-attempts': '3',
+    'data-tracking-retry-delay': '250',
+    'data-tracking-retry-backoff': '1.5',
+    'data-tracking-matrix-preset': 'extended',
+    'data-tracking-user-ip-hash': 'hash-value',
+    'data-tracking-campaign-keys': 'cid,gclid',
+    'data-tracking-utm-keys': 'utm_source,utm_medium,utm_campaign'
   });
   const cfg = SafeExternalLinksGuard.buildSettings(script);
   assert.strictEqual(cfg.timeoutMs, 1500, 'data-timeout should be parsed as integer');
@@ -60,8 +82,48 @@ class FakeScript {
   assert.strictEqual(cfg.trackingParameter, 'myclid', 'data-tracking-parameter should override the default name');
   assert.strictEqual(cfg.trackingPixelEndpoint, '/collect', 'data-tracking-pixel-endpoint should override the default endpoint');
   assert.strictEqual(cfg.trackingIncludeMetadata, false, 'data-tracking-include-metadata="false" should disable metadata collection');
+  assert.strictEqual(cfg.trackingSamplingRate, 0.5, 'data-tracking-sampling-rate should cap sampling rate');
+  assert.deepStrictEqual(cfg.trackingAllowlist, ['example.com', 'docs.example.com'], 'data-tracking-allowlist should parse CSV');
+  assert.deepStrictEqual(cfg.trackingBlocklist, ['bad.example.com'], 'data-tracking-blocklist should parse CSV');
+  assert.strictEqual(cfg.trackingRespectDnt, false, 'data-tracking-respect-dnt="false" should disable DNT honouring');
+  assert.strictEqual(cfg.trackingTimeoutMs, 5000, 'data-tracking-timeout-ms should override timeout');
+  assert.strictEqual(cfg.trackingRetry.attempts, 3, 'data-tracking-retry-attempts should override attempts');
+  assert.strictEqual(cfg.trackingRetry.delayMs, 250, 'data-tracking-retry-delay should override delay');
+  assert.strictEqual(cfg.trackingRetry.backoffFactor, 1.5, 'data-tracking-retry-backoff should override factor');
+  assert.strictEqual(cfg.trackingCaptureMatrix.activePreset, 'extended', 'data-tracking-matrix-preset should set active preset');
+  assert.strictEqual(cfg.trackingUserIpHash, 'hash-value', 'data-tracking-user-ip-hash should be applied');
+  assert.deepStrictEqual(cfg.trackingCampaignKeys, ['cid', 'gclid'], 'data-tracking-campaign-keys should parse list');
+  assert.deepStrictEqual(cfg.trackingUtmKeys, ['utm_source', 'utm_medium', 'utm_campaign'], 'data-tracking-utm-keys should parse list');
   assert.strictEqual(cfg.debugMode, false, 'debugMode should remain disabled when not provided');
   assert.strictEqual(cfg.debugLevel, 'basic', 'debugLevel should stay basic when attribute is missing');
+})();
+
+(() => {
+  const script = new FakeScript({
+    'data-tracking-matrix-overrides': '{"domains":{"example.com":{"preset":"minimal"}}}'
+  });
+  const cfg = SafeExternalLinksGuard.buildSettings(script);
+  assert.ok(cfg.trackingCaptureMatrix, 'trackingCaptureMatrix should be initialised when overrides are provided');
+  assert.strictEqual(
+    cfg.trackingCaptureMatrix.overrides.domains.example.com.preset,
+    'minimal',
+    'matrix overrides should parse JSON content'
+  );
+})();
+
+(() => {
+  const script = new FakeScript({
+    'data-tracking-hmac-secret': 'secret',
+    'data-tracking-hmac-algorithm': 'sha-512',
+    'data-tracking-hmac-format': 'hex',
+    'data-tracking-hmac-header': 'X-Test-Signature'
+  });
+  const cfg = SafeExternalLinksGuard.buildSettings(script);
+  assert.ok(cfg.trackingHmac, 'trackingHmac should be initialised when attributes are provided');
+  assert.strictEqual(cfg.trackingHmac.secret, 'secret', 'HMAC secret should be read from attribute');
+  assert.strictEqual(cfg.trackingHmac.algorithm, 'SHA-512', 'HMAC algorithm should normalise the value');
+  assert.strictEqual(cfg.trackingHmac.format, 'hex', 'HMAC format should respect explicit value');
+  assert.strictEqual(cfg.trackingHmac.header, 'X-Test-Signature', 'HMAC header should be applied');
 })();
 
 (() => {
