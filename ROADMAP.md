@@ -9,6 +9,7 @@
 - [ ] Preparare una demo automatizzata che verifichi l'integrazione `SafeExternalLinksGuard.amp` all'interno di `<amp-script>` con dataset di policy precalcolato.
 - [ ] Automatizzare test cross-browser (Playwright/Sauce) per validare la nuova detection multi-sorgente in modalità privacy.
 - [ ] Raccogliere feedback sui domini reali per ampliare la mappatura TLD/sottodomini della heuristica `host` e coprire mercati aggiuntivi.
+- [ ] Valutare un test end-to-end che simuli il caricamento ritardato di `links-guard.i18n.js` per monitorare la nuova coda `__i18nReadyQueue` in ambienti reali.
 
 ## Obiettivi a Medio Termine
 - [ ] Semplificare la gestione dei template della modale consentendo override tramite configurazione JSON.

@@ -1727,6 +1727,37 @@
 
   guardNamespace.i18n = api;
 
+  const readyQueueKey = '__i18nReadyQueue';
+  if (Array.isArray(guardNamespace[readyQueueKey])) {
+    const queueRef = guardNamespace[readyQueueKey];
+    const pending = queueRef.length ? queueRef.slice() : [];
+    queueRef.length = 0;
+    queueRef.push = (callback) => {
+      if (typeof callback === 'function') {
+        try {
+          callback(api);
+        } catch (err) {
+          if (typeof console !== 'undefined' && console.error) {
+            console.error('[SafeLinkGuard] Errore durante l\'esecuzione della coda i18n', err);
+          }
+        }
+      }
+      return queueRef.length;
+    };
+    pending.forEach((callback) => {
+      if (typeof callback !== 'function') {
+        return;
+      }
+      try {
+        callback(api);
+      } catch (err) {
+        if (typeof console !== 'undefined' && console.error) {
+          console.error('[SafeLinkGuard] Errore durante l\'esecuzione della coda i18n', err);
+        }
+      }
+    });
+  }
+
   // Inizializzazione eager per evitare flash di lingua errata.
   const initialLanguage = detectLanguage();
   setLanguage(initialLanguage);
