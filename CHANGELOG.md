@@ -1,4 +1,9 @@
 # Changelog
+## [1.10.4] - 2025-11-26
+### Fixed
+- Il parametro di tracking `myclid` viene ora applicato subito ai link consentiti e sincronizzato con lo stato interno,
+  garantendo l'aggiornamento dell'attributo `href` per aperture da menu contestuale, nuove schede e copie dell'URL. (links-guard.js)
+
 ## [1.10.3] - 2025-11-25
 ### Added
 - Fallback localizzati integrati in `links-guard.js` per garantire la traduzione della modale anche quando `links-guard.i18n.js` non può essere caricato dal browser.
