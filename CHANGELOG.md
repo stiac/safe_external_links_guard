@@ -1,4 +1,14 @@
 # Changelog
+## [1.10.1] - 2025-11-23
+### Added
+- Riepiloghi automatici delle decisioni di policy (allow/warn/deny) nella console debug con conteggio dei link coinvolti, origine della decisione (cache, endpoint, fallback) ed esempi di anchor in modalità `verbose`.
+
+### Changed
+- Il livello `basic` del debugger mostra ora anche le informazioni essenziali sui domini analizzati, inclusi motivi e messaggi applicati, rendendo immediata l'individuazione dei link sospetti.
+
+### Fixed
+- La modalità debug segnala esplicitamente i domini bloccati o messi in warning, includendo lingua, motivazione e metadati di policy così da facilitare la diagnosi dei link spam segnalati dagli utenti.
+
 ## [1.10.0] - 2025-11-22
 ### Added
 - Modalità debug controllabile via `debugMode`/`debugLevel` con livelli `basic` e `verbose`, comprensiva di log di configurazione, tracking e fallback.

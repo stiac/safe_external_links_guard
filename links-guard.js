@@ -1990,13 +1990,10 @@
 
   const normalizeAction = (val) => {
     const a = String(val || "").toLowerCase().trim();
-    return (a === "allow" || a === "warn" || a === "deny") ? a : "warn";
+    return a === "allow" || a === "warn" || a === "deny" ? a : "warn";
   };
 
   async function getPolicy(host) {
-    const cached = policyCache.get(host);
-    if (cached) return cached.action;
-
     if (!endpointHealthy) {
       debug.warn(
         "Endpoint non disponibile, uso fallback 'warn'",
@@ -2004,13 +2001,15 @@
         { scope: "policy", tags: ["fallback"] }
       );
       const fallback = "warn";
-      policyCache.set(
-        host,
-        fallback,
-        Math.min(300, cfg.cacheTtlSec),
-        { key: "messages.endpointUnavailable" }
-      );
-      return fallback;
+      const ttl = Math.min(300, cfg.cacheTtlSec);
+      const descriptor = { key: "messages.endpointUnavailable" };
+      policyCache.set(host, fallback, ttl, descriptor);
+      return {
+        action: fallback,
+        source: "endpoint-fallback",
+        ttl,
+        message: descriptor
+      };
     }
 
     try {
@@ -2031,7 +2030,13 @@
       const ttl = Number.isFinite(json?.ttl) ? json.ttl : cfg.cacheTtlSec;
       const message = extractMessageDescriptorFromResponse(json);
       policyCache.set(host, action, ttl, message);
-      return action;
+      return {
+        action,
+        source: "network",
+        ttl,
+        message,
+        response: cfg.debugLevel === "verbose" ? json : undefined
+      };
     } catch (e) {
       const isTimeout = e?.name === "TimeoutError";
       if (isTimeout) {
@@ -2048,15 +2053,18 @@
         );
       }
       const fallback = "warn";
-      policyCache.set(
-        host,
-        fallback,
-        Math.min(300, cfg.cacheTtlSec),
-        isTimeout
-          ? { key: "messages.timeout" }
-          : { key: "messages.error" }
-      );
-      return fallback;
+      const ttl = Math.min(300, cfg.cacheTtlSec);
+      const descriptor = isTimeout
+        ? { key: "messages.timeout" }
+        : { key: "messages.error" };
+      policyCache.set(host, fallback, ttl, descriptor);
+      return {
+        action: fallback,
+        source: isTimeout ? "timeout" : "network-error",
+        ttl,
+        message: descriptor,
+        error: serializeError(e) || String(e)
+      };
     }
   }
 
@@ -2065,18 +2073,19 @@
   const inFlight = new Set();
   let running = 0;
 
-  const applyPolicyToHost = (host, action) => {
+  const applyPolicyToHost = (host, action, meta = {}) => {
     const set = anchorsByHost.get(host);
     if (!set) return;
     const cached = policyCache.get(host);
-    const messageDescriptor = cached ? cached.message : null;
+    const messageDescriptor = cached ? cached.message : meta.message || null;
     const warnFallback = cfg.warnMessageDefault || defaultWarnMessage;
     const warnMessage =
       translateMessageDescriptor(messageDescriptor, warnFallback) || warnFallback;
     const denyReason =
       translateMessageDescriptor(messageDescriptor, defaultDenyMessage) ||
       defaultDenyMessage;
-    for (const node of Array.from(set)) {
+    const nodes = Array.from(set);
+    for (const node of nodes) {
       if (!node.isConnected) { set.delete(node); continue; }
       if (action === "deny") {
         disableLink(node, denyReason, host);
@@ -2118,11 +2127,155 @@
         }
       }
     }
+
+    if (!cfg.debugMode) {
+      return;
+    }
+
+    const sourceTag =
+      typeof meta.source === "string" && meta.source.trim()
+        ? meta.source.trim()
+        : cached && meta.source !== "cache"
+        ? "cache"
+        : "runtime";
+    const trackedSet = anchorsByHost.get(host);
+    const level = cfg.debugLevel === "verbose" ? "verbose" : "basic";
+    const summary = {
+      host,
+      action,
+      linksMatched: nodes.length,
+      mode: cfg.mode,
+      source: sourceTag
+    };
+    if (cfg.warnHighlightClass) {
+      summary.warnHighlightClass = cfg.warnHighlightClass;
+    }
+    if (messageDescriptor) {
+      summary.message = messageDescriptor;
+    }
+    const renderedMessage = action === "deny" ? denyReason : warnMessage;
+    if (renderedMessage) {
+      summary.renderedMessage = renderedMessage;
+    }
+    if (meta && Number.isFinite(meta.ttl)) {
+      summary.ttl = meta.ttl;
+    }
+    if (meta && Number.isFinite(meta.cacheAgeSec)) {
+      summary.cacheAgeSec = meta.cacheAgeSec;
+    }
+    if (meta && Number.isFinite(meta.cachedAt)) {
+      summary.cachedAtSec = meta.cachedAt;
+      try {
+        summary.cachedAtIso = new Date(meta.cachedAt * 1000).toISOString();
+      } catch (isoErr) {
+        summary.cachedAtIso = null;
+      }
+    }
+    if (meta && meta.error) {
+      summary.error = meta.error;
+    }
+    if (trackedSet) {
+      summary.totalTrackedNodes = trackedSet.size;
+    } else {
+      summary.totalTrackedNodes = nodes.length;
+    }
+
+    if (level === "verbose") {
+      if (meta && meta.response) {
+        summary.policyResponse = meta.response;
+      }
+      const sampleSource = trackedSet ? Array.from(trackedSet) : nodes;
+      const samples = sampleSource.slice(0, 10).map((node) => {
+        const state = anchorStates.get(node) || null;
+        const textContent = (node.textContent || "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 160);
+        const sample = {
+          tag: node.tagName ? node.tagName.toLowerCase() : null,
+          text: textContent || null,
+          disabled:
+            node.classList?.contains("slg-disabled") ||
+            node.getAttribute?.("aria-disabled") === "true"
+              ? true
+              : undefined,
+          hasWarnHighlight:
+            cfg.warnHighlightClass &&
+            node.classList?.contains(cfg.warnHighlightClass)
+              ? true
+              : undefined
+        };
+        if (node.tagName === "A") {
+          sample.href = node.getAttribute("href") || node.href || null;
+        }
+        if (node.dataset?.safeLinkGuard) {
+          sample.dataset = { safeLinkGuard: node.dataset.safeLinkGuard };
+        }
+        if (state) {
+          sample.state = {
+            host: state.host,
+            url: state.url ? state.url.href : null
+          };
+        }
+        return sample;
+      });
+      summary.sampleAnchors = samples;
+      if (sampleSource.length > samples.length) {
+        summary.sampleAnchorsTruncated = sampleSource.length - samples.length;
+      }
+    }
+
+    const tags = [action];
+    if (sourceTag) {
+      tags.push(sourceTag);
+    }
+
+    debug.event("Policy applicata", summary, {
+      scope: "policy",
+      level,
+      tags
+    });
+
+    if (action === "deny") {
+      debug.warn(
+        "Link bloccati per host sospetto",
+        {
+          host,
+          linksMatched: nodes.length,
+          message: messageDescriptor || { text: denyReason }
+        },
+        { scope: "policy", tags: ["deny", sourceTag || "runtime"] }
+      );
+    } else if (action === "warn") {
+      debug.info(
+        "Host contrassegnato come warning",
+        {
+          host,
+          linksMatched: nodes.length,
+          message: messageDescriptor || { text: warnMessage }
+        },
+        { scope: "policy", tags: ["warn", sourceTag || "runtime"] }
+      );
+    }
   };
 
   const enqueueHost = (host) => {
     const cached = policyCache.get(host);
-    if (cached) { applyPolicyToHost(host, cached.action); return; }
+    if (cached) {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const meta = {
+        source: "cache",
+        ttl: cached.ttl,
+        cachedAt: cached.ts,
+        cacheAgeSec:
+          Number.isFinite(cached.ts) && cached.ts <= nowSec
+            ? nowSec - cached.ts
+            : undefined,
+        message: cached.message
+      };
+      applyPolicyToHost(host, cached.action, meta);
+      return;
+    }
     if (inFlight.has(host)) return;
     inFlight.add(host);
     queue.push(host);
@@ -2135,8 +2288,18 @@
       running++;
       (async () => {
         try {
-          const action = await getPolicy(host);
-          applyPolicyToHost(host, action);
+          const result = await getPolicy(host);
+          const action =
+            result && typeof result === "object" && result.action
+              ? result.action
+              : typeof result === "string"
+              ? result
+              : "warn";
+          const meta =
+            result && typeof result === "object"
+              ? result
+              : { source: "network" };
+          applyPolicyToHost(host, action, meta);
         } finally {
           inFlight.delete(host);
           running--;
@@ -2790,8 +2953,16 @@
 
     const cachedDecision = policyCache.get(host);
     if (!cachedDecision) {
-      const action = await getPolicy(host);
-      applyPolicyToHost(host, action);
+      const result = await getPolicy(host);
+      const action =
+        result && typeof result === "object" && result.action
+          ? result.action
+          : typeof result === "string"
+          ? result
+          : "warn";
+      const meta =
+        result && typeof result === "object" ? result : { source: "network" };
+      applyPolicyToHost(host, action, meta);
       const finalCached = policyCache.get(host);
       if (action === "allow") {
         followExternalUrl(trackingContext?.url || url, {
