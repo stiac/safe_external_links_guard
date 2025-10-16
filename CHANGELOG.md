@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.7.1] - 2025-11-08
+### Fixed
+- Evitata la doppia dichiarazione della funzione `applyModalTranslations` in `links-guard.js`, eliminando l'errore di sintassi
+  che bloccava l'inizializzazione della modale quando lo script veniva eseguito.
+
 ## [1.7.0] - 2025-11-07
 ### Added
 - API `createContentRenderer` nel modulo `links-guard.i18n.js` per gestire contenuti multilingua in modo professionale tramite
