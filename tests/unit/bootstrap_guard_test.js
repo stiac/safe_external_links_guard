@@ -1,4 +1,5 @@
 const assert = require('assert');
+const fs = require('fs');
 const path = require('path');
 
 const bootstrapFactory = require(path.resolve(__dirname, '../../links-guard.bootstrap.js'));
@@ -157,4 +158,19 @@ const createEnvironment = ({ anchors: initialAnchors = [], config = {}, windowCo
   env.bootstrap.forwardTo(null);
   env.bootstrap.release();
   assert.strictEqual(env.listeners.click, undefined, 'Release should remove the bootstrap listener');
+})();
+
+(() => {
+  const inlineContent = fs.readFileSync(
+    path.resolve(__dirname, '../../resources/bootstrap-inline.min.js'),
+    'utf8'
+  );
+  assert.ok(
+    inlineContent.length < 2048,
+    'Inline bootstrap must remain under 2 KB'
+  );
+  assert.ok(
+    /removeEventListener\('click',R,true\)/.test(inlineContent),
+    'Inline bootstrap release must remove the click listener'
+  );
 })();

@@ -2,8 +2,8 @@
 
 ## Informazioni Generali
 - **Progetto:** Safe External Links Guard
-- **Versione:** 1.12.0
-- **Data:** 2025-11-28
+- **Versione:** 1.12.1
+- **Data:** 2025-11-29
 - **Autore aggiornamento:** AI Development Assistant
 
 ## Stato Moduli
@@ -14,7 +14,7 @@
 | Tracciamento clic (links-guard.js) | Aggiornato | Runtime `myclid` modulare con matrice di cattura, sampling, rispetto DNT, retry e firma HMAC opzionale, più API pubblica `SafeExternalLinksGuard.tracking`. |
 | Configurazione (links-guard.settings.js) | Aggiornato | Nuovi parser per sampling, allowlist/blocklist, preset matrice, timeout/retry e campi HMAC, completi di attributi `data-*` dedicati. |
 | Documentazione | Aggiornata | README, CHANGELOG e guide aggiornate alla release 1.12.0 con istruzioni per il bootstrap inline e sanificazione server-side. |
-| Bootstrap inline (resources/bootstrap-inline.min.js) | Nuovo | Guardia click inline <2 KB caricata in `<head>` per bloccare gli anchor esterni prima del first paint con forwarding sicuro verso lo script principale. |
+| Bootstrap inline (resources/bootstrap-inline.min.js) | Aggiornato | Guardia click inline <2 KB caricata in `<head>` che ora rimuove il listener di fallback dopo l'inizializzazione dello script principale, prevenendo blocchi permanenti dei link. |
 | Sanitizzazione markup (app/Services/Markup/ExternalLinkAttributeEnforcer.php) | Nuovo | Servizio PHP che imposta attributi SEO (`target`, `rel`) su link esterni durante il rendering server-side. |
 
 ## Attività Recenti
@@ -33,6 +33,7 @@
 | 2025-11-26 | AI Development Assistant | Ripristino dei metadati di policy nei log verbose dei link rimossi, arricchimento della diagnostica con host/URL/messaggi e nuovo test `debug_policy_summary_test`. | 0.5 |
 | 2025-11-27 | AI Development Assistant | Refactoring del tracciamento `myclid` con runtime modulare, matrice di cattura configurabile, syncing legacy e aggiornamento documentazione/test per la release 1.11.0. | 1.6 |
 | 2025-11-28 | AI Development Assistant | Introduzione del bootstrap inline, nuova allowlist host, servizio PHP di enforcement attributi SEO, aggiornamento configurazioni e test unitari. | 2.1 |
+| 2025-11-29 | AI Development Assistant | Correzione del listener del bootstrap inline che restava attivo dopo l'hand-off al modulo principale, con aggiornamento documentale e versionamento a 1.12.1. | 0.3 |
 
 
 ## Rischi e Note Tecniche

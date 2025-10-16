@@ -1,5 +1,9 @@
 # Changelog
 # Changelog
+## [1.12.1] - 2025-11-29
+### Fixed
+- Il bootstrap inline (`resources/bootstrap-inline.min.js`) rimuove ora il proprio listener di cattura dopo l'inizializzazione di `links-guard.js`, impedendo che blocchi i click sui link esterni una volta che l'handler principale è pronto.
+
 ## [1.12.0] - 2025-11-28
 ### Added
 - Bootstrap inline (`resources/bootstrap-inline.min.js`) inferiore a 2 KB con intercettazione immediata dei click e hand-off automatico verso `links-guard.js`.
