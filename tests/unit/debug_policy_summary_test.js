@@ -532,6 +532,37 @@ const run = async () => {
     'Il TTL calcolato lato client deve essere riportato nello stato del link rimosso'
   );
 
+  assert.strictEqual(
+    typeof guard.initDebug,
+    'function',
+    'La funzione initDebug deve essere esposta sul namespace pubblico'
+  );
+  const session = guard.initDebug({ filename: 'unit-test.json', maxItems: 8 });
+  assert(session, 'La sessione di debug deve essere restituita');
+  assert.strictEqual(session.active, true, 'La sessione deve essere attiva in modalità debug');
+  assert.strictEqual(
+    typeof session.export,
+    'function',
+    'La sessione deve permettere l\'esportazione in JSON'
+  );
+  const exported = session.export();
+  assert(
+    typeof exported === 'string' && exported.includes('"entries"'),
+    'L\'export JSON deve contenere la sezione entries'
+  );
+  assert(guard.debugSession, 'La sessione attuale deve essere tracciata sul namespace');
+  assert.strictEqual(
+    guard.debugSession,
+    session,
+    'La sessione restituita deve corrispondere a quella tracciata nel namespace'
+  );
+  session.dispose();
+  assert.strictEqual(
+    guard.debugSession,
+    null,
+    'Dopo la chiusura la sessione corrente deve essere azzerata'
+  );
+
   assert(policyEvent.details.policyResponse, 'La risposta completa della policy deve essere inclusa in verbose mode');
   assert.strictEqual(
     policyEvent.details.policyResponse.analysis.reason,

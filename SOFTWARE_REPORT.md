@@ -2,18 +2,19 @@
 
 ## Informazioni Generali
 - **Progetto:** Safe External Links Guard
-- **Versione:** 1.12.5
-- **Data:** 2025-12-03
+- **Versione:** 1.12.6
+- **Data:** 2025-12-04
 - **Autore aggiornamento:** AI Development Assistant
 
 ## Stato Moduli
 | Modulo | Stato | Note |
 | --- | --- | --- |
-| Gestione modale (links-guard.js) | Aggiornato | Rilevazione automatica Reader/AMP con mantenimento del tooltip di sicurezza sui link `allow`, così l'avviso resta visibile anche quando la modale non è disponibile. |
+| Gestione modale (links-guard.js) | Aggiornato | Runtime debug arricchito con pannello diagnostico e listener dinamici; nessun impatto sui flussi di protezione standard quando il debug è spento. |
+| Debug e diagnostica (SafeExternalLinksGuard.debug) | Aggiornato | `initDebug()` crea un pannello a scomparsa con export JSON, `debug.log()` funge da alias leggibile di `info` e gli eventi vengono azzerati quando `debugMode` è disattivato. |
 | Localizzazione (links-guard.i18n.js) | Aggiornato | Coda `__i18nReadyQueue` e fallback localizzati nel core per garantire la traduzione della modale anche quando il modulo i18n non viene caricato dal browser. |
 | Tracciamento clic (links-guard.js) | Aggiornato | Runtime `myclid` modulare con matrice di cattura, sampling, rispetto DNT, retry e firma HMAC opzionale, più API pubblica `SafeExternalLinksGuard.tracking`. |
 | Configurazione (links-guard.settings.js) | Aggiornato | Nuovi parser per sampling, allowlist/blocklist, preset matrice, timeout/retry e campi HMAC, completi di attributi `data-*` dedicati. |
-| Documentazione | Aggiornata | README, CHANGELOG e guide aggiornate alla release 1.12.5 con note sul parser PHP non distruttivo per gli anchor esterni e indicazioni specifiche per Sngine. |
+| Documentazione | Aggiornata | README, CHANGELOG e guide aggiornate alla release 1.12.6 con istruzioni su `initDebug()`, pannello debug e flusso di export JSON. |
 | Bootstrap inline (resources/bootstrap-inline.min.js) | Aggiornato | Guardia click inline <2 KB caricata in `<head>` che dialoga con lo script principale; nessuna modifica in questa release. |
 | Sanitizzazione markup (app/Services/Markup/ExternalLinkAttributeEnforcer.php) | Aggiornato | Parser lineare che applica `target="_blank"` e token `rel` senza utilizzare `DOMDocument`, preservando layout e attributi personalizzati del markup generato lato server. |
 | Bootstrap PHP (app/bootstrap.php) | Aggiornato | Buffer di output che sfrutta il nuovo parser lineare per evitare side-effect sul markup, mantenendo la compatibilità con il loader root `bootstrap.php`. |
@@ -39,6 +40,7 @@
 | 2025-12-01 | AI Development Assistant | Ripristino del file `bootstrap.php` nella root del pacchetto per supportare gli ambienti che includono ancora il percorso legacy, allineando documentazione e test. | 0.2 |
 | 2025-12-02 | AI Development Assistant | Documentazione dell'integrazione di Safe External Links Guard in Sngine (bootstrap PHP + asset front-end) e aggiornamento del report alla versione 1.12.4. | 0.2 |
 | 2025-12-03 | AI Development Assistant | Fix del parser PHP degli anchor per evitare la corruzione dell'HTML generato dai CMS, aggiornamento test/doc e rilascio 1.12.5. | 0.4 |
+| 2025-12-04 | AI Development Assistant | Introduzione del pannello debug `initDebug()`, alias `debug.log`, export JSON integrato, test aggiornati e documentazione della release 1.12.6. | 0.6 |
 
 
 ## Rischi e Note Tecniche

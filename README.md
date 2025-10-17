@@ -1,8 +1,8 @@
 # Safe External Links Guard
 
-**Versione:** 1.12.5
+**Versione:** 1.12.6
 
-> Novità 1.12.5: corretta la sanificazione server-side degli anchor esterni evitando che il bootstrap PHP alteri il markup generato (particolarmente evidente in Sngine), mantenendo al contempo l'applicazione immediata degli attributi `target`/`rel`.
+> Novità 1.12.6: modalità debug potenziata con pannello diagnostico attivabile da configurazione (`initDebug()`), livello selezionabile (`basic`/`verbose`), funzione di log centralizzata (`debug.log`) e export JSON immediato con un click o copia negli appunti.
 
 ## Panoramica
 Safe External Links Guard è uno script JavaScript standalone che analizza i link esterni presenti in una pagina web e applica policy di sicurezza basate su una decisione server-side. Il progetto include anche un endpoint PHP di esempio che restituisce le azioni consentite per ciascun host.
@@ -267,12 +267,13 @@ Il file `links-guard.settings.js` espone il namespace globale `SafeExternalLinks
 
 ### Modalità debug
 
-La versione 1.10.0 introduce una modalità debug integrata che aiuta a diagnosticare i problemi senza inquinare la console quando non serve; dalla 1.10.1 il debugger aggiunge inoltre riepiloghi dettagliati delle decisioni di policy e un focus sui domini bloccati o segnalati, la 1.10.2 mette sempre in evidenza la lingua rilevata (preferita, alternative e sorgenti) nei log di livello `basic` e `verbose`, mentre la 1.10.4 mantiene lo stato analitico dei link rimossi (inclusi messaggi, sorgente e TTL della policy) anche quando `<a>` viene sostituito da `<span>`.
+La versione 1.10.0 introduce una modalità debug integrata che aiuta a diagnosticare i problemi senza inquinare la console quando non serve; dalla 1.10.1 il debugger aggiunge inoltre riepiloghi dettagliati delle decisioni di policy e un focus sui domini bloccati o segnalati, la 1.10.2 mette sempre in evidenza la lingua rilevata (preferita, alternative e sorgenti) nei log di livello `basic` e `verbose`, la 1.10.4 mantiene lo stato analitico dei link rimossi (inclusi messaggi, sorgente e TTL della policy) anche quando `<a>` viene sostituito da `<span>`, mentre la 1.12.6 introduce un pannello diagnostico opzionale con export JSON in un click e un'API `initDebug()` per controllare il livello di dettaglio direttamente dall'applicazione.
 
 - Abilita il debug impostando `settings.debugMode = true` (via override JS) oppure l’attributo `data-debug-mode="true"` sul tag `<script>`.
-- Se vuoi più dettagli attiva anche `settings.debugLevel = 'verbose'` o `data-debug-level="verbose"`. Il livello `basic` mostra gli eventi principali (configurazione, fallback attivati, tracking, errori) e, dalla 1.10.1, riassume le policy applicate (host, azione, provenienza cache/endpoint, numero di link interessati) mostrando ora sempre la lingua rilevata; `verbose` aggiunge metadati completi, contesto lingua con sorgenti, payload anonimizzati ed esempi di link coinvolti per ogni dominio.
-- Quando il debug è disattivato non viene emesso alcun log. Tutti i messaggi vengono gestiti da `SafeExternalLinksGuard.debug`, che raccoglie gli eventi in memoria solo mentre il debug è attivo.
-- I dati raccolti possono essere esportati con `SafeExternalLinksGuard.debug.exportAsJson()` (facoltativamente passando `{ pretty: false }` per ottenere un JSON compatto) oppure letti come array con `SafeExternalLinksGuard.debug.getEntries()`.
+- Se vuoi più dettagli attiva anche `settings.debugLevel = 'verbose'` o `data-debug-level="verbose"`. Il livello `basic` mostra gli eventi principali (configurazione, fallback attivati, tracking, errori) e riassume le policy applicate (host, azione, provenienza cache/endpoint, numero di link interessati) evidenziando sempre la lingua rilevata; `verbose` aggiunge metadati completi, contesto lingua con sorgenti, payload anonimizzati ed esempi di link coinvolti per ogni dominio.
+- Con la 1.12.6 puoi richiamare `SafeExternalLinksGuard.initDebug(options)` per generare (o rigenerare) il pannello diagnostico: restituisce un oggetto sessione con le proprietà `.panel` (nodo DOM della dashboard), `.export(options?)` (JSON pronto da condividere) e `.dispose()` per rimuovere pannello e listener. Puoi opzionalmente passare `filename`, `maxItems` o lasciare che il pannello si attivi automaticamente quando `debugMode` è `true`.
+- Tutti i messaggi passano attraverso `SafeExternalLinksGuard.debug`, che espone anche il metodo `debug.log(message, details?, meta?)` come alias rapido per `debug.info`. Quando il debug è disattivato non vengono generati log né memorizzati eventi.
+- I dati raccolti possono essere esportati dal pannello (`Esporta JSON`), dalla sessione (`session.export()`) oppure via API (`SafeExternalLinksGuard.debug.exportAsJson({ pretty: false })`) e letti come array con `SafeExternalLinksGuard.debug.getEntries()`.
 
 Esempio rapido di attivazione dalla pagina:
 
@@ -286,7 +287,16 @@ Esempio rapido di attivazione dalla pagina:
 ></script>
 ```
 
-Nel log compariranno la configurazione normalizzata, la lingua rilevata con preferenza, alternative e sorgenti, i fallback attivati (cache, endpoint non raggiungibile, ecc.), gli eventi di tracking (ID applicati, pixel inviati), le decisioni di policy per ogni host (allow/warn/deny con motivazione e conteggio dei link) e gli errori del resolver. In qualsiasi momento puoi esportare i dati per analisi esterne:
+Nel log compariranno la configurazione normalizzata, la lingua rilevata con preferenza, alternative e sorgenti, i fallback attivati (cache, endpoint non raggiungibile, ecc.), gli eventi di tracking (ID applicati, pixel inviati), le decisioni di policy per ogni host (allow/warn/deny con motivazione e conteggio dei link) e gli errori del resolver. Quando `debugMode` è attivo viene mostrato automaticamente anche un pannello diagnostico a scomparsa che riepiloga gli stessi dati con elenco eventi filtrabile.
+
+```js
+const session = SafeExternalLinksGuard.initDebug({ filename: 'safe-links-debug.json' });
+console.info(session.export());
+// session.panel è il nodo DOM del pannello, utile per personalizzazioni runtime.
+// Quando hai terminato chiama session.dispose() per rimuovere pannello e listener.
+```
+
+Puoi sempre esportare i dati per analisi esterne anche senza pannello interattivo:
 
 ```js
 const debugDump = SafeExternalLinksGuard.debug.exportAsJson();
