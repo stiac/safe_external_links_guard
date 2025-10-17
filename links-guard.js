@@ -37,6 +37,9 @@
     documentLang: null,
     sources: []
   };
+  let activeDebugSession = null;
+  let activeDebugPanel = null;
+  let releaseDebugListener = null;
   const VALID_MODES = new Set(["strict", "warn", "soft"]);
   const DEBUG_LEVELS = new Set(["basic", "verbose"]);
 
@@ -143,11 +146,34 @@
 
   const createDebugManager = () => {
     const entries = [];
+    const listeners = new Map();
     let state = {
       enabled: false,
       level: "basic",
       context: {},
       updatedAt: null
+    };
+
+    const emit = (payload) => {
+      if (!listeners.size) {
+        return;
+      }
+      listeners.forEach((handler) => {
+        try {
+          handler(payload);
+        } catch (notifyErr) {
+          if (
+            state.enabled &&
+            typeof console !== "undefined" &&
+            typeof console.warn === "function"
+          ) {
+            console.warn(
+              "[SafeLinkGuard][WARN] Gestore eventi debug ha generato un errore",
+              notifyErr
+            );
+          }
+        }
+      });
     };
 
     const record = (type, message, details, meta = {}) => {
@@ -180,6 +206,7 @@
         return entry;
       }
       entries.push(entry);
+      emit({ type: "entry", entry: { ...entry } });
       if (level === "verbose" && state.level !== "verbose") {
         return entry;
       }
@@ -225,19 +252,29 @@
           context: options.context ? sanitizeDetails(options.context) : {},
           updatedAt: new Date().toISOString()
         };
+        if (!enabled) {
+          if (entries.length) {
+            entries.splice(0, entries.length);
+            emit({ type: "reset", entries: [] });
+          }
+          emit({ type: "state", state: { ...state } });
+          return { ...state };
+        }
         const contextDetails = {
           level: normalizedLevel,
           context: state.context
         };
         record(
           "info",
-          enabled
-            ? `Modalità debug attiva (livello: ${normalizedLevel})`
-            : "Modalità debug disattivata",
+          `Modalità debug attiva (livello: ${normalizedLevel})`,
           contextDetails,
           { scope: "debug", persistWhenDisabled: true }
         );
+        emit({ type: "state", state: { ...state } });
         return { ...state };
+      },
+      log(message, details, meta) {
+        return record("info", message, details, meta);
       },
       info(message, details, meta) {
         return record("info", message, details, meta);
@@ -262,6 +299,32 @@
       },
       getEntries() {
         return entries.map((entry) => ({ ...entry }));
+      },
+      on(listener) {
+        if (typeof listener !== "function") {
+          return () => {};
+        }
+        const wrapped = (payload) => listener(payload);
+        listeners.set(listener, wrapped);
+        wrapped({ type: "state", state: { ...state } });
+        if (entries.length) {
+          wrapped({
+            type: "bootstrap",
+            entries: entries.map((entry) => ({ ...entry }))
+          });
+        }
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+      clear() {
+        if (!entries.length) {
+          return 0;
+        }
+        const cleared = entries.length;
+        entries.splice(0, entries.length);
+        emit({ type: "reset", entries: [] });
+        return cleared;
       },
       exportAsJson(options = {}) {
         const payload = {
@@ -1183,6 +1246,486 @@
     }
   });
 
+  const formatTimestamp = (value) => {
+    if (!value) {
+      return "";
+    }
+    try {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return String(value);
+      }
+      return `${date.toLocaleTimeString()} · ${date.toLocaleDateString()}`;
+    } catch (err) {
+      return String(value);
+    }
+  };
+
+  const createDebugPanel = (options = {}) => {
+    if (
+      typeof document === "undefined" ||
+      !document ||
+      typeof document.createElement !== "function"
+    ) {
+      return null;
+    }
+
+    const existing = document.querySelector("[data-slg-debug-panel]");
+    if (existing && existing.parentNode) {
+      existing.parentNode.removeChild(existing);
+    }
+
+    const doc = document;
+    const container = doc.createElement("aside");
+    container.setAttribute("data-slg-debug-panel", "true");
+    container.style.position = "fixed";
+    container.style.bottom = "16px";
+    container.style.right = "16px";
+    container.style.width = "360px";
+    container.style.maxWidth = "90vw";
+    container.style.maxHeight = "70vh";
+    container.style.display = "flex";
+    container.style.flexDirection = "column";
+    container.style.background = "rgba(17, 24, 39, 0.94)";
+    container.style.color = "#f9fafb";
+    container.style.boxShadow = "0 18px 35px rgba(15, 23, 42, 0.45)";
+    container.style.borderRadius = "12px";
+    container.style.fontFamily =
+      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    container.style.zIndex = String(options.zIndex || 2147483000);
+
+    const header = doc.createElement("div");
+    header.style.display = "flex";
+    header.style.alignItems = "center";
+    header.style.justifyContent = "space-between";
+    header.style.padding = "12px 16px";
+    header.style.borderBottom = "1px solid rgba(255, 255, 255, 0.08)";
+    const title = doc.createElement("strong");
+    title.textContent = "Safe External Links Guard · Debug";
+    title.style.fontSize = "14px";
+    title.style.letterSpacing = "0.01em";
+    header.appendChild(title);
+
+    const headerActions = doc.createElement("div");
+    headerActions.style.display = "flex";
+    headerActions.style.alignItems = "center";
+    headerActions.style.gap = "6px";
+
+    const stateBadge = doc.createElement("span");
+    stateBadge.style.fontSize = "12px";
+    stateBadge.style.padding = "2px 6px";
+    stateBadge.style.borderRadius = "9999px";
+    stateBadge.style.background = "rgba(96, 165, 250, 0.16)";
+    stateBadge.style.color = "#bfdbfe";
+    stateBadge.textContent = options.level
+      ? `Level: ${options.level}`
+      : "Debug attivo";
+
+    const toggleBtn = doc.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.textContent = "Nascondi";
+    toggleBtn.style.fontSize = "12px";
+    toggleBtn.style.padding = "4px 8px";
+    toggleBtn.style.border = "1px solid rgba(148, 163, 184, 0.35)";
+    toggleBtn.style.borderRadius = "8px";
+    toggleBtn.style.background = "transparent";
+    toggleBtn.style.color = "inherit";
+    toggleBtn.style.cursor = "pointer";
+
+    const exportBtn = doc.createElement("button");
+    exportBtn.type = "button";
+    exportBtn.textContent = "Esporta JSON";
+    exportBtn.style.fontSize = "12px";
+    exportBtn.style.padding = "4px 8px";
+    exportBtn.style.border = "1px solid rgba(148, 163, 184, 0.35)";
+    exportBtn.style.borderRadius = "8px";
+    exportBtn.style.background = "rgba(59, 130, 246, 0.18)";
+    exportBtn.style.color = "#dbeafe";
+    exportBtn.style.cursor = "pointer";
+
+    const closeBtn = doc.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.textContent = "×";
+    closeBtn.style.fontSize = "16px";
+    closeBtn.style.lineHeight = "1";
+    closeBtn.style.width = "24px";
+    closeBtn.style.height = "24px";
+    closeBtn.style.border = "none";
+    closeBtn.style.background = "transparent";
+    closeBtn.style.color = "inherit";
+    closeBtn.style.cursor = "pointer";
+
+    headerActions.appendChild(stateBadge);
+    headerActions.appendChild(toggleBtn);
+    headerActions.appendChild(exportBtn);
+    headerActions.appendChild(closeBtn);
+    header.appendChild(headerActions);
+
+    const body = doc.createElement("div");
+    body.style.display = "flex";
+    body.style.flexDirection = "column";
+    body.style.padding = "12px 16px";
+    body.style.gap = "12px";
+    body.style.overflow = "hidden";
+    body.style.flex = "1";
+
+    const summaryWrapper = doc.createElement("div");
+    summaryWrapper.style.display = "flex";
+    summaryWrapper.style.flexDirection = "column";
+    summaryWrapper.style.gap = "8px";
+
+    const summaryLabel = doc.createElement("span");
+    summaryLabel.textContent = "Configurazione attiva";
+    summaryLabel.style.fontSize = "12px";
+    summaryLabel.style.textTransform = "uppercase";
+    summaryLabel.style.color = "rgba(203, 213, 225, 0.85)";
+
+    const summaryPre = doc.createElement("pre");
+    summaryPre.style.margin = "0";
+    summaryPre.style.padding = "12px";
+    summaryPre.style.borderRadius = "8px";
+    summaryPre.style.background = "rgba(30, 41, 59, 0.9)";
+    summaryPre.style.fontSize = "12px";
+    summaryPre.style.maxHeight = "120px";
+    summaryPre.style.overflow = "auto";
+    summaryPre.textContent = "{}";
+
+    const languageLabel = doc.createElement("span");
+    languageLabel.textContent = "Lingua rilevata";
+    languageLabel.style.fontSize = "12px";
+    languageLabel.style.textTransform = "uppercase";
+    languageLabel.style.color = "rgba(203, 213, 225, 0.85)";
+
+    const languagePre = doc.createElement("pre");
+    languagePre.style.margin = "0";
+    languagePre.style.padding = "12px";
+    languagePre.style.borderRadius = "8px";
+    languagePre.style.background = "rgba(30, 41, 59, 0.9)";
+    languagePre.style.fontSize = "12px";
+    languagePre.style.maxHeight = "80px";
+    languagePre.style.overflow = "auto";
+    languagePre.textContent = "{}";
+
+    summaryWrapper.appendChild(summaryLabel);
+    summaryWrapper.appendChild(summaryPre);
+    summaryWrapper.appendChild(languageLabel);
+    summaryWrapper.appendChild(languagePre);
+
+    const logsWrapper = doc.createElement("div");
+    logsWrapper.style.display = "flex";
+    logsWrapper.style.flexDirection = "column";
+    logsWrapper.style.gap = "8px";
+    logsWrapper.style.flex = "1";
+    logsWrapper.style.minHeight = "120px";
+
+    const logsLabel = doc.createElement("span");
+    logsLabel.textContent = "Eventi recenti";
+    logsLabel.style.fontSize = "12px";
+    logsLabel.style.textTransform = "uppercase";
+    logsLabel.style.color = "rgba(203, 213, 225, 0.85)";
+
+    const logList = doc.createElement("ul");
+    logList.style.listStyle = "none";
+    logList.style.margin = "0";
+    logList.style.padding = "0";
+    logList.style.flex = "1";
+    logList.style.overflow = "auto";
+    logList.style.background = "rgba(15, 23, 42, 0.65)";
+    logList.style.borderRadius = "8px";
+
+    logsWrapper.appendChild(logsLabel);
+    logsWrapper.appendChild(logList);
+
+    const exportStatus = doc.createElement("span");
+    exportStatus.style.fontSize = "11px";
+    exportStatus.style.color = "rgba(148, 163, 184, 0.85)";
+
+    const exportArea = doc.createElement("textarea");
+    exportArea.style.position = "absolute";
+    exportArea.style.opacity = "0";
+    exportArea.style.pointerEvents = "none";
+    exportArea.setAttribute("tabindex", "-1");
+
+    body.appendChild(summaryWrapper);
+    body.appendChild(logsWrapper);
+    body.appendChild(exportStatus);
+
+    container.appendChild(header);
+    container.appendChild(body);
+    container.appendChild(exportArea);
+
+    const appendLogEntry = (entry) => {
+      const item = doc.createElement("li");
+      item.style.padding = "10px 12px";
+      item.style.borderBottom = "1px solid rgba(148, 163, 184, 0.14)";
+      item.style.display = "flex";
+      item.style.flexDirection = "column";
+      item.style.gap = "4px";
+
+      const meta = doc.createElement("div");
+      meta.style.display = "flex";
+      meta.style.justifyContent = "space-between";
+      meta.style.alignItems = "center";
+      meta.style.fontSize = "11px";
+      meta.style.color = "rgba(203, 213, 225, 0.75)";
+      const tag = doc.createElement("span");
+      tag.textContent = `[${entry.type.toUpperCase()}] ${entry.message}`;
+      const time = doc.createElement("span");
+      time.textContent = formatTimestamp(entry.timestamp);
+      meta.appendChild(tag);
+      meta.appendChild(time);
+
+      const scope = doc.createElement("div");
+      scope.style.fontSize = "11px";
+      scope.style.color = "rgba(148, 163, 184, 0.85)";
+      scope.textContent = entry.scope ? `Scope: ${entry.scope}` : "";
+
+      const payload = doc.createElement("pre");
+      payload.style.margin = "0";
+      payload.style.padding = "8px";
+      payload.style.background = "rgba(30, 41, 59, 0.7)";
+      payload.style.borderRadius = "6px";
+      payload.style.fontSize = "11px";
+      payload.style.whiteSpace = "pre-wrap";
+      payload.style.wordBreak = "break-word";
+      payload.textContent =
+        entry.details != null
+          ? JSON.stringify(entry.details, null, 2)
+          : "Nessun dettaglio";
+
+      item.appendChild(meta);
+      if (entry.scope) {
+        item.appendChild(scope);
+      }
+      item.appendChild(payload);
+      logList.appendChild(item);
+
+      const maxItems = options.maxItems || 40;
+      while (Array.isArray(logList.children) && logList.children.length > maxItems) {
+        logList.removeChild(logList.children[0]);
+      }
+    };
+
+    const renderLogs = (entries = []) => {
+      while (Array.isArray(logList.children) && logList.children.length) {
+        logList.removeChild(logList.children[0]);
+      }
+      entries.slice(-1 * (options.maxItems || 40)).forEach((entry) => {
+        appendLogEntry(entry);
+      });
+    };
+
+    const exporter =
+      typeof options.exporter === "function"
+        ? options.exporter
+        : () => "{}";
+
+    const refreshExport = () => {
+      try {
+        exportArea.value = exporter();
+      } catch (err) {
+        exportArea.value = "{}";
+      }
+    };
+
+    const updateStatus = (message) => {
+      exportStatus.textContent = message || "";
+      if (message) {
+        setTimeout(() => {
+          if (exportStatus.textContent === message) {
+            exportStatus.textContent = "";
+          }
+        }, 3500);
+      }
+    };
+
+    exportBtn.addEventListener("click", () => {
+      let exported = false;
+      let payload = "";
+      try {
+        payload = exporter();
+      } catch (err) {
+        payload = exportArea.value || "{}";
+      }
+
+      if (
+        typeof Blob === "function" &&
+        typeof URL !== "undefined" &&
+        typeof URL.createObjectURL === "function"
+      ) {
+        try {
+          const blob = new Blob([payload], { type: "application/json" });
+          const link = doc.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = options.filename || "safe-links-debug.json";
+          doc.body.appendChild(link);
+          link.click();
+          setTimeout(() => {
+            if (typeof URL.revokeObjectURL === "function") {
+              URL.revokeObjectURL(link.href);
+            }
+            link.remove();
+          }, 50);
+          exported = true;
+          updateStatus("File JSON scaricato");
+        } catch (downloadErr) {
+          exported = false;
+        }
+      }
+
+      if (
+        !exported &&
+        typeof navigator !== "undefined" &&
+        navigator &&
+        navigator.clipboard &&
+        typeof navigator.clipboard.writeText === "function"
+      ) {
+        navigator.clipboard
+          .writeText(payload)
+          .then(() => {
+            updateStatus("Contenuto copiato negli appunti");
+          })
+          .catch(() => {
+            exported = false;
+          });
+        exported = true;
+      }
+
+      if (!exported) {
+        exportArea.value = payload;
+        if (typeof exportArea.focus === "function") {
+          try {
+            exportArea.focus({ preventScroll: true });
+          } catch (errFocus) {
+            try {
+              exportArea.focus();
+            } catch (errFocusLegacy) {
+              // Ignora: in ambienti legacy potrebbe non essere disponibile.
+            }
+          }
+        }
+        if (typeof exportArea.select === "function") {
+          try {
+            exportArea.select();
+          } catch (errSelect) {
+            // Ignora eventuali eccezioni in ambienti non interattivi.
+          }
+        }
+        updateStatus("JSON pronto da copiare");
+      }
+    });
+
+    let collapsed = false;
+    const applyCollapsed = () => {
+      body.style.display = collapsed ? "none" : "flex";
+      toggleBtn.textContent = collapsed ? "Mostra" : "Nascondi";
+    };
+
+    toggleBtn.addEventListener("click", () => {
+      collapsed = !collapsed;
+      applyCollapsed();
+    });
+
+    closeBtn.addEventListener("click", () => {
+      if (container.parentNode) {
+        container.parentNode.removeChild(container);
+      }
+    });
+
+    const updateSummary = (summary) => {
+      try {
+        summaryPre.textContent = JSON.stringify(summary, null, 2);
+      } catch (err) {
+        summaryPre.textContent = String(summary || "{}");
+      }
+    };
+
+    const updateLanguage = (language) => {
+      try {
+        languagePre.textContent = JSON.stringify(language, null, 2);
+      } catch (err) {
+        languagePre.textContent = String(language || "{}");
+      }
+    };
+
+    const updateStateBadge = (state) => {
+      if (!state) {
+        stateBadge.textContent = "Debug";
+        stateBadge.style.background = "rgba(148, 163, 184, 0.16)";
+        stateBadge.style.color = "#e2e8f0";
+        return;
+      }
+      if (state.enabled) {
+        stateBadge.textContent = `Level: ${state.level || "basic"}`;
+        stateBadge.style.background = "rgba(96, 165, 250, 0.16)";
+        stateBadge.style.color = "#bfdbfe";
+      } else {
+        stateBadge.textContent = "Debug off";
+        stateBadge.style.background = "rgba(148, 163, 184, 0.16)";
+        stateBadge.style.color = "#e2e8f0";
+      }
+    };
+
+    const mount = () => {
+      const target = doc.body || doc.documentElement;
+      target.appendChild(container);
+      refreshExport();
+      applyCollapsed();
+    };
+
+    mount();
+
+    return {
+      element: container,
+      updateSnapshot(snapshot) {
+        updateSummary(snapshot.summary || {});
+        updateLanguage(snapshot.language || {});
+        updateStateBadge(snapshot.state || null);
+        renderLogs(snapshot.entries || []);
+        refreshExport();
+      },
+      appendEntry(entry) {
+        appendLogEntry(entry);
+        refreshExport();
+      },
+      updateState(state) {
+        updateStateBadge(state);
+      },
+      reset(entries) {
+        renderLogs(entries || []);
+        refreshExport();
+      },
+      destroy() {
+        if (container.parentNode) {
+          container.parentNode.removeChild(container);
+        }
+      }
+    };
+  };
+
+  const destroyDebugArtifacts = () => {
+    if (releaseDebugListener) {
+      try {
+        releaseDebugListener();
+      } catch (err) {
+        // Ignora eventuali errori di teardown.
+      }
+      releaseDebugListener = null;
+    }
+    if (activeDebugPanel && typeof activeDebugPanel.destroy === "function") {
+      try {
+        activeDebugPanel.destroy();
+      } catch (err) {
+        // Evita che problemi durante la chiusura del pannello blocchino l'applicazione.
+      }
+    }
+    activeDebugPanel = null;
+    activeDebugSession = null;
+    if (guardNamespace && typeof guardNamespace === "object") {
+      guardNamespace.debugSession = null;
+    }
+  };
+
   const collectRuntimeLanguageSnapshot = () => {
     const snapshot = {
       preferred: null,
@@ -1253,6 +1796,117 @@
 
   const configSource = usingLegacySettings ? "legacy" : "module";
 
+  const buildDebugSnapshot = () => ({
+    summary: summarizeConfigForDebug(cfg, configFingerprint),
+    language: runtimeLanguageSnapshot,
+    entries: debug.getEntries(),
+    state: debug.getState()
+  });
+
+  const emitDebugOverviewToConsole = (level) => {
+    if (typeof console === "undefined") {
+      return;
+    }
+    const snapshot = buildDebugSnapshot();
+    try {
+      if (typeof console.groupCollapsed === "function") {
+        console.groupCollapsed(
+          `[SafeLinkGuard][DEBUG] Snapshot (${level}) — ${new Date().toISOString()}`
+        );
+        if (typeof console.table === "function") {
+          try {
+            console.table(snapshot.summary);
+          } catch (errTable) {
+            console.log("Configurazione", snapshot.summary);
+          }
+        } else if (typeof console.log === "function") {
+          console.log("Configurazione", snapshot.summary);
+        }
+        if (typeof console.log === "function") {
+          console.log("Lingua", snapshot.language);
+          console.log("Fingerprint", configFingerprint);
+        }
+        console.groupEnd();
+      } else if (typeof console.log === "function") {
+        console.log(
+          `[SafeLinkGuard][DEBUG] Configurazione attiva (${level})`,
+          snapshot.summary
+        );
+      }
+    } catch (errLogOverview) {
+      // Ignora errori della console per evitare che il debug impatti gli utenti finali.
+    }
+  };
+
+  const initDebugSession = (options = {}) => {
+    destroyDebugArtifacts();
+
+    const enabled = Boolean(cfg.debugMode);
+    const level = cfg.debugLevel === "verbose" ? "verbose" : "basic";
+
+    const session = {
+      active: enabled,
+      level,
+      fingerprint: configFingerprint,
+      panel: null,
+      export(exportOptions) {
+        if (exportOptions && typeof exportOptions === "object") {
+          return debug.exportAsJson(exportOptions);
+        }
+        return debug.exportAsJson({ pretty: true });
+      },
+      dispose() {
+        destroyDebugArtifacts();
+      }
+    };
+
+    if (!enabled) {
+      activeDebugSession = session;
+      return session;
+    }
+
+    emitDebugOverviewToConsole(level);
+
+    const panel = createDebugPanel({
+      level,
+      exporter: () => debug.exportAsJson({ pretty: true }),
+      filename:
+        typeof options.filename === "string" && options.filename.trim()
+          ? options.filename.trim()
+          : undefined,
+      zIndex: Number.isFinite(cfg.zIndex) ? cfg.zIndex + 10 : undefined,
+      maxItems:
+        Number.isFinite(options.maxItems) && options.maxItems > 0
+          ? options.maxItems
+          : undefined
+    });
+
+    if (panel) {
+      panel.updateSnapshot(buildDebugSnapshot());
+      session.panel = panel.element;
+      activeDebugPanel = panel;
+      releaseDebugListener = debug.on((event) => {
+        if (!activeDebugPanel) {
+          return;
+        }
+        if (event.type === "entry") {
+          activeDebugPanel.appendEntry(event.entry);
+        } else if (event.type === "reset") {
+          activeDebugPanel.reset(debug.getEntries());
+        } else if (event.type === "bootstrap") {
+          activeDebugPanel.reset(
+            Array.isArray(event.entries) ? event.entries : debug.getEntries()
+          );
+        } else if (event.type === "state") {
+          activeDebugPanel.updateState(event.state);
+        }
+      });
+    }
+
+    activeDebugSession = session;
+    return session;
+  };
+
   debug.configure({
     enabled: Boolean(cfg.debugMode),
     level: cfg.debugLevel,
@@ -1285,6 +1939,13 @@
       { scope: "i18n" }
     );
   }
+
+  guardNamespace.initDebug = (options) => {
+    const session = initDebugSession(options || {});
+    guardNamespace.debugSession = session;
+    return session;
+  };
+  guardNamespace.debugSession = guardNamespace.initDebug({ reason: "auto" });
 
   const toURL = (href) => {
     try {

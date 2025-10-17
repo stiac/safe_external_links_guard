@@ -1,5 +1,17 @@
 # Changelog
 # Changelog
+## [1.12.6] - 2025-12-04
+### Added
+- Pannello diagnostico richiamabile con `SafeExternalLinksGuard.initDebug()` che visualizza configurazione, lingua, eventi recenti e pulsante "Esporta JSON", completo di export programmabile (`session.export()`) e gestione del ciclo di vita (`session.dispose()`).
+- Metodo `debug.log(message, details?, meta?)` come alias leggibile di `debug.info`, utile per log personalizzati coerenti con il livello configurato (`basic`/`verbose`).
+
+### Changed
+- `SafeExternalLinksGuard.debug` notifica ora i listener runtime (`debug.on(listener)`) e pulisce la coda degli eventi quando il debug viene disattivato, garantendo l'assenza di log residui in modalità produzione.
+- Il README documenta il nuovo flusso `initDebug()` con esempi di pannello a scomparsa e di export JSON direttamente dall'interfaccia.
+
+### Fixed
+- In modalità normale (`debugMode = false`) il debugger rimane completamente silente: nessuna entry viene conservata o mostrata, evitando tracce visibili in console o nelle esportazioni.
+
 ## [1.12.5] - 2025-12-03
 ### Fixed
 - Evitata la corruzione dell'HTML generato da CMS come Sngine sostituendo l'uso di `DOMDocument` con un parser lineare degli anchor nel bootstrap PHP (`app/Services/Markup/ExternalLinkAttributeEnforcer.php`), così gli attributi `target`/`rel` vengono applicati senza alterare spaziature o nodi adiacenti.
